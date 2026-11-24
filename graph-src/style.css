@@ -316,6 +316,8 @@
   .agent-card .close { width: 30px; height: 30px; font-size: 13px; background: #f3dfb6; color: #5b3b12; border: 1px solid #e2c48a; }
   .ac-bars { display: grid; grid-template-columns: auto 1fr auto auto 1fr auto; gap: 5px; align-items: center; margin: 8px 0 6px; font-family: var(--head); font-size: 11px; }
   .ac-bars .bar-wrap { background: #efe3c8; border-color: #e2c48a; }
+  .ac-gq { margin: 4px 0; padding: 6px 8px; border-radius: 10px; background: #fff6dc; border: 1px solid #f1d58f; font-size: 11px; }
+  .ac-gq .gq { margin-top: 3px; } .ac-gq .gq.done { color: #15803d; } .ac-gq .d { color: #b45309; font-size: 10px; } .ac-gq .p { float: right; color: #6b5a3e; }
   .ac-stats { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
   .ac-stats .st { padding: 2px 7px; border-radius: 999px; background: #f6e9cc; font-size: 10.5px; font-family: var(--head); }
   .disaster-banner { top: 136px !important; }

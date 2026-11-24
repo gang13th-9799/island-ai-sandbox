@@ -877,7 +877,7 @@ function experiment(agent, forcedMethod) {
       markDiscovery(res.key, agent);
       trimMemory(agent);
       observe(agent, sig);
-      agent.bubble = `💡 ค้นพบ ${outName(res.key)}!`;
+      agent.bubble = `💡 ค้นพบ ${outName(res.key)}!`; godQuestEvent(agent, 'discover');
       agent.hunch = null;
       pushTrial({ title: `${a} + ${b}`, detail: `${M.name} · ${where}`, success: true, note: `✅ ${res.novel ? 'ผลที่ไม่คาดคิด! ' : ''}${note}`, actor: agent.name });
     } else {
@@ -938,6 +938,7 @@ function craftKnown(agent, entry) {
   if (Math.random() < Math.min(0.95, skill)) {
     const note = produce(entry.out, agent);
     agent.bubble = `🛠️ ทำ ${outName(entry.out)}`;
+    godQuestEvent(agent, 'craft');
     pushTrial({ title: `ผลิต: ${outName(entry.out)}`, detail: `${entry.a} + ${entry.b} · ${M.name}`, success: true, note: `🛠️ ${note} (ฝึกแล้ว ${entry.practice} ครั้ง)`, actor: agent.name, craft: true });
   } else {
     agent.bubble = '😓 ทำพลาด เสียวัตถุดิบ';
@@ -1005,7 +1006,7 @@ function transferKnowledge(from, to, mode) {
     if (Math.random() < 0.3) addTeachLog(`💢 ${from.name} ไม่ยอมสอน ${to.name} เพราะไม่ถูกกัน (${rel(from, to)})`);
     return false;
   }
-  gainExp(from, 'cha', 1);
+  gainExp(from, 'cha', 1); godQuestEvent(from, 'teach');
   // Did the learner understand? Depends on learner INT and teacher CHA
   const deja = to.pastKnow && to.pastKnow[sig] ? 0.45 : 0;   // déjà vu: knew this in a past life
   const understand = Math.min(0.97, 0.25 + st(to, 'int') * 0.04 + st(from, 'cha') * 0.03 + deja);
@@ -1264,7 +1265,7 @@ function runQuests() {
 }
 
 function completeQuest(q, giver, h) {
-  q.status = 'done'; q.doneH = nowH(); h.questId = null; h.goal = null;
+  q.status = 'done'; q.doneH = nowH(); h.questId = null; h.goal = null; godQuestEvent(h, 'help');
   const got = [];
   (q.agreed || ['thanks']).forEach(k => {
     if (k === 'thanks') got.push('🙏 ขอบคุณ');
@@ -2454,7 +2455,7 @@ function staminaTick() {
       a.hunger = Math.max(0, a.hunger - 2);              // metabolism slows (hunger tick adds it back)
       const wake = (a.stamina >= 100 && !lateNight) || (a.stamina >= 70 && morning) || a.hunger >= 85;
       if (wake) {
-        a.sleeping = false; a.sleepAt = null;
+        a.sleeping = false; a.sleepAt = null; if (a.sleepKind === 'bed' && a.stamina >= 95) godQuestEvent(a, 'rest');
         a.bubble = a.sleepKind === 'bed' ? '🌅 ตื่นนอน สดชื่น!' : a.sleepKind === 'fire' ? '🌅 ตื่นข้างกองไฟ' : '🥱 ตื่นมาปวดหลัง นอนกับพื้น';
         if (a.sleepKind === 'ground') gainExp(a, 'vit', 0.5);
       } else a.bubble = a.sleepKind === 'bed' ? '😴 นอนหลับในที่พัก' : a.sleepKind === 'fire' ? '😴 นอนข้างกองไฟ' : '😪 นอนกับพื้น';
@@ -2594,6 +2595,55 @@ function temperatureTick() {
 function weatherLabel() { const w = WEATHER[zoneWeather(currentZoneId)]; return `${w.icon} ${w.name} ${airTemp(currentZoneId)}°C`; }
 
 // ==========================================
+// FAITH & GOD QUESTS: God hands every person 2 optional quests a day; finishing them earns faith.
+// Praying needs at least 10 faith; the more faith offered, the more likely a wish is granted.
+// ==========================================
+const GOD_QUESTS = [
+  { type: 'gather', diff: 1, faith: 2, title: q => `เก็บ ${q.item} ${q.qty} ชิ้น`, make: a => { const nodes = Object.values(ZONES).flatMap(z => z.res); const near = [a.zone].concat(getAdjacentZones(a.zone)).flatMap(z => ZONES[z].res); const item = pick(near.length ? near : nodes); return { item, qty: 2 + Math.floor(Math.random() * 3) }; } },
+  { type: 'rest', diff: 1, faith: 2, title: () => 'นอนหลับพักผ่อนในที่พักให้เต็มอิ่ม 1 คืน', make: () => ({ qty: 1 }) },
+  { type: 'share', diff: 2, faith: 4, title: () => 'แบ่งอาหารให้คนที่หิว 1 ครั้ง', make: () => ({ qty: 1 }) },
+  { type: 'teach', diff: 2, faith: 4, title: () => 'สอนความรู้ให้คนอื่น 1 เรื่อง', make: () => ({ qty: 1 }), need: a => Object.values(a.know || {}).some(e => e.out) },
+  { type: 'help', diff: 3, faith: 5, title: () => 'ช่วยเควสของเพื่อนบ้านให้สำเร็จ 1 ครั้ง', make: () => ({ qty: 1 }) },
+  { type: 'craft', diff: 3, faith: 6, title: () => 'ประดิษฐ์ของสำเร็จ 2 ชิ้น', make: () => ({ qty: 2 }), need: a => Object.values(a.know || {}).some(e => e.out) },
+  { type: 'hunt', diff: 3, faith: 6, title: () => 'ล่าสัตว์สำเร็จ 1 ตัว', make: () => ({ qty: 1 }) },
+  { type: 'discover', diff: 5, faith: 12, title: () => 'ค้นพบสิ่งใหม่ด้วยตัวเอง 1 อย่าง', make: () => ({ qty: 1 }) },
+  { type: 'predator', diff: 5, faith: 15, title: () => 'ปราบสัตว์นักล่า 1 ตัว', make: () => ({ qty: 1 }), need: a => a.age >= 18 }
+];
+const DIFF_STARS = d => '◆'.repeat(d) + '◇'.repeat(5 - d);
+function assignGodQuests() {
+  aiAgents.forEach(a => {
+    if (a.age < 8) { a.godQuests = []; return; }
+    const pool = GOD_QUESTS.filter(t => !t.need || t.need(a)).filter(t => a.age >= 15 || t.diff <= 2);
+    const picks = pool.slice().sort(() => Math.random() - 0.5).slice(0, 2);
+    a.godQuests = picks.map(t => Object.assign({ type: t.type, diff: t.diff, faith: t.faith, prog: 0, done: false, day: simDay }, t.make(a)))
+      .map(q => Object.assign(q, { title: GOD_QUESTS.find(t => t.type === q.type).title(q) }));
+    // accepting is optional: depends on personality, skill vs difficulty, and current faith
+    a.godQuests.forEach(q => { const skill = (st(a, 'str') + st(a, 'dex') + st(a, 'int')) / 3; q.accepted = Math.random() < 0.35 + (a.kind || 0.5) * 0.4 + skill * 0.02 - q.diff * 0.07; });
+  });
+  if (!bgTick) addLog(`📯 [เควสพระเจ้า] วันที่ ${simDay}: พระเจ้ามอบเควสใหม่ให้ทุกคนคนละ 2 เควส (ไม่บังคับ ทำแล้วได้ศรัทธา)`, '#fde68a');
+}
+function godQuestEvent(a, type, item, n = 1) {
+  if (!a || !a.godQuests) return;
+  a.godQuests.forEach(q => {
+    if (q.done || !q.accepted || q.type !== type) return;
+    if (type === 'gather' && item !== q.item) return;
+    q.prog = Math.min(q.qty, q.prog + n);
+    if (q.prog >= q.qty) {
+      q.done = true; a.faith = (a.faith || 0) + q.faith;
+      a.bubble = `✨ ทำเควสพระเจ้าสำเร็จ! ศรัทธา +${q.faith}`;
+      addLog(`✨ [เควสพระเจ้าสำเร็จ] ${a.name}: "${q.title}" ได้ศรัทธา +${q.faith} (รวม ${a.faith})`, '#fde68a');
+    }
+  });
+}
+function godQuestSteer(a) {
+  // accepted gather quest: head for that resource if it is in this zone
+  const q = (a.godQuests || []).find(q => q.accepted && !q.done && q.type === 'gather');
+  if (!q || a.gatherT) return;
+  const n = (zoneNodes[a.zone] || []).find(n => n.name === q.item);
+  if (n) a.gatherT = Object.assign({ zone: a.zone }, n);
+}
+
+// ==========================================
 // PRAYERS: AI ask God (the player) for new plants, animals, minerals or elements.
 // Approved wishes become part of the world and are written to the god database.
 // Rejected wishes make the AI rethink and ask for something more reasonable next time.
@@ -2657,7 +2707,9 @@ function prayerTick() {
   if (simMinutes % 360 !== 0) return;                                     // think about it 4 times a day
   const pending = prayers.filter(p => p.realm === tickingRealm && p.status === 'pending');
   if (pending.length >= 3) return;
-  const cand = aiAgents.filter(a => a.age >= 15 && !pending.some(p => p.agentId === a.id) && !a.sleeping);
+  // fate decides prayers the god leaves unanswered for 2 days: more faith offered = more likely granted
+  prayers.filter(p => p.realm === tickingRealm && p.status === 'pending' && simDay - p.day >= 2).forEach(p => resolvePrayer(p, Math.random() < fateChance(p), '', 'fate'));
+  const cand = aiAgents.filter(a => a.age >= 15 && (a.faith || 0) >= 10 && !pending.some(p => p.agentId === a.id) && !a.sleeping);
   for (const a of cand.sort(() => Math.random() - 0.5)) {
     if (Math.random() > 0.25) continue;
     const needs = prayerNeeds(a); if (!needs.length) continue;
@@ -2670,12 +2722,16 @@ function prayerTick() {
     const cat = need.startsWith('mat:') ? { kind: 'mineral' } : PRAYER_CATALOG[need];
     const wish = need.startsWith('mat:') ? materialWish(need.slice(4), memo.tier) : cat.tiers[memo.tier];
     const better = memo.rejects ? ` (คิดใหม่ครั้งที่ ${memo.rejects}: ลดคำขอให้สมเหตุสมผลขึ้น)` : '';
-    const p = { id: 'pr' + (prayerSeq++) + '_' + Date.now().toString(36), realm: tickingRealm, realmName: realms[tickingRealm].def.name, agentId: a.id, agentName: a.name,
+    const offering = Math.min(a.faith, 10 + Math.round((a.faith - 10) * [0, 0.3, 0.55, 0.8][memo.tier]));
+    a.faith -= offering;
+    const p = { offering, id: 'pr' + (prayerSeq++) + '_' + Date.now().toString(36), realm: tickingRealm, realmName: realms[tickingRealm].def.name, agentId: a.id, agentName: a.name,
       zone: a.zone, need, kind: cat.kind, tier: memo.tier, stars: TIER_STARS[memo.tier], wish, reason: reason + better, day: simDay, status: 'pending', attempt: memo.rejects + 1 };
     prayers.unshift(p);
     a.prayMemo[need] = memo;
     a.bubble = `🙏 อธิษฐานขอ${wish.name}`;
-    addLog(`🙏 [คำอธิษฐาน] ${a.name} ขอพระเจ้า: "${wish.name}" — ${wish.desc}`, '#fde68a');
+    addLog(`🙏 [คำอธิษฐาน] ${a.name} ถวายศรัทธา ${offering} ขอพระเจ้า: "${wish.name}" — ${wish.desc}`, '#fde68a');
+    const auto = godAutoLevel();
+    if (auto && offering >= auto) { resolvePrayer(p, true, '', 'auto'); return; }
     if (prayers.filter(q => q.status === 'pending').length >= 3) break;
     return;
   }
@@ -2712,27 +2768,34 @@ function loadGodDB() {
   try { godArchive = JSON.parse(localStorage.getItem(GOD_DB_KEY) || '[]'); } catch (e) { godArchive = []; }
   godArchive.filter(e => e.decision === 'approved' && e.kind !== 'animal').forEach(e => { MAT[e.wish.name] = Object.assign({}, MAT[e.wish.name] || {}, e.wish.props); });
 }
+function fateChance(p) { return p.offering / (p.offering + 15 * p.tier); }
+function godAutoLevel() { try { return +(localStorage.getItem('island_ai_god_auto') || 0); } catch (e) { return 0; } }
+function setGodAuto(v) { try { localStorage.setItem('island_ai_god_auto', String(+v || 0)); } catch (e) {} renderPrayers(); }
+// Resolve a prayer; assumes the prayer's realm is the one currently loaded.
+function resolvePrayer(p, ok, note, by) {
+  p.status = ok ? 'approved' : 'rejected'; p.decidedDay = simDay; p.by = by;
+  const a = byId(p.agentId), who = by === 'fate' ? 'ชะตาฟ้าลิขิต' : by === 'auto' ? 'พระเจ้า (อนุมัติอัตโนมัติ)' : 'พระเจ้า';
+  if (ok) {
+    p.placed = applyWish(p);
+    if (a) { a.bubble = `🙌 ${by === 'fate' ? 'ชะตาประทาน' : 'พระเจ้าประทาน'}${p.wish.name}!`; a.rep = (a.rep || 0) + 1; if (a.prayMemo) delete a.prayMemo[p.need]; }
+    addLog(`✨ [${who}อนุมัติ] "${p.wish.name}" ปรากฏขึ้นที่ ${p.placed.join(', ')} ตามคำอธิษฐานของ ${p.agentName} (ถวายศรัทธา ${p.offering})`, '#fde68a');
+  } else if (a) {
+    const back = Math.floor(p.offering / 2); a.faith = (a.faith || 0) + back;
+    const m = (a.prayMemo = a.prayMemo || {})[p.need] || { tier: p.tier, rejects: 0 };
+    m.rejects++; m.tier = p.tier - 1; m.lastDay = simDay; a.prayMemo[p.need] = m;
+    a.bubble = m.tier >= 1 ? '🤔 คงขอมากเกินไป ต้องคิดให้สมเหตุสมผลกว่านี้' : '😔 พระเจ้าไม่ให้ ต้องพึ่งตัวเองแล้ว';
+    addLog(`⛔ [${who}ปฏิเสธ] คำขอ "${p.wish.name}" ของ ${p.agentName}${note ? ` (เหตุผล: ${note})` : ''} ได้ศรัทธาคืน ${back} ${m.tier >= 1 ? '— จะกลับไปคิดคำขอที่สมเหตุสมผลกว่านี้' : '— ยอมแพ้เรื่องนี้ จะหาทางเอง'}`, '#fca5a5');
+    if (m.tier < 1 && p.need.startsWith('mat:')) createQuest(a, 'gather', { title: `ช่วยหาของแทน ${p.need.slice(4)}`, item: p.need.slice(4), qty: 2, zone: a.zone, difficulty: 3 });
+  }
+  godArchive.unshift({ id: p.id, at: new Date().toISOString(), realm: p.realmName, day: p.decidedDay, agent: p.agentName, zone: p.zone, need: p.need, kind: p.kind,
+    tier: p.tier, stars: p.stars, offering: p.offering, by, wish: p.wish, reason: p.reason, decision: p.status, note, placed: p.placed || [] });
+  saveGodDB();
+}
 function answerPrayer(id, ok) {
   const p = prayers.find(x => x.id === id); if (!p || p.status !== 'pending') return;
   const note = ok ? '' : (document.getElementById('pr-note-' + id) || {}).value || '';
-  p.status = ok ? 'approved' : 'rejected'; p.decidedDay = p.day;
-  inRealm(p.realm, () => {
-    const a = byId(p.agentId); p.decidedDay = simDay;
-    if (ok) {
-      p.placed = applyWish(p);
-      if (a) { a.bubble = `🙌 พระเจ้าประทาน${p.wish.name}!`; a.rep = (a.rep || 0) + 1; if (a.prayMemo) delete a.prayMemo[p.need]; }
-      addLog(`✨ [พระเจ้าอนุมัติ] "${p.wish.name}" ปรากฏขึ้นที่ ${p.placed.join(', ')} ตามคำอธิษฐานของ ${p.agentName}`, '#fde68a');
-    } else if (a) {
-      const m = (a.prayMemo = a.prayMemo || {})[p.need] || { tier: p.tier, rejects: 0 };
-      m.rejects++; m.tier = p.tier - 1; m.lastDay = simDay; a.prayMemo[p.need] = m;
-      a.bubble = m.tier >= 1 ? '🤔 คงขอมากเกินไป ต้องคิดให้สมเหตุสมผลกว่านี้' : '😔 พระเจ้าไม่ให้ ต้องพึ่งตัวเองแล้ว';
-      addLog(`⛔ [พระเจ้าปฏิเสธ] คำขอ "${p.wish.name}" ของ ${p.agentName}${note ? ` (เหตุผล: ${note})` : ''} ${m.tier >= 1 ? '— จะกลับไปคิดคำขอที่สมเหตุสมผลกว่านี้' : '— ยอมแพ้เรื่องนี้ จะหาทางเอง'}`, '#fca5a5');
-      if (m.tier < 1 && p.need.startsWith('mat:')) createQuest(a, 'gather', { title: `ช่วยหาของแทน ${p.need.slice(4)}`, item: p.need.slice(4), qty: 2, zone: a.zone, difficulty: 3 });
-    }
-  });
-  godArchive.unshift({ id: p.id, at: new Date().toISOString(), realm: p.realmName, day: p.decidedDay, agent: p.agentName, zone: p.zone, need: p.need, kind: p.kind,
-    tier: p.tier, stars: p.stars, wish: p.wish, reason: p.reason, decision: p.status, note, placed: p.placed || [] });
-  saveGodDB(); saveGameState(); renderPrayers(); renderAllUI();
+  inRealm(p.realm, () => resolvePrayer(p, ok, note, 'god'));
+  saveGameState(); renderPrayers(); renderAllUI();
 }
 function exportGodDB() {
   const blob = new Blob([JSON.stringify(godArchive, null, 2)], { type: 'application/json' });
@@ -2746,15 +2809,17 @@ function renderPrayers() {
       <div class="card-title"><span>${KIND_LABEL[p.kind]} ${p.wish.name}</span><span class="tag tag-warn" title="ความสมเหตุสมผล">${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}</span></div>
       <div>🗣️ <b>${p.agentName}</b> (${p.realmName} · ${p.zone} · วันที่ ${p.day}) ขอว่า: “${p.wish.desc}”</div>
       <div class="sec-note" style="margin:6px 0;">💭 เหตุผล: ${p.reason}</div>
+      <div style="font-size:11.5px; margin-bottom:6px;">✨ ถวายศรัทธา <b>${p.offering}</b> · ถ้าไม่ตอบภายใน 2 วัน ชะตาจะตัดสินเอง (โอกาสอนุมัติ ${Math.round(fateChance(p) * 100)}%)</div>
       <input id="pr-note-${p.id}" placeholder="เหตุผลที่ปฏิเสธ (ไม่บังคับ)" style="width:100%; padding:7px 9px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.25); color:var(--text); margin-bottom:6px;">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
         <button class="gbtn moss" onclick="answerPrayer('${p.id}', true)">✅ อนุมัติ</button>
         <button class="gbtn ember" onclick="answerPrayer('${p.id}', false)">⛔ ปฏิเสธ</button>
-      </div></div>`).join('') : '<div class="sec-note">ยังไม่มีคำอธิษฐานใหม่ AI จะอธิษฐานเมื่อขาดแคลนจริงๆ เช่น ไม่มีของกิน ไม่มีสัตว์ให้ล่า หนาวแต่ไม่มีไม้ หรือขาดวัตถุดิบที่ไม่มีบนเกาะ</div>';
+      </div></div>`).join('') : '<div class="sec-note">ยังไม่มีคำอธิษฐานใหม่ AI ที่มีศรัทธา 10 ขึ้นไปจะอธิษฐานเมื่อขาดแคลนจริงๆ เช่น ไม่มีของกิน ไม่มีสัตว์ให้ล่า หนาวแต่ไม่มีไม้ หรือขาดวัตถุดิบที่ไม่มีบนเกาะ</div>';
+  const au = document.getElementById('god-auto'); if (au && document.activeElement !== au) au.value = godAutoLevel() || '';
   const hist = document.getElementById('god-db-list');
   if (hist) hist.innerHTML = godArchive.slice(0, 40).map(e => `<div class="card" style="padding:8px 10px;">
       <div class="card-title" style="font-size:12px;"><span>${e.decision === 'approved' ? '✅' : '⛔'} ${KIND_LABEL[e.kind]} ${e.wish.name}</span><span class="tag ${e.decision === 'approved' ? 'tag-ok' : 'tag-fail'}">${e.decision === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ'}</span></div>
-      <div style="font-size:11px; color:var(--muted);">${e.realm} · วันที่ ${e.day} · ขอโดย ${e.agent} · ${'★'.repeat(e.stars)}${e.placed && e.placed.length ? ' · เกิดที่ ' + e.placed.join(', ') : ''}${e.note ? ' · เหตุผล: ' + e.note : ''}</div></div>`).join('') || '<div class="sec-note">ยังไม่มีบันทึก</div>';
+      <div style="font-size:11px; color:var(--muted);">${e.realm} · วันที่ ${e.day} · ขอโดย ${e.agent} · ${'★'.repeat(e.stars)} · ✨${e.offering ?? '-'}${e.by === 'fate' ? ' · 🎲 ชะตาตัดสิน' : e.by === 'auto' ? ' · ⚙️ อัตโนมัติ' : ''}${e.placed && e.placed.length ? ' · เกิดที่ ' + e.placed.join(', ') : ''}${e.note ? ' · เหตุผล: ' + e.note : ''}</div></div>`).join('') || '<div class="sec-note">ยังไม่มีบันทึก</div>';
 }
 
 function runAutonomousStep() {
@@ -2903,7 +2968,7 @@ function runAutonomousStep() {
       .sort((p, q) => (q.food || 0) - (p.food || 0))[0];
     if (!giver) return;
     const amt = Math.min(6, Math.floor(giver.food / 5));
-    giver.food -= amt; h.food = (h.food || 0) + amt;
+    giver.food -= amt; h.food = (h.food || 0) + amt; godQuestEvent(giver, 'share');
     addRel(h, giver, 6); addRel(giver, h, 1); giver.rep += 1;
     if (Math.random() < 0.4) addLog(`🤲 ${giver.name} แบ่งอาหาร ${amt} ให้ ${h.name} ที่กำลังหิวโซ`, '#86efac');
   });
@@ -2918,6 +2983,8 @@ function runAutonomousStep() {
   assignQuests();
   runQuests();
   socialTick();
+  if (simMinutes === 360 || aiAgents.some(a => a.age >= 8 && (!a.godQuests || (a.godQuests[0] && a.godQuests[0].day !== simDay && simMinutes >= 360)))) assignGodQuests();
+  aiAgents.forEach(godQuestSteer);
   staminaTick();
   prayerTick();
 
@@ -2999,6 +3066,7 @@ function runAutonomousStep() {
     depositTick(a);
     if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) addFood(a, gain * 3);
     else if (Math.random() < 0.5) { addFood(a, 2); if (!a.goal) a.bubble = '🌿 เจอผักผลไม้ป่าระหว่างทาง'; }
+    godQuestEvent(a, 'gather', t.name, gain);
     if (!a.goal) a.bubble = `เก็บ ${t.name} +${gain}`;
   });
 
@@ -3065,6 +3133,7 @@ function runAutonomousStep() {
         if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
         if (target.predator) hunter.rep += 3;
         hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `🏹 ล่า${target.name} (+${target.lootFood})`;
+        godQuestEvent(hunter, 'hunt'); if (target.predator) godQuestEvent(hunter, 'predator');
         huntLogs.unshift({ animal: target.name, remPop: target.pop, food: target.lootFood, hunter: hunter.name });
         addLog(target.predator
           ? `🏆 [ล่านักล่า] ${hunter.name} ล่า "${target.name}" ที่ ${tz} สำเร็จ! ได้หนัง เขี้ยว และเนื้อที่ไม่ค่อยอร่อย (เหลือ ${target.pop} ตัว)`
@@ -3380,6 +3449,7 @@ function renderAllUI() {
           <span>⚡ แรง ${Math.round(a.stamina ?? 100)}%</span>
           <div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.stamina ?? 100)}%; background:${(a.stamina ?? 100) < 25 ? '#ef4444' : '#38bdf8'};"></div></div>
           <span>🌡️ ${a.felt ?? '-'}°C ${(a.warmth ?? 100) < 50 ? '🥶' : ''}</span>
+          <span>✨ ${a.faith || 0}</span>
           <span>${a.sleeping ? (a.sleepKind === 'bed' ? '🛖 นอนในที่พัก' : a.sleepKind === 'fire' ? '🔥 นอนข้างกองไฟ' : '😪 นอนกับพื้น') : a.wantRest ? '🥱 กำลังไปพัก' : '🏃 ตื่นอยู่'}</span>
         </div>
         ${(() => {
@@ -4274,6 +4344,7 @@ function renderAgentCard() {
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
+${(a.godQuests || []).length ? `<div class="ac-gq">📯 เควสพระเจ้าวันนี้ · ✨ ศรัทธา <b>${a.faith || 0}</b>${(a.faith || 0) >= 10 ? ' (อธิษฐานได้)' : ''}${a.godQuests.map(q => `<div class="gq ${q.done ? 'done' : ''}">${q.done ? '✅' : q.accepted ? '⏳' : '💤'} ${q.title} <span class="d">${DIFF_STARS(q.diff)} +${q.faith}✨</span> ${q.done ? '' : q.accepted ? `<span class="p">${q.prog}/${q.qty}</span>` : '<span class="p">ไม่รับ</span>'}</div>`).join('')}</div>` : `<div class="ac-sub">✨ ศรัทธา ${a.faith || 0}</div>`}
     <div class="ac-sub">🧠 รู้ ${kn} สูตร · 🎒 ${Object.entries(a.bag || {}).filter(([, n]) => n > 0).slice(0, 5).map(([k, n]) => `${k}×${n}`).join(', ') || 'กระเป๋าว่าง'}</div>`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
   if (PUP.ready) { const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, 42, 90, 80, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); }
