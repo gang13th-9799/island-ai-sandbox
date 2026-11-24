@@ -3231,7 +3231,7 @@ function prayerNeeds(a) {
   if ((stationsOf('smelter').length || discoveredProducts.crucible) && !Object.values(ZONES).some(z => z.res.some(r => (MAT[r] || {}).metal)))
     out.push(['metal', 'มีเตาถลุงแล้ว แต่ไม่มีแร่โลหะให้ถลุงเลย']);
   if (stationsOf('lab').length && Math.random() < 0.3) out.push(['element', 'ห้องแล็บว่าง ไม่มีธาตุใหม่ให้ทดลอง']);
-  return out;
+  return out.concat(giftNeeds(a));
 }
 function prayerTick() {
   if (simMinutes % 360 !== 0) return;                                     // think about it 4 times a day
@@ -3266,6 +3266,116 @@ function prayerTick() {
     return;
   }
 }
+// ---------- Prayers can ask for anything: stats, weapons, tools, medicine, knowledge/recipes, weather, children ----------
+Object.assign(KIND_LABEL, { stat: '💪 ค่าสถานะ', weapon: '⚔️ อาวุธ', tool: '🔨 เครื่องมือ', medicine: '💊 ยา', knowledge: '📜 ความรู้/สูตรผลิต', weather: '🌤️ ฟ้าฝน', child: '👶 ลูก' });
+const STAT_FOR_ROLE = a => /ล่า/.test(a.role || '') ? 'str' : /ช่าง/.test(a.role || '') ? 'dex' : /วิจัย|แปร/.test(a.role || '') ? 'int' : /หัวหน้า/.test(a.role || '') ? 'cha' : 'vit';
+Object.assign(PRAYER_CATALOG, {
+  stat: { kind: 'stat', tiers: {
+    3: { name: 'พลังเทพ', desc: 'ขอให้ค่าสถานะทุกค่า +5 ในชั่วพริบตา' },
+    2: { name: 'พรแห่งความชำนาญ', desc: 'ขอให้ค่าความถนัดหลัก +3' },
+    1: { name: 'พรเล็กๆ', desc: 'ขอให้ค่าความถนัดหลัก +1 พอให้ทำงานได้ดีขึ้น' } } },
+  weapon: { kind: 'weapon', tiers: {
+    3: { name: 'ดาบเทพเจ้า', desc: 'ดาบที่ไม่มีวันทื่อ ฟันอะไรก็ขาด', tool: 'blade', dur: 9999 },
+    2: { name: 'หอกเหล็กคม', desc: 'หอกเหล็กแข็งแรงไว้ล่าสัตว์และป้องกันตัว', tool: 'blade', dur: 60 },
+    1: { name: 'ใบมีดหินคม', desc: 'ขอแค่มีดหินสักเล่ม ไว้ป้องกันตัวจากสัตว์ร้าย', tool: 'blade', dur: 10 } } },
+  tool: { kind: 'tool', tiers: {
+    3: { name: 'ขวานวิเศษ', desc: 'ขวานที่ตัดไม้ได้ทีละต้นไม่มีวันสึก', tool: 'axe', dur: 9999 },
+    2: { name: 'ขวานเหล็ก', desc: 'ขวานเหล็กคมๆ ตัดไม้เร็วขึ้นมาก', tool: 'axe', dur: 50 },
+    1: { name: 'ขวานหิน', desc: 'ขอขวานหินสักเล่ม ไว้ตัดไม้มาสร้างที่พัก', tool: 'axe', dur: 15 } } },
+  medicine: { kind: 'medicine', tiers: {
+    3: { name: 'น้ำอมฤต', desc: 'รักษาทุกคนในโซนให้หายสนิท และมีอายุยืนขึ้น' },
+    2: { name: 'พรแห่งการเยียวยา', desc: 'ขอให้บาดแผลของข้าหายสนิท' },
+    1: { name: 'ยาต้มสมุนไพร', desc: 'ขอยาสมุนไพรสัก 2 ถ้วยไว้รักษาแผล' } } },
+  knowledge: { kind: 'knowledge', tiers: {
+    3: { name: 'ปัญญาสวรรค์', desc: 'ขอให้รู้สูตรผลิตใหม่ 3 อย่างทันที' },
+    2: { name: 'สูตรผลิตจากสวรรค์', desc: 'ขอความรู้สูตรผลิตใหม่ 1 อย่าง' },
+    1: { name: 'นิมิตชี้ทาง', desc: 'ขอแค่คำใบ้ว่าควรลองผสมอะไรกับอะไร' } } },
+  weather: { kind: 'weather', tiers: {
+    3: { name: 'สิ้นสุดฤดูหนาว', desc: 'ขอให้ฤดูหนาวจบลงเดี๋ยวนี้ ให้ฤดูใบไม้ผลิมาถึง' },
+    2: { name: 'ฟ้าใสสองวัน', desc: 'ขอให้ฟ้าใส ไม่มีฝนไม่มีหิมะ 2 วัน' },
+    1: { name: 'ฝนหยุดสักครู่', desc: 'ขอให้ฝนหยุดวันนี้ พอให้ออกไปหาของได้' } } },
+  child: { kind: 'child', tiers: {
+    3: { name: 'ลูกแฝดผู้มีพรสวรรค์', desc: 'ขอลูกแฝดที่มีพรสวรรค์สูงทุกด้าน' },
+    2: { name: 'ลูกหนึ่งคน', desc: 'ขอให้ได้ลูกสักคนเร็วๆ นี้' },
+    1: { name: 'พรแห่งการมีบุตร', desc: 'ขอให้ครอบครัวมีลูกได้ง่ายขึ้น' } } }
+});
+function findNewRecipes(a, n) {
+  const known = new Set(Object.values(a.know || {}).filter(e => e.out).map(e => e.out));
+  const mats = Object.keys(MAT).concat(Object.values(PRODUCTS).filter(p => p.kind === 'item').map(p => p.name));
+  const found = [], seen = new Set();
+  const ms = Object.keys(METHODS).sort(() => Math.random() - 0.5);
+  outer: for (const m of ms) for (const x of mats.slice().sort(() => Math.random() - 0.5)) for (const y of mats) {
+    const r = natureLaw(x, y, m);
+    if (r && r.ok && PRODUCTS[r.key] && !known.has(r.key) && !seen.has(r.key)) { seen.add(r.key); found.push({ a: x, b: y, m, out: r.key }); if (found.length >= n) break outer; }
+  }
+  return found;
+}
+function godChild(mom, dad, gifted) {
+  const nextGen = Math.max(mom.gen || 1, dad ? dad.gen || 1 : 1) + 1, g = Math.random() < 0.5 ? 'ชาย' : 'หญิง';
+  const talent = dad ? inheritTalent(dad, mom) : Object.assign({}, mom.talent);
+  if (gifted) STAT_KEYS.forEach(k => { talent[k] = Math.max(talent[k], 1.8); });
+  const bb = newAgent({ name: pickChildName(g, nextGen), gender: g, gen: nextGen, age: 0, hunger: 10, talent, zone: mom.zone, home: mom.home, x: mom.x, y: mom.y,
+    bubble: '👶 เกิดจากพรของพระเจ้า', guardian: mom.id, know: {} });
+  aiAgents.push(bb); bb.role = 'เด็ก';
+  [dad, mom].filter(Boolean).forEach(par => { addRel(bb, par, 60); addRel(par, bb, 70); });
+  const mv = villageOf(mom); if (mv) { bb.villageId = mv.id; mv.members.push(bb.id); }
+  currentGeneration = Math.max(currentGeneration, nextGen);
+  return bb.name;
+}
+const GIFT_EFFECTS = {
+  stat(p, a) { if (!a) return 'ผู้ขอไม่อยู่แล้ว'; const k = STAT_FOR_ROLE(a);
+    if (p.tier === 3) { STAT_KEYS.forEach(s => { a.stats[s] = Math.min(STAT_MAX, a.stats[s] + 5); }); return `${a.name} ค่าสถานะทุกค่า +5`; }
+    const n = p.tier === 2 ? 3 : 1; a.stats[k] = Math.min(STAT_MAX, a.stats[k] + n); a.hp = Math.min(maxHp(a), a.hp); return `${a.name} ${STATS[k].name} +${n}`; },
+  weapon(p, a) { return giveDivineTool(p, a); }, tool(p, a) { return giveDivineTool(p, a); },
+  medicine(p, a) {
+    if (p.tier === 3) { const here = aiAgents.filter(o => o.zone === p.zone); here.forEach(o => { o.hp = maxHp(o); o.lifeBonus = (o.lifeBonus || 0) + 5; }); return `รักษา ${here.length} คนในโซน ${p.zone} ให้หายสนิท อายุยืนขึ้น 5 ปี`; }
+    if (!a) return 'ผู้ขอไม่อยู่แล้ว';
+    if (p.tier === 2) { a.hp = maxHp(a); return `${a.name} หายสนิท`; }
+    put(a, 'ยาต้มสมุนไพร', 2); return `${a.name} ได้ยาต้มสมุนไพร 2 ถ้วย`; },
+  knowledge(p, a) { if (!a) return 'ผู้ขอไม่อยู่แล้ว';
+    const rs = findNewRecipes(a, p.tier === 3 ? 3 : 1);
+    if (!rs.length) return 'ไม่มีสูตรใหม่ที่ยังไม่รู้แล้ว';
+    if (p.tier === 1) { const r = rs[0]; a.hunch = { items: [r.a, r.b], m: r.m, ttl: 48 }; return `${a.name} เห็นนิมิต: ลอง "${r.a}" กับ "${r.b}" ด้วยวิธี${METHODS[r.m].name}`; }
+    rs.forEach(r => { a.know[sigOf(r.a, r.b, r.m)] = { a: r.a, b: r.b, m: r.m, out: r.out, from: 'god', day: simDay, practice: 1 }; markDiscovery(r.out, a); });
+    trimMemory(a);
+    return `${a.name} รู้สูตร: ` + rs.map(r => `${PRODUCTS[r.out].name} (${r.a} + ${r.b} · ${METHODS[r.m].name})`).join(', ');
+  },
+  weather(p) {
+    if (p.tier === 3) { if (SEASONS[currentSeasonIdx].id === 'winter') { currentSeasonIdx = 0; } weather = { kind: 'clear', hours: 24 }; return 'ฤดูกาลเปลี่ยนเป็นฤดูใบไม้ผลิ ฟ้าใส'; }
+    weather = { kind: 'clear', hours: p.tier === 2 ? 48 : 12 }; return `ฟ้าใส ${p.tier === 2 ? '2 วัน' : '12 ชั่วโมง'}`; },
+  child(p, a) { if (!a) return 'ผู้ขอไม่อยู่แล้ว';
+    const mate = aiAgents.find(o => o !== a && o.age >= 18 && o.gender !== a.gender && rel(a, o) >= 30);
+    const mom = a.gender === 'หญิง' ? a : mate, dad = a.gender === 'หญิง' ? mate : a;
+    if (!mom) return 'ยังไม่มีคู่ครอง';
+    if (p.tier === 1) { mom.fertile = (mom.fertile || 0) + 1; return `${mom.name} ได้รับพรให้มีบุตรง่ายขึ้น`; }
+    const names = [godChild(mom, dad, p.tier === 3)]; if (p.tier === 3) names.push(godChild(mom, dad, true));
+    return `${mom.name} ให้กำเนิด ${names.join(' และ ')}`; }
+};
+function giveDivineTool(p, a) {
+  if (!a) return 'ผู้ขอไม่อยู่แล้ว';
+  const w = p.wish; let key = keyByName(w.name);
+  if (!key) { key = 'god:' + w.name; dynamicProducts[key] = { name: w.name, kind: 'tool', tool: w.tool, dur: w.dur, props: { hard: 1, sharp: 1, divine: 1 } }; }
+  const t = newTool(w.name, a); t.public = false; return `${a.name} ได้รับ ${w.name}`;
+}
+function giftNeeds(a) {
+  const out = [];
+  const k = STAT_FOR_ROLE(a);
+  if (Math.random() < 0.15 && a.stats[k] < 8) out.push(['stat', `อยากเก่ง${STATS[k].name}ขึ้น ตอนนี้แค่ระดับ ${a.stats[k]}`]);
+  const beast = faunaSpecies.some(f => f.predator && [a.zone].concat(getAdjacentZones(a.zone)).some(z => (f.zp[z] || 0) > 0));
+  if (a.age >= 15 && !hasTool('blade', a) && (beast || /ล่า/.test(a.role || ''))) out.push(['weapon', beast ? 'สัตว์ร้ายอยู่ใกล้ แต่ไม่มีอาวุธป้องกันตัว' : 'เป็นนักล่าแต่ไม่มีอาวุธ']);
+  if (!hasTool('axe', a) && ((a.role || '').includes('เก็บ') || (a.role || '').includes('ช่าง')) && Math.random() < 0.4) out.push(['tool', 'ต้องตัดไม้ทุกวันแต่ไม่มีขวาน']);
+  const hurt = aiAgents.filter(o => o.zone === a.zone && o.hp < maxHp(o) * 0.5).length;
+  if (a.hp < maxHp(a) * 0.45 || hurt >= 2) out.push(['medicine', `บาดเจ็บ HP ${a.hp}/${maxHp(a)}${hurt >= 2 ? ` และมีคนเจ็บในโซน ${hurt} คน` : ''} ไม่มียารักษา`]);
+  const lastFind = Math.max(-1, ...Object.values(a.know || {}).filter(e => e.out).map(e => e.day || 0));
+  if (a.age >= 15 && simDay - lastFind >= 4 && Math.random() < 0.5) out.push(['knowledge', `ทดลองมา ${simDay - Math.max(0, lastFind)} วันแล้วยังไม่ค้นพบอะไรใหม่ อยากได้ความรู้สูตรผลิต`]);
+  const wz = zoneWeather(a.zone);
+  if ((wz === 'rain' || wz === 'storm' || wz === 'snow') && aiAgents.filter(o => (o.warmth ?? 100) < 60).length >= 2) out.push(['weather', `${WEATHER[wz].name}ไม่หยุด คนหนาวกันหลายคน`]);
+  if (SEASONS[currentSeasonIdx].id === 'winter' && aiAgents.filter(o => (o.warmth ?? 100) < 40).length >= 2) out.push(['weather', 'ฤดูหนาวนี้โหดร้ายเกินไป']);
+  const kids = aiAgents.filter(c => c.age < 12 && c.guardian === a.id).length;
+  if (a.age >= 20 && a.age <= 45 && !kids && aiAgents.some(o => o !== a && o.age >= 18 && o.gender !== a.gender && rel(a, o) >= 30) && Math.random() < 0.3) out.push(['child', 'อยากมีลูกสืบสกุล']);
+  return out;
+}
+
 function inRealm(i, fn) {
   if (i === activeRealm) return fn();
   realms[activeRealm].state = captureRealm();
@@ -3276,6 +3386,7 @@ function inRealm(i, fn) {
 }
 function applyWish(p) {
   const w = p.wish; const placed = [];
+  if (GIFT_EFFECTS[p.need]) { p.effect = GIFT_EFFECTS[p.need](p, byId(p.agentId)); return [p.zone]; }
   if (p.kind === 'animal') {
     let f = faunaSpecies.find(x => x.name === w.name);
     if (!f) {
@@ -3308,7 +3419,7 @@ function resolvePrayer(p, ok, note, by) {
   if (ok) {
     p.placed = applyWish(p);
     if (a) { a.bubble = `🙌 ${by === 'fate' ? 'ชะตาประทาน' : 'พระเจ้าประทาน'}${p.wish.name}!`; a.rep = (a.rep || 0) + 1; if (a.prayMemo) delete a.prayMemo[p.need]; }
-    addLog(`✨ [${who}อนุมัติ] "${p.wish.name}" ปรากฏขึ้นที่ ${p.placed.join(', ')} ตามคำอธิษฐานของ ${p.agentName} (ถวายศรัทธา ${p.offering})`, '#fde68a');
+    addLog(`✨ [${who}อนุมัติ] "${p.wish.name}" ${p.effect ? '→ ' + p.effect : 'ปรากฏขึ้นที่ ' + p.placed.join(', ')} ตามคำอธิษฐานของ ${p.agentName} (ถวายศรัทธา ${p.offering})`, '#fde68a');
   } else if (a) {
     const back = Math.floor(p.offering / 2); a.faith = (a.faith || 0) + back;
     const m = (a.prayMemo = a.prayMemo || {})[p.need] || { tier: p.tier, rejects: 0 };
@@ -3318,7 +3429,7 @@ function resolvePrayer(p, ok, note, by) {
     if (m.tier < 1 && p.need.startsWith('mat:')) createQuest(a, 'gather', { title: `ช่วยหาของแทน ${p.need.slice(4)}`, item: p.need.slice(4), qty: 2, zone: a.zone, difficulty: 3 });
   }
   godArchive.unshift({ id: p.id, at: new Date().toISOString(), realm: p.realmName, day: p.decidedDay, agent: p.agentName, zone: p.zone, need: p.need, kind: p.kind,
-    tier: p.tier, stars: p.stars, offering: p.offering, by, wish: p.wish, reason: p.reason, decision: p.status, note, placed: p.placed || [] });
+    tier: p.tier, stars: p.stars, offering: p.offering, by, effect: p.effect || '', wish: p.wish, reason: p.reason, decision: p.status, note, placed: p.placed || [] });
   saveGodDB();
 }
 function answerPrayer(id, ok) {
@@ -3336,7 +3447,7 @@ function renderPrayers() {
   const pend = prayers.filter(p => p.status === 'pending');
   const cnt = document.getElementById('cnt-pray'); if (cnt) { cnt.innerText = pend.length; cnt.style.display = pend.length ? '' : 'none'; }
   box.innerHTML = pend.length ? pend.map(p => `<div class="card pray-card">
-      <div class="card-title"><span>${KIND_LABEL[p.kind]} ${p.wish.name}</span><span class="tag tag-warn" title="ความสมเหตุสมผล">${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}</span></div>
+      <div class="card-title"><span>${KIND_LABEL[p.kind] || '🙏'} ${p.wish.name}</span><span class="tag tag-warn" title="ความสมเหตุสมผล">${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}</span></div>
       <div>🗣️ <b>${p.agentName}</b> (${p.realmName} · ${p.zone} · วันที่ ${p.day}) ขอว่า: “${p.wish.desc}”</div>
       <div class="sec-note" style="margin:6px 0;">💭 เหตุผล: ${p.reason}</div>
       <div style="font-size:11.5px; margin-bottom:6px;">✨ ถวายศรัทธา <b>${p.offering}</b> · ถ้าไม่ตอบภายใน 2 วัน ชะตาจะตัดสินเอง (โอกาสอนุมัติ ${Math.round(fateChance(p) * 100)}%)</div>
@@ -3349,7 +3460,7 @@ function renderPrayers() {
   const hist = document.getElementById('god-db-list');
   if (hist) hist.innerHTML = godArchive.slice(0, 40).map(e => `<div class="card" style="padding:8px 10px;">
       <div class="card-title" style="font-size:12px;"><span>${e.decision === 'approved' ? '✅' : '⛔'} ${KIND_LABEL[e.kind]} ${e.wish.name}</span><span class="tag ${e.decision === 'approved' ? 'tag-ok' : 'tag-fail'}">${e.decision === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ'}</span></div>
-      <div style="font-size:11px; color:var(--muted);">${e.realm} · วันที่ ${e.day} · ขอโดย ${e.agent} · ${'★'.repeat(e.stars)} · ✨${e.offering ?? '-'}${e.by === 'fate' ? ' · 🎲 ชะตาตัดสิน' : e.by === 'auto' ? ' · ⚙️ อัตโนมัติ' : ''}${e.placed && e.placed.length ? ' · เกิดที่ ' + e.placed.join(', ') : ''}${e.note ? ' · เหตุผล: ' + e.note : ''}</div></div>`).join('') || '<div class="sec-note">ยังไม่มีบันทึก</div>';
+      <div style="font-size:11px; color:var(--muted);">${e.realm} · วันที่ ${e.day} · ขอโดย ${e.agent} · ${'★'.repeat(e.stars)} · ✨${e.offering ?? '-'}${e.by === 'fate' ? ' · 🎲 ชะตาตัดสิน' : e.by === 'auto' ? ' · ⚙️ อัตโนมัติ' : ''}${e.effect ? ' · ผล: ' + e.effect : e.placed && e.placed.length ? ' · เกิดที่ ' + e.placed.join(', ') : ''}${e.note ? ' · เหตุผล: ' + e.note : ''}</div></div>`).join('') || '<div class="sec-note">ยังไม่มีบันทึก</div>';
 }
 
 function runAutonomousStep() {
@@ -3387,12 +3498,13 @@ function runAutonomousStep() {
         const food = (m.food || 0) + (f.food || 0) + (v ? v.food / 4 : 0);
         const kidsOf = aiAgents.filter(k => k.age < 12 && (k.guardian === f.id || k.guardian === m.id)).length;
         // A child only when the household can feed one more mouth
-        if (sc >= 30 && food >= 30 && food / (2 + kidsOf + 1) >= 7 && kidsOf < 3) pairs.push([m, f, sc]);
+        if ((sc >= 30 && food >= 30 && food / (2 + kidsOf + 1) >= 7 && kidsOf < 3) || (f.fertile && sc >= 20 && food >= 15 && kidsOf < 4)) pairs.push([m, f, sc + (f.fertile ? 100 : 0)]);
       }));
       if (!pairs.length) { addLog('💔 ยังไม่มีคู่ไหนพร้อมสร้างครอบครัว (ต้องสนิทกันและมีอาหารพอ)', '#f9a8d4'); }
       else {
       pairs.sort((p, q) => q[2] - p[2]);
       const [dad, mom] = pairs[Math.floor(Math.random() * Math.min(2, pairs.length))];
+      if (mom.fertile) mom.fertile--;
       const nextGen = Math.max(dad.gen, mom.gen) + 1;
       currentGeneration = Math.max(currentGeneration, nextGen);
       const g = Math.random() < 0.5 ? 'ชาย' : 'หญิง';
