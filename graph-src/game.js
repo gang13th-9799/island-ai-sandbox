@@ -67,6 +67,7 @@ const SEASONS = [
   { id: 'winter', name: '❄️ ฤดูหนาว', temp: '11°C', tint: 'rgba(186, 230, 253, 0.26)', foodMult: 1.5, fishBonus: 0, gatherBonus: 1 }
 ];
 let currentSeasonIdx = 0;
+let weather = { kind: 'clear', hours: 6 };
 
 // Tech tree = milestones of what the island has DISCOVERED (not a recipe list)
 const TECH_TREE_ERAS = [
@@ -1780,7 +1781,7 @@ function ecologyTick() {
 const REALM_VARS = ['simMinutes', 'simDay', 'currentZoneId', 'worldSeed', 'currentSeasonIdx', 'techDiscovered', 'discoveredProducts', 'ZONES',
   'zoneTerrainGrid', 'zoneNodes', 'faunaSpecies', 'animalLogs', 'foodStock', 'activeDisaster', 'aiCrisisProposals', 'rndTrials', 'huntLogs',
   'teachLogs', 'alchemyLogs', 'toolWear', 'dynamicProducts', 'novelCount', 'usedNames', 'sharedInventory', 'discoveredElements', 'shelters',
-  'families', 'government', 'currentGeneration', 'aiAgents', 'toolItems', 'toolSeq', 'villages', 'villageSeq', 'quests', 'questSeq', 'souls', 'logBuffer'];
+  'families', 'government', 'currentGeneration', 'aiAgents', 'toolItems', 'toolSeq', 'villages', 'villageSeq', 'quests', 'questSeq', 'souls', 'logBuffer', 'weather'];
 function captureRealm() {
   return { simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
@@ -2467,7 +2468,7 @@ function staminaTick() {
       addLog(`😵 [หมดแรง] "${a.name}" ทำงานหนักจนล้มหลับกลางทาง HP -4`, '#fb923c');
       return;
     }
-    const tired = a.stamina < 25 || (lateNight && a.stamina < 85);
+    const tired = a.stamina < 25 || (lateNight && a.stamina < 85) || ((a.warmth ?? 100) < 40 && !morning);
     if (!tired) { a.wantRest = false; a.restWait = 0; return; }
     a.wantRest = true; a.restWait = (a.restWait || 0) + 1;
     if (a.goal && a.goal.gate) return;                  // finish a realm crossing first
@@ -2489,6 +2490,88 @@ function staminaTick() {
     }
   });
 }
+
+// ==========================================
+// TEMPERATURE & WEATHER: cold nights, rain and winter can kill people sleeping outside
+// ==========================================
+const WEATHER = {
+  clear:  { icon: '☀️', name: 'ฟ้าใส', dt: 0, wet: 0 },
+  cloudy: { icon: '⛅', name: 'เมฆครึ้ม', dt: -2, wet: 0 },
+  rain:   { icon: '🌧️', name: 'ฝนตก', dt: -5, wet: 1 },
+  storm:  { icon: '⛈️', name: 'พายุฝน', dt: -8, wet: 2 },
+  snow:   { icon: '🌨️', name: 'หิมะตก', dt: -9, wet: 1 }
+};
+const SEASON_BASE_T = { spring: 27, summer: 34, rainy: 23, winter: 15 };
+const WEATHER_ODDS = { spring: { clear: 5, cloudy: 3, rain: 2 }, summer: { clear: 7, cloudy: 2, rain: 1, storm: 0.5 }, rainy: { cloudy: 3, rain: 5, storm: 2, clear: 1 }, winter: { clear: 4, cloudy: 4, rain: 2 } };
+const WEATHER_ODDS_FROZEN = { clear: 2, cloudy: 3, snow: 4, storm: 1 };
+const GEO_DT = { mountain_cave: -3, mountain_cliff: -4, mountain_peak: -7, waterfall_river: -2, hill_forest: -1, hill_grassland: -1, deep_forest: -1, beach_ocean: 1, rocky_beach: 0, wetland: 0 };
+const OUTFIT_WARMTH = { bare: 0, under: 1, leaf: 0, flower: 0, hide: 6, deer: 5, cloth: 4, village: 5, winter: 13, cape: 7 };
+function fixWeather() { if (!weather || !WEATHER[weather.kind]) weather = { kind: 'clear', hours: 2 }; }
+function weatherTick() {
+  fixWeather();
+  if (--weather.hours > 0) return;
+  const frozen = realms[tickingRealm] && realms[tickingRealm].def && realms[tickingRealm].def.winter && SEASONS[currentSeasonIdx].id === 'winter';
+  const odds = frozen ? WEATHER_ODDS_FROZEN : WEATHER_ODDS[SEASONS[currentSeasonIdx].id]; const tot = Object.values(odds).reduce((x, y) => x + y, 0);
+  let r = Math.random() * tot, k = 'clear'; for (const [w, p] of Object.entries(odds)) { if ((r -= p) <= 0) { k = w; break; } }
+  if (k !== weather.kind && (k === 'storm' || k === 'snow' || k === 'rain')) addLog(`${WEATHER[k].icon} [อากาศเปลี่ยน] ${WEATHER[k].name}${k === 'snow' || k === 'storm' ? ' ใครอยู่ข้างนอกระวังหนาวตาย!' : ''}`, '#7dd3fc');
+  weather = { kind: k, hours: 3 + Math.floor(Math.random() * 7) };
+}
+function airTemp(zone) {
+  fixWeather();
+  const h = Math.floor(simMinutes / 60) % 24;
+  const daily = h >= 12 && h < 16 ? 3 : h >= 21 || h < 5 ? -6 : h >= 5 && h < 8 ? -3 : 0;
+  const realmCold = realms[tickingRealm] && realms[tickingRealm].def && realms[tickingRealm].def.winter ? -6 : 0;
+  return SEASON_BASE_T[SEASONS[currentSeasonIdx].id] + daily + WEATHER[weather.kind].dt + (GEO_DT[ZONES[zone].geo] || 0) + realmCold;
+}
+function feltTemp(a) {
+  let t = airTemp(a.zone);
+  const indoors = a.sleeping && a.sleepKind === 'bed';
+  const fire = stationInZone(a.zone, 'campfire');
+  const nearFire = fire && Math.hypot(a.x - fire.x, a.y - fire.y) <= 8;
+  t += OUTFIT_WARMTH[pupOutfit(a)] || 0;
+  if (indoors) t += 12 + WEATHER[weather.kind].wet * 3;         // walls keep the rain and wind off
+  else t -= WEATHER[weather.kind].wet * 3;                      // soaked
+  if (nearFire) t += 12;
+  if (a.sleeping && aiAgents.filter(o => o !== a && o.sleeping && o.zone === a.zone && Math.hypot(o.x - a.x, o.y - a.y) <= 3).length >= 2) t += 3;   // huddling
+  if (a.sleeping && a.sleepKind === 'ground') t -= 2;
+  if (a.age < 12) t -= 2; if (a.age >= 55) t -= 2;
+  return Math.round(t);
+}
+function temperatureTick() {
+  weatherTick();
+  aiAgents.forEach(a => {
+    if (a.warmth === undefined) a.warmth = 100;
+    const t = feltTemp(a); a.felt = t;
+    const vit = Math.min(0.4, st(a, 'vit') * 0.015);
+    if (t < 12) {
+      a.warmth = Math.max(0, a.warmth - (12 - t) * 0.45 * (1 - vit));
+      if (Math.random() < 0.3) gainExp(a, 'vit', 0.3);
+    } else if (t > 38) {
+      a.stamina = Math.max(0, (a.stamina ?? 100) - (t - 38) * 0.8);
+      a.warmth = Math.min(100, a.warmth + 10);
+      if (t > 42) { a.hp = Math.max(0, a.hp - 2); if (!a.sleeping) a.bubble = '🥵 ร้อนจนหน้ามืด'; }
+    } else a.warmth = Math.min(100, a.warmth + (t >= 18 ? 12 : 7));
+    if (a.warmth < 50 && !a.sleeping && Math.random() < 0.5) a.bubble = a.warmth < 25 ? '🥶 หนาวสั่นจนแทบขยับไม่ไหว' : '🥶 หนาวจัง ต้องหาที่อุ่นๆ';
+    if (a.warmth < 25) { a.hp = Math.max(0, a.hp - (a.warmth <= 0 ? 5 : 2)); a.coldHurt = true; }
+    else a.coldHurt = false;
+    if (a.warmth <= 0 && a.sleeping) { a.sleeping = false; a.bubble = '🥶 หนาวจนต้องตื่นมา!'; }
+    // seek warmth: go to a fire or a shelter in this zone
+    if (a.warmth < 55 && a.age >= 12 && !a.sleeping) {
+      const spot = restSpotIn(a.zone, a);
+      if (spot && Math.hypot(a.x - spot.x, a.y - spot.y) > 3) { a.goal = null; a.session = null; a.gatherT = null; for (let k = 0; k < 4; k++) moveToward(a, spot.x, spot.y); a.coldSeek = true; }
+      else if (!spot && a.warmth < 45 && !(a.goal && a.goal.gate)) {
+        // nowhere warm here: head for a neighbouring zone that has a fire/shelter, or lower & warmer ground
+        const nb = getAdjacentZones(a.zone).map(z => [z, (shelters.some(s => s.zone === z && (isRestShelter(s) || s.station === 'campfire')) ? 20 : 0) + (GEO_DT[ZONES[z].geo] || 0)])
+          .sort((p, q) => q[1] - p[1])[0];
+        if (nb && nb[1] > (GEO_DT[ZONES[a.zone].geo] || 0)) {
+          a.zone = nb[0]; buildZoneTerrain(a.zone); const p = findValidTile(a.zone, false); a.x = p.x; a.y = p.y; a.goal = null; a.gatherT = null;
+          a.bubble = `🥶 หนาวเกินไป ย้ายไปหาที่อุ่นที่ ${nb[0]}`; a.coldSeek = true;
+        } else a.coldSeek = false;
+      } else a.coldSeek = false;
+    } else a.coldSeek = false;
+  });
+}
+function weatherLabel() { return `${WEATHER[weather.kind].icon} ${WEATHER[weather.kind].name} ${airTemp(currentZoneId)}°C`; }
 
 function runAutonomousStep() {
   if (!isRunning) return;
@@ -2639,6 +2722,8 @@ function runAutonomousStep() {
     addRel(h, giver, 6); addRel(giver, h, 1); giver.rep += 1;
     if (Math.random() < 0.4) addLog(`🤲 ${giver.name} แบ่งอาหาร ${amt} ให้ ${h.name} ที่กำลังหิวโซ`, '#86efac');
   });
+  temperatureTick();
+  removeDead(aiAgents.filter(a => a.hp <= 0 && a.coldHurt), d => `🥶 [หนาวตาย] "${d.name}" ทนความหนาวไม่ไหว เสียชีวิตขณะ${d.sleeping || d.sleepKind === 'ground' ? 'นอนกลางแจ้ง' : 'อยู่ข้างนอก'} (${WEATHER[weather.kind].name} ${airTemp(d.zone)}°C)`);
   removeDead(aiAgents.filter(a => a.hp <= 0), d => `💀 [เสียชีวิต] "${d.name}" เสียชีวิตจากความหิวหรือบาดเจ็บหนัก!`);
   if (aiAgents.length && aiAgents.reduce((t, a) => t + (a.food || 0), 0) / aiAgents.length < 2) generateCrisisProposal('อาหารของทุกคนใกล้หมด');
 
@@ -2654,7 +2739,7 @@ function runAutonomousStep() {
   const night = isNightTime();
   aiAgents.forEach(a => {
     buildZoneTerrain(a.zone);
-    if (a.sleeping || a.wantRest) return;
+    if (a.sleeping || a.wantRest || a.coldSeek) return;
     if (a.age < 12) {
       // Small children stay with their guardian (that's where they learn)
       let g = aiAgents.find(o => o.id === a.guardian && o.age >= 15);
@@ -2896,7 +2981,7 @@ function updateHudChips() {
   if (bgTick) return;
   const h = String(Math.floor(simMinutes / 60) % 24).padStart(2, '0');
   document.getElementById('clock-display').innerText = `วันที่ ${simDay} · ${h}:00 ${isNightTime() ? 'กลางคืน' : 'กลางวัน'}`;
-  document.getElementById('season-display').innerText = `${SEASONS[currentSeasonIdx].name} (${SEASONS[currentSeasonIdx].temp})`;
+  document.getElementById('season-display').innerText = `${SEASONS[currentSeasonIdx].name} · ${weatherLabel()}`;
   const foodAll = aiAgents.reduce((t, a) => t + (a.food || 0), 0);
   document.getElementById('food-display').innerText = `🍖 อาหารติดตัวรวม ${foodAll}`;
   document.getElementById('food-display').style.color = foodAll <= aiAgents.length * 2 ? '#ff5a6e' : '#ffcf6b';
@@ -3106,6 +3191,7 @@ function renderAllUI() {
         <div class="stat-row">
           <span>⚡ แรง ${Math.round(a.stamina ?? 100)}%</span>
           <div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.stamina ?? 100)}%; background:${(a.stamina ?? 100) < 25 ? '#ef4444' : '#38bdf8'};"></div></div>
+          <span>🌡️ ${a.felt ?? '-'}°C ${(a.warmth ?? 100) < 50 ? '🥶' : ''}</span>
           <span>${a.sleeping ? (a.sleepKind === 'bed' ? '🛖 นอนในที่พัก' : a.sleepKind === 'fire' ? '🔥 นอนข้างกองไฟ' : '😪 นอนกับพื้น') : a.wantRest ? '🥱 กำลังไปพัก' : '🏃 ตื่นอยู่'}</span>
         </div>
         ${(() => {
@@ -3265,6 +3351,7 @@ function getMood(a) {
   if (b.startsWith('❌') || b.startsWith('😓') || b.startsWith('😅') || b.startsWith('🤔')) return 'confused';
   if (a.hunger >= 70 || (a.crowd || 0) >= 2) return 'sad';
   if (b.startsWith('🏹') || b.startsWith('🚶') || b.startsWith('🔬')) return 'focus';
+  if ((a.warmth ?? 100) < 50 && !a.sleeping) return 'scared';
   if (a.sleeping || ((a.stamina ?? 100) < 25)) return 'sleepy';
   return 'happy';
 }
@@ -3807,8 +3894,22 @@ function drawCanvas() {
     });
     ctx.globalCompositeOperation = 'source-over';
   }
-  // screen-space labels (constant size)
+  // weather overlay (rain / snow)
   ctx.setTransform(d, 0, 0, d, 0, 0);
+  const wk = (weather && weather.kind) || 'clear';
+  if (wk === 'rain' || wk === 'storm' || wk === 'snow') {
+    if (wk !== 'snow') { ctx.fillStyle = wk === 'storm' ? 'rgba(40,50,80,.28)' : 'rgba(60,80,110,.14)'; ctx.fillRect(0, 0, VIEW.w, VIEW.h); }
+    const n = wk === 'storm' ? 160 : wk === 'rain' ? 90 : 70, t = now;
+    ctx.strokeStyle = 'rgba(220,235,255,.55)'; ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.2; ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const sx = ((i * 97.3 + (wk === 'snow' ? Math.sin(t + i) * 20 : -t * 120)) % (VIEW.w + 40) + VIEW.w + 40) % (VIEW.w + 40) - 20;
+      const sy = ((i * 53.7 + t * (wk === 'snow' ? 40 : 520)) % (VIEW.h + 40)) - 20;
+      if (wk === 'snow') { ctx.moveTo(sx + 2, sy); ctx.arc(sx, sy, 2, 0, 7); } else { ctx.moveTo(sx, sy); ctx.lineTo(sx - 4, sy + 12); }
+    }
+    wk === 'snow' ? ctx.fill() : ctx.stroke();
+    if (wk === 'storm' && Math.sin(t * 1.7) > 0.995) { ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(0, 0, VIEW.w, VIEW.h); }
+  }
+  // screen-space labels (constant size)
   labels.forEach(l => drawLabel(ctx, l));
 }
 
@@ -3824,6 +3925,8 @@ function drawLabel(ctx, l) {
 }
 function statusIcon(a) {
   const b = a.bubble || ''; const m = b.match(/^\p{Extended_Pictographic}️?/u);
+  if ((a.warmth ?? 100) < 50) return '🥶';
+  if ((a.felt ?? 25) > 38) return '🥵';
   if (a.sleeping) return '💤';
   if (a.wantRest || (a.stamina ?? 100) < 25) return '🥱';
   if (a.hunger >= 70) return '🍖';
@@ -3919,6 +4022,7 @@ function renderAgentCard() {
     <div class="ac-bars"><span>❤️</span><div class="bar-wrap"><div class="bar-hp" style="width:${hp}%;background:${hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171'}"></div></div><span>${hp}%</span>
       <span>🍖</span><div class="bar-wrap"><div class="bar-hg" style="width:${hg}%;background:#f5a524"></div></div><span>${hg}%</span>
       <span>⚡</span><div class="bar-wrap"><div class="bar-hp" style="width:${sta}%;background:${sta < 25 ? '#ef4444' : '#38bdf8'}"></div></div><span>${sta}%</span>
+      <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
     <div class="ac-sub">🧠 รู้ ${kn} สูตร · 🎒 ${Object.entries(a.bag || {}).filter(([, n]) => n > 0).slice(0, 5).map(([k, n]) => `${k}×${n}`).join(', ') || 'กระเป๋าว่าง'}</div>`;
