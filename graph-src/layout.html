@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#120f2a">
+<title>เกาะร้าง AI — ค่ำคืนแห่งการเรียนรู้</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="ambient"></div>
+<div class="game">
+  <div class="stage">
+    <div class="canvas-wrapper"><canvas id="mapCanvas" width="560" height="560"></canvas></div>
+    <div class="vignette"></div>
+
+    <!-- Top HUD -->
+    <div class="hud-top">
+      <div class="clock-orb">
+        <div class="orb" id="sky-orb">☀️</div>
+        <div class="clock-text">
+          <div class="brand">🔥 เกาะร้าง AI</div>
+          <div id="clock-display">วันที่ 1 · 08:00 กลางวัน</div>
+          <div id="season-display">🌸 ฤดูใบไม้ผลิ (27°C)</div>
+        </div>
+      </div>
+      <div class="res-row">
+        <span class="chip" id="food-display">🍖 อาหาร 28</span>
+        <span class="chip" id="village-chip">🏕️ ยังไม่มีหมู่บ้าน</span>
+        <span class="chip" id="pop-chip">👥 2</span>
+        <button class="chip" id="world-display" onclick="openLobby()" style="cursor:pointer; color:#f0abfc;">🌀 ล็อบบี้</button>
+        <span class="chip hide-sm" id="save-status">💾 พร้อม</span>
+      </div>
+    </div>
+
+    <div class="zone-bar">
+      <span id="zone-title">โซน C1</span>
+      <button class="gbtn ghost" onclick="changeZoom(-1)">－</button>
+      <button class="gbtn ghost" onclick="changeZoom(1)">＋</button>
+      <button class="gbtn ghost" onclick="toggleLabels()" id="btn-labels">🏷️</button>
+      <button class="gbtn ghost" onclick="toggleGrid()" id="btn-grid">#</button>
+    </div>
+
+    <div class="disaster-banner" id="disaster-banner">⚠️ ภัยพิบัติกำลังเกิด!</div>
+
+    <div class="minimap-box" id="minimap-box">
+      <div class="mm-head" onclick="document.getElementById('minimap-box').classList.toggle('collapsed')"><span>🗺️ แผนที่เกาะ</span><span>▾</span></div>
+      <div class="minimap-grid" id="minimap-grid"></div>
+    </div>
+
+    <button class="portal-btn portal-n" id="btn-portal-n" onclick="travelDir('N')">⬆️ เหนือ</button>
+    <button class="portal-btn portal-s" id="btn-portal-s" onclick="travelDir('S')">⬇️ ใต้</button>
+    <button class="portal-btn portal-w" id="btn-portal-w" onclick="travelDir('W')">⬅️</button>
+    <button class="portal-btn portal-e" id="btn-portal-e" onclick="travelDir('E')">➡️</button>
+
+    <div id="hover-terrain">แตะแผนที่เพื่อดูพื้นที่</div>
+    <div class="log-bar" id="log-bar"></div>
+
+    <div class="backdrop" id="backdrop" onclick="closeSheet()"></div>
+
+    <!-- Realm lobby -->
+    <div id="lobby">
+      <div class="lobby-inner">
+        <div class="sheet-head" style="border:none; padding:6px 0 10px;">
+          <div class="lobby-title" style="font-family:var(--head); font-weight:800; font-size:18px; color:var(--amber-2);">🌀 ล็อบบี้ดินแดน</div>
+          <button class="gbtn ghost round close" onclick="closeLobby()">✕</button>
+        </div>
+        <div class="sec-note">ทุกดินแดนเดินเวลาไปพร้อมกัน AI ข้ามดินแดนได้ทางเกจที่พระเจ้าสร้างไว้เท่านั้น ส่วนสัตว์ร้ายก็อาจหลงเข้าเกจได้เหมือนกัน</div>
+        <div id="lobby-requests"></div>
+        <div id="lobby-realms"></div>
+        <h4 style="color:#f0abfc; font-family:var(--head); font-size:13px; margin:12px 0 8px;">🌀 เหตุการณ์ข้ามดินแดน</h4>
+        <div id="lobby-log"></div>
+      </div>
+    </div>
+
+    <!-- Slide-up sheet -->
+    <div class="sidebar" id="sheet">
+      <div class="grabber"></div>
+      <div class="sheet-head">
+        <div id="sheet-title">🌳 เทคโนโลยี</div>
+        <button class="gbtn ghost round close" onclick="closeSheet()">✕</button>
+      </div>
+
+      <div id="tab-techtree" class="tab-content active">
+        <div class="sec-note">
+          ไม่มีสูตรสำเร็จให้ กฎธรรมชาติของแต่ละโลกถูกซ่อนไว้และสุ่มใหม่ทุกครั้งที่เริ่มโลกใหม่ AI ต้องทดลองเอง จดจำเอง และสอนต่อกันเอง ถ้าคนที่รู้ตายหมดโดยยังไม่ได้สอนใคร ความรู้นั้นจะหายไปจากเกาะ
+        </div>
+        <div id="tech-tree-container"></div>
+      </div>
+
+      <div id="tab-civ" class="tab-content">
+        <div id="gov-box"></div>
+        <h4 style="color:var(--amber-2);">👥 ประชากร</h4>
+        <div class="sec-note">ค่าสถานะเริ่มที่ 1 ทุกค่า และโตจากการทำงานจริงเท่านั้น ตัวอักษร S/A/B/C/D คือพรสวรรค์ (ความเร็วในการโต) ลูกได้รับพรสวรรค์บางส่วนจากพ่อแม่<br>🧪 = ค้นพบเอง · 📖 = มีคนสอน · ⚠️ = จำได้ว่าวิธีนี้ใช้ไม่ได้ · เด็กเกิดมาไม่มีความรู้ ต้องเรียนจากผู้ใหญ่ในโซนเดียวกัน (รอบกองไฟตอนกลางคืนจะสอนได้เร็วขึ้น)</div>
+        <div id="agent-list"></div>
+        <h4 style="color:var(--violet);">📚 เรื่องเล่ารอบกองไฟ</h4>
+        <div id="teach-list"></div>
+        <h4 style="color:#f9a8d4;">👨‍👩‍👧‍👦 สายตระกูล</h4>
+        <div id="family-list"></div>
+      </div>
+
+      <div id="tab-rnd" class="tab-content">
+        <div class="sec-note">
+          การทดลองแต่ละแบบต้องมีสถานีหรือเครื่องมือจริง และ AI ต้องเดินไปถึงสถานีนั้นเอง เครื่องมือใช้แล้วสึกและพังได้ · ความล้มเหลวที่จำไว้รวมกันมี <span id="cnt-mem">0</span> รูปแบบ
+        </div>
+        <h4 style="color:var(--amber-2);">🏗️ สถานีและสิ่งปลูกสร้าง</h4>
+        <div id="station-list"></div>
+        <h4 style="color:var(--amber-2);">🔧 วิธีทำงานที่มีในโลก</h4>
+        <div id="method-list"></div>
+        <h4 style="color:var(--violet);">🏛️ โกดังหมู่บ้าน (สมาชิกต้องเอาของมาแลก)</h4>
+        <div id="inv-list" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;"></div>
+        <h4 style="color:var(--amber-2);">🔧 เครื่องมือและเจ้าของ</h4>
+        <div id="tool-list"></div>
+        <h4 style="color:var(--amber-2);">🎒 กระเป๋าส่วนตัว</h4>
+        <div class="sec-note">ของในกระเป๋าเป็นของเจ้าของ คนอื่นหยิบไม่ได้ สมาชิกหมู่บ้านต้องส่งเข้าโกดังตาม % ที่ตกลงกัน และคนใจดีจะบริจาคเพิ่มเอง</div>
+        <div id="bag-list"></div>
+        <h4 style="color:var(--violet);">🧪 บันทึกการทดลอง</h4>
+        <div id="rnd-list"></div>
+      </div>
+
+      <div id="tab-alchemy" class="tab-content">
+        <div class="sec-note">
+          ต้องมี <b>ห้องแล็บแปรธาตุ</b> ที่ AI สร้างเอง และต้องมีวัตถุดิบที่มีธาตุอยู่ในคลัง ผลการผสมแต่ละคู่จะเหมือนเดิมเสมอในโลกเดียวกัน AI จึงจดจำและสอนต่อได้
+        </div>
+        <button class="gbtn amber" style="width:100%; margin-bottom:12px;" onclick="requestSynthesis()">⚛️ ส่งนักวิจัยไปแปรธาตุ</button>
+        <div class="elem-grid" id="element-grid"></div>
+        <div id="alchemy-log-list"></div>
+      </div>
+
+      <div id="tab-quest" class="tab-content">
+        <div class="sec-note">AI ตั้งเควสขอความช่วยเหลือกันเองเมื่อเดือดร้อน คนรับเควสต่อรองค่าตอบแทนได้ก่อนรับ ช่วยสำเร็จแล้วสนิทกันขึ้น แต่ถ้าตอบแทนไม่คุ้มหรือผิดสัญญา ความสัมพันธ์จะแย่ลง ถ้าแย่หนักจะไม่ยอมสอนกัน ทะเลาะกัน และไม่จับคู่กัน</div>
+        <h4 style="color:var(--amber-2);">📜 กระดานเควส</h4>
+        <div id="quest-list"></div>
+        <h4 style="color:#f9a8d4;">💞 ความสัมพันธ์ที่น่าสนใจ</h4>
+        <div id="rel-list"></div>
+      </div>
+
+      <div id="tab-crisis" class="tab-content">
+        <div id="crisis-status-box"></div>
+        <div id="ai-solutions-list"></div>
+        <h4 style="color:var(--moss);">🐾 สัตว์ในป่า (สงวนพันธุ์ขั้นต่ำ 2 ตัว)</h4>
+        <div id="fauna-pop-list"></div>
+        <h4 style="color:var(--blood);">⚙️ ตั้งค่าโลก</h4>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="gbtn ember" onclick="triggerSeasonalDisaster()">🌪️ เรียกภัยพิบัติ</button>
+          <button class="gbtn ghost" onclick="resetSaveData()">🗑️ เริ่มโลกใหม่</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom dock -->
+    <div class="dock">
+      <div class="controls">
+        <button id="btn-toggle-sim" class="gbtn moss" onclick="toggleSim()">⏸️ หยุด</button>
+        <button class="gbtn amber" onclick="cycleSpeed()" id="btn-speed">⏩ 1x</button>
+        <button class="gbtn" onclick="addAIAgent('ชาย')">👨 +ชาย</button>
+        <button class="gbtn" onclick="addAIAgent('หญิง')">👩 +หญิง</button>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn" data-title="🌳 เทคโนโลยี" onclick="switchTab('techtree', this)"><span class="ico">🌳</span>เทค<span class="cnt"><span id="cnt-tech">0</span>/10</span></button>
+        <button class="tab-btn" data-title="👥 ประชากร" onclick="switchTab('civ', this)"><span class="ico">🏕️</span>ประชากร<span class="cnt" id="cnt-pop">2</span></button>
+        <button class="tab-btn" data-title="🧪 ทดลอง & สถานี" onclick="switchTab('rnd', this)"><span class="ico">🧪</span>ทดลอง<span class="cnt" id="cnt-rnd">0</span></button>
+        <button class="tab-btn" data-title="⚛️ แปรธาตุ" onclick="switchTab('alchemy', this)"><span class="ico">🔮</span>แปรธาตุ<span class="cnt" id="cnt-elem">7</span></button>
+        <button class="tab-btn" data-title="📜 กระดานเควส & ความสัมพันธ์" onclick="switchTab('quest', this)"><span class="ico">📜</span>เควส<span class="cnt" id="cnt-quest">0</span></button>
+        <button class="tab-btn" data-title="🆘 วิกฤต & สัตว์ป่า" onclick="switchTab('crisis', this)"><span class="ico">🌙</span>วิกฤต<span class="cnt" id="cnt-sol">0</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
