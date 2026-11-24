@@ -3816,6 +3816,42 @@ function centerOnZone() {
 const screenOf = (wx, wy) => [(wx - VIEW.cx) * VIEW.zoom + VIEW.w / 2, (wy - VIEW.cy) * VIEW.zoom + VIEW.h / 2];
 const worldOf = (sx, sy) => [(sx - VIEW.w / 2) / VIEW.zoom + VIEW.cx, (sy - VIEW.h / 2) / VIEW.zoom + VIEW.cy];
 
+// ---------- real-ish scale: every object is sized relative to an adult AI ----------
+const HUMAN_H = WT * 2.9;          // adult height on the map (world px)
+const SIZE_REL = {                 // height in "adult heights"
+  shelter_hut: 1.6, st_store: 1.5, shelter_kiln: 1.0, st_smelter: 1.2, st_lab: 1.3, st_bench: 0.55, st_fire: 0.45, st_wall: 0.9,
+  st_gate: 2.2, shelter_farm: 0.4, shelter_reactor: 2.0, res_tree: 2.4, res_bamboo: 2.0, res_rock: 0.35,
+  deer: 0.62, boar: 0.42, wolf: 0.45, leopard: 0.45, fish: 0.22
+};
+function drawTreeV(ctx, cx, fy, kind, seed) {
+  const H = HUMAN_H * (kind === 'bamboo' ? 1.9 : 2.3) * (0.9 + (seed % 5) * 0.05);
+  if (kind === 'bamboo') {
+    for (let i = -2; i <= 2; i++) {
+      const x = cx + i * H * 0.07, h = H * (0.75 + ((seed + i * 7) % 4) * 0.08);
+      ctx.strokeStyle = '#4d7c2f'; ctx.lineWidth = H * 0.045; ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x + i * 2, fy - h); ctx.stroke();
+      ctx.strokeStyle = '#86b84a'; ctx.lineWidth = H * 0.025; ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x + i * 2, fy - h); ctx.stroke();
+      ctx.fillStyle = '#3f6b25'; for (let k = 1; k < 5; k++) ctx.fillRect(x - H * 0.028 + i * 2 * k / 5, fy - h * k / 5, H * 0.056, H * 0.012);
+      ctx.fillStyle = '#6aa84f'; ctx.beginPath(); ctx.ellipse(x + i * 2 + H * 0.05, fy - h, H * 0.09, H * 0.03, -0.5, 0, 7); ctx.fill();
+    }
+    return;
+  }
+  ctx.fillStyle = '#7a4a2a'; ctx.fillRect(cx - H * 0.06, fy - H * 0.45, H * 0.12, H * 0.45);
+  ctx.fillStyle = '#5a3520'; ctx.fillRect(cx - H * 0.06, fy - H * 0.45, H * 0.04, H * 0.45);
+  const blobs = [[0, -0.66, 0.3], [-0.2, -0.55, 0.22], [0.2, -0.56, 0.22], [-0.08, -0.82, 0.2], [0.12, -0.78, 0.18]];
+  ctx.fillStyle = '#3f8a3a'; blobs.forEach(([dx, dy, r]) => { ctx.beginPath(); ctx.arc(cx + dx * H, fy + dy * H, r * H, 0, 7); ctx.fill(); });
+  ctx.fillStyle = '#58a84a'; blobs.forEach(([dx, dy, r]) => { ctx.beginPath(); ctx.arc(cx + dx * H - r * H * 0.25, fy + dy * H - r * H * 0.25, r * H * 0.7, 0, 7); ctx.fill(); });
+}
+function drawSized(ctx, key, cx, footY, recolor, rel) {
+  const mat = SPRITES[key]; if (!mat) return { w: 0, h: 0 };
+  const h = (rel || SIZE_REL[key] || 1) * HUMAN_H, p = h / mat.length, w = mat[0].length * p;
+  const x0 = cx - w / 2, y0 = footY - h;
+  for (let r = 0; r < mat.length; r++) for (let c = 0; c < mat[r].length; c++) {
+    const col = recolor && recolor[mat[r][c]] ? recolor[mat[r][c]] : PALETTE[mat[r][c]];
+    if (col) { ctx.fillStyle = col; ctx.fillRect(x0 + c * p - 0.05, y0 + r * p - 0.05, p + 0.1, p + 0.1); }
+  }
+  return { w, h, x0, y0, p };
+}
+
 function drawCanvas() {
   if (bgTick) return;
   const canvas = document.getElementById('mapCanvas'); if (!VIEW.w) resizeView();
@@ -3838,34 +3874,39 @@ function drawCanvas() {
   const items = [];
   const labels = [];
   shelters.filter(s => s.zone === currentZoneId).forEach(s => items.push({ y: (s.y + 3) * WT, draw: () => {
-    const sx = s.x * WT, sy = s.y * WT;
-    ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(sx + WT * 1.6, sy + WT * 2.75, WT * 1.9, WT * 0.45, 0, 0, 7); ctx.fill();
-    drawPixelSprite(ctx, s.sprite || 'shelter_hut', sx, sy, WT * 1.4);
-    if (showLabels) labels.push({ x: sx + WT * 1.5, y: sy - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
+    const cx = (s.x + 1.5) * WT, fy = (s.y + 3) * WT, key = s.sprite || 'shelter_hut';
+    const w = (SPRITES[key] ? SPRITES[key][0].length / SPRITES[key].length : 1.4) * (SIZE_REL[key] || 1) * HUMAN_H;
+    ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * 0.55, w * 0.13, 0, 0, 7); ctx.fill();
+    const d = drawSized(ctx, key, cx, fy);
+    if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
   (zoneNodes[currentZoneId] || []).forEach(n => items.push({ y: (n.y + 1) * WT, draw: () => {
-    const px = n.x * WT, py = n.y * WT, ic = resIcon(n.name);
-    if (n.sprite === 'res_tree' || n.sprite === 'res_bamboo') drawPixelSprite(ctx, n.sprite, px - WT * 0.2, py - WT * 1.2, WT * 1.2);
-    else { ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(px + WT * 0.5, py + WT * 0.95, WT * 0.7, WT * 0.25, 0, 0, 7); ctx.fill(); }
-    ctx.font = `${WT * 1.05}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(ic, px + WT * 0.5, py + WT * (n.sprite === 'res_tree' || n.sprite === 'res_bamboo' ? 1.2 : 0.95)); ctx.textAlign = 'left';
-    if (showLabels && z >= 2.6) labels.push({ x: px + WT * 0.5, y: py + WT * 1.35, text: n.name, color: '#3f3f1f', bg: 'rgba(255,255,240,.8)', small: true, center: true, below: true });
+    const cx = (n.x + 0.5) * WT, fy = (n.y + 1) * WT, ic = resIcon(n.name), tall = n.sprite === 'res_tree' || n.sprite === 'res_bamboo';
+    ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(cx, fy, WT * (tall ? 1.6 : 0.7), WT * 0.32, 0, 0, 7); ctx.fill();
+    if (tall) drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
+    const isz = HUMAN_H * 0.36;
+    ctx.font = `${isz}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(ic, cx + (tall ? WT * 0.9 : 0), fy);
+    ctx.textAlign = 'left';
+    if (showLabels && z >= 2.6) labels.push({ x: cx, y: fy + 3, text: n.name, color: '#3f3f1f', bg: 'rgba(255,255,240,.8)', small: true, center: true, below: true });
   } }));
   faunaSpecies.filter(f => (f.zp[currentZoneId] || 0) > 0).forEach(f => {
     if (!f.zoneCoords) f.zoneCoords = {};
     if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = findValidTile(currentZoneId, f.sprite === 'fish');
     const pos = f.zoneCoords[currentZoneId];
-    items.push({ y: (pos.y + 1.5) * WT, draw: () => {
+    items.push({ y: (pos.y + 1) * WT, draw: () => {
       const tt = trOf(f, currentZoneId);
       const rc = tt.color ? { [MAIN_COLOR_CH[f.sprite] || 'O']: tt.color } : null;
-      const ax = pos.x * WT, ay = pos.y * WT, ps = Math.max(2, Math.floor(WT * 1.3 * 2.2 / 14));
-      ctx.fillStyle = 'rgba(40,30,20,.22)'; ctx.beginPath(); ctx.ellipse(ax + ps * 7, ay + ps * 8, ps * 6, ps * 1.4, 0, 0, 7); ctx.fill();
+      const key = f.sprite || 'deer', rel = (SIZE_REL[key] || 0.6) * (1 + (tt.str || 0) * 0.08);
+      const cx = (pos.x + 0.5) * WT, fy = (pos.y + 1) * WT;
+      const mat = SPRITES[key], h = rel * HUMAN_H, p = h / mat.length, w = mat[0].length * p, ax = cx - w / 2, ay = fy - h, ps = p;
+      ctx.fillStyle = 'rgba(40,30,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * 0.45, w * 0.1, 0, 0, 7); ctx.fill();
       if (tt.parts.includes('ปีก')) { ctx.fillStyle = 'rgba(226,232,240,.9)'; ctx.beginPath(); ctx.moveTo(ax + ps * 5, ay + ps * 3); ctx.lineTo(ax + ps * 2, ay - ps * 3); ctx.lineTo(ax + ps * 9, ay + ps * 2); ctx.closePath(); ctx.fill(); }
-      drawPixelSprite(ctx, f.sprite || 'deer', ax, ay, WT * 1.3, rc);
+      drawSized(ctx, key, cx, fy, rc, rel);
       if (tt.parts.includes('เขา')) { ctx.strokeStyle = '#f5f5f4'; ctx.lineWidth = Math.max(1, ps * 0.6); ctx.beginPath(); ctx.moveTo(ax + ps * 3, ay + ps); ctx.lineTo(ax + ps * 1, ay - ps * 2); ctx.moveTo(ax + ps * 5, ay + ps); ctx.lineTo(ax + ps * 6, ay - ps * 2); ctx.stroke(); }
       if (tt.parts.includes('หาง')) { ctx.strokeStyle = tt.color || '#78350f'; ctx.lineWidth = Math.max(1, ps * 0.6); ctx.beginPath(); ctx.moveTo(ax + ps * 13, ay + ps * 4); ctx.quadraticCurveTo(ax + ps * 17, ay + ps * 2, ax + ps * 18, ay + ps * 6); ctx.stroke(); }
       if (tt.parts.includes('เกล็ด')) { ctx.fillStyle = 'rgba(147,197,253,.9)'; for (let i = 0; i < 4; i++) ctx.fillRect(ax + ps * (3 + i * 2), ay + ps * 4, ps * 0.8, ps * 0.8); }
-      if (showLabels) labels.push({ x: ax + ps * 7, y: ay - 3, text: `${f.predator ? '⚠️ ' : ''}${variantLabel(f, currentZoneId)} ×${f.zp[currentZoneId]}`, color: f.predator ? '#b91c1c' : '#334155', bg: f.predator ? 'rgba(254,226,226,.95)' : 'rgba(255,255,255,.85)', small: true, center: true });
+      if (showLabels) labels.push({ x: cx, y: ay - 3, text: `${f.predator ? '⚠️ ' : ''}${variantLabel(f, currentZoneId)} ×${f.zp[currentZoneId]}`, color: f.predator ? '#b91c1c' : '#334155', bg: f.predator ? 'rgba(254,226,226,.95)' : 'rgba(255,255,255,.85)', small: true, center: true });
     } });
   });
   const tickDur = 10 / simSpeed;
@@ -3958,7 +3999,7 @@ function drawAgentTag(ctx, l, sx, sy) {
   }
 }
 function drawAgent(ctx, a, now, labels) {
-  const H = WT * 2.9;
+  const H = HUMAN_H;
   const fx = a._rx * WT + WT * 0.5, feetY = (a._ry + 1) * WT;
   ctx.fillStyle = 'rgba(40,30,20,0.25)'; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.2, H * 0.06, 0, 0, 7); ctx.fill();
   if (VIEW.follow === a.id) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.28, H * 0.09, 0, 0, 7); ctx.stroke(); }
