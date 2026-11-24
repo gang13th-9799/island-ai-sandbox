@@ -4864,7 +4864,6 @@ function drawCanvas() {
         if (tt.parts.includes('หาง')) { ctx.strokeStyle = color || '#78350f'; ctx.lineWidth = Math.max(1, ps * 0.6); ctx.beginPath(); ctx.moveTo(ax + ps * 13, ay + ps * 4); ctx.quadraticCurveTo(ax + ps * 17, ay + ps * 2, ax + ps * 18, ay + ps * 6); ctx.stroke(); }
         if (tt.parts.includes('เกล็ด')) { ctx.fillStyle = 'rgba(147,197,253,.9)'; for (let k = 0; k < 4; k++) ctx.fillRect(ax + ps * (3 + k * 2), ay + ps * 4, ps * 0.8, ps * 0.8); }
         ctx.restore();
-        if (i === 0 && showLabels) labels.push({ x: cx, y: ay - 3, text: `${f.predator ? '⚠️ ' : ''}${variantLabel(f, currentZoneId)} ×${f.zp[currentZoneId]}`, color: f.predator ? '#b91c1c' : '#334155', bg: f.predator ? 'rgba(254,226,226,.95)' : 'rgba(255,255,255,.85)', small: true, center: true });
       } });
     });
   });
