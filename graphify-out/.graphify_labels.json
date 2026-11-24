@@ -1,1 +1,1 @@
-{"0": "game.js", "1": "addLog", "2": "runAutonomousStep", "3": "drawCanvas", "4": "renderAllUI", "5": "experiment", "6": "productDef", "7": "realmTravelTick", "8": "runQuests", "9": "makeSoul", "10": "closeSheet", "11": "toolsOfType"}
+{"0": "game.js", "1": "experiment", "2": "runAutonomousStep", "3": "addLog", "4": "renderAllUI", "5": "rel", "6": "buildZoneTerrain", "7": "drawCanvas", "8": "ecologyTick", "9": "drawPuppet", "10": "clampView", "11": "pupKeys", "12": "closeSheet", "13": "toolsOfType"}

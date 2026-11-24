@@ -14,49 +14,73 @@
 <div class="game">
   <div class="stage">
     <div class="canvas-wrapper"><canvas id="mapCanvas" width="560" height="560"></canvas></div>
-    <div class="vignette"></div>
 
-    <!-- Top HUD -->
-    <div class="hud-top">
-      <div class="clock-orb">
+    <!-- Top-left: realm / village status -->
+    <div class="hud-tl panel">
+      <div class="brand">🔥 เกาะร้าง AI</div>
+      <button class="link" id="world-display" onclick="openLobby()">🌀 ล็อบบี้</button>
+      <div class="tl-row"><span id="village-chip">🏕️ ยังไม่มีหมู่บ้าน</span></div>
+      <div class="tl-row"><span id="pop-chip">👥 2</span><span id="food-display">🍖 อาหาร 28</span></div>
+      <div class="tl-row"><span id="season-display">🌸 ฤดูใบไม้ผลิ (27°C)</span></div>
+      <span id="save-status">💾 พร้อม</span>
+    </div>
+
+    <!-- Top-right: clock dial + minimap -->
+    <div class="hud-tr">
+      <div class="clock-dial panel">
         <div class="orb" id="sky-orb">☀️</div>
-        <div class="clock-text">
-          <div class="brand">🔥 เกาะร้าง AI</div>
-          <div id="clock-display">วันที่ 1 · 08:00 กลางวัน</div>
-          <div id="season-display">🌸 ฤดูใบไม้ผลิ (27°C)</div>
-        </div>
+        <div id="clock-display">วันที่ 1 · 08:00 กลางวัน</div>
       </div>
-      <div class="res-row">
-        <span class="chip" id="food-display">🍖 อาหาร 28</span>
-        <span class="chip" id="village-chip">🏕️ ยังไม่มีหมู่บ้าน</span>
-        <span class="chip" id="pop-chip">👥 2</span>
-        <button class="chip" id="world-display" onclick="openLobby()" style="cursor:pointer; color:#f0abfc;">🌀 ล็อบบี้</button>
-        <span class="chip hide-sm" id="save-status">💾 พร้อม</span>
+      <div class="minimap-box panel" id="minimap-box">
+        <div class="mm-head" onclick="document.getElementById('minimap-box').classList.toggle('collapsed')"><span id="zone-title">โซน C1</span><span>▾</span></div>
+        <div class="minimap-grid" id="minimap-grid"></div>
       </div>
     </div>
 
-    <div class="zone-bar">
-      <span id="zone-title">โซน C1</span>
-      <button class="gbtn ghost" onclick="changeZoom(-1)">－</button>
-      <button class="gbtn ghost" onclick="changeZoom(1)">＋</button>
-      <button class="gbtn ghost" onclick="toggleLabels()" id="btn-labels">🏷️</button>
-      <button class="gbtn ghost" onclick="toggleGrid()" id="btn-grid">#</button>
+    <!-- Top menu icons -->
+    <div class="menu-bar tabs">
+      <button class="tab-btn" data-title="🌳 เทคโนโลยี" onclick="switchTab('techtree', this)"><span class="ico">🌳</span>เทค<span class="cnt"><span id="cnt-tech">0</span></span></button>
+      <button class="tab-btn" data-title="👥 ประชากร" onclick="switchTab('civ', this)"><span class="ico">🏕️</span>ประชากร<span class="cnt" id="cnt-pop">2</span></button>
+      <button class="tab-btn" data-title="🧪 ทดลอง & สถานี" onclick="switchTab('rnd', this)"><span class="ico">🧪</span>ทดลอง<span class="cnt" id="cnt-rnd">0</span></button>
+      <button class="tab-btn" data-title="⚛️ แปรธาตุ" onclick="switchTab('alchemy', this)"><span class="ico">🔮</span>แปรธาตุ<span class="cnt" id="cnt-elem">7</span></button>
+      <button class="tab-btn" data-title="📜 กระดานเควส & ความสัมพันธ์" onclick="switchTab('quest', this)"><span class="ico">📜</span>เควส<span class="cnt" id="cnt-quest">0</span></button>
+      <button class="tab-btn" data-title="🆘 วิกฤต & สัตว์ป่า" onclick="switchTab('crisis', this)"><span class="ico">🆘</span>วิกฤต<span class="cnt" id="cnt-sol">0</span></button>
+      <button class="tab-btn" onclick="openLobby()"><span class="ico">🌀</span>ดินแดน<span class="cnt" id="cnt-god" style="display:none">!</span></button>
     </div>
 
     <div class="disaster-banner" id="disaster-banner">⚠️ ภัยพิบัติกำลังเกิด!</div>
 
-    <div class="minimap-box" id="minimap-box">
-      <div class="mm-head" onclick="document.getElementById('minimap-box').classList.toggle('collapsed')"><span>🗺️ แผนที่เกาะ</span><span>▾</span></div>
-      <div class="minimap-grid" id="minimap-grid"></div>
+    <!-- Left edge: chronicle + god requests -->
+    <div class="side-left">
+      <button class="side-btn" onclick="document.getElementById('log-bar').classList.toggle('hide')" title="บันทึกเหตุการณ์">💬</button>
+      <button class="side-btn" onclick="openLobby()" title="คำขอจากพระเจ้า">✉️<span class="dot" id="god-dot"></span></button>
+      <button class="side-btn sm" onclick="addAIAgent('ชาย')" title="เพิ่มผู้ชาย">👨</button>
+      <button class="side-btn sm" onclick="addAIAgent('หญิง')" title="เพิ่มผู้หญิง">👩</button>
     </div>
+    <div class="log-bar" id="log-bar"></div>
 
-    <button class="portal-btn portal-n" id="btn-portal-n" onclick="travelDir('N')">⬆️ เหนือ</button>
-    <button class="portal-btn portal-s" id="btn-portal-s" onclick="travelDir('S')">⬇️ ใต้</button>
+    <!-- Zone travel (small edge arrows) -->
+    <button class="portal-btn portal-n" id="btn-portal-n" onclick="travelDir('N')">⬆️</button>
+    <button class="portal-btn portal-s" id="btn-portal-s" onclick="travelDir('S')">⬇️</button>
     <button class="portal-btn portal-w" id="btn-portal-w" onclick="travelDir('W')">⬅️</button>
     <button class="portal-btn portal-e" id="btn-portal-e" onclick="travelDir('E')">➡️</button>
 
+    <!-- Bottom-right: controls -->
+    <div class="hud-br">
+      <div class="br-row">
+        <button class="rbtn" onclick="changeZoom(-1)">－</button>
+        <button class="rbtn" onclick="changeZoom(1)">＋</button>
+        <button class="rbtn" onclick="toggleLabels()" id="btn-labels">🏷️</button>
+        <button class="rbtn" onclick="toggleGrid()" id="btn-grid">#</button>
+      </div>
+      <div class="br-row">
+        <button id="btn-toggle-sim" class="gbtn moss" onclick="toggleSim()">⏸️ หยุด</button>
+        <button class="gbtn amber" onclick="cycleSpeed()" id="btn-speed">⏩ 1x</button>
+      </div>
+    </div>
+
     <div id="hover-terrain">แตะแผนที่เพื่อดูพื้นที่</div>
-    <div class="log-bar" id="log-bar"></div>
+    <div id="agent-card" class="agent-card"></div>
 
     <div class="backdrop" id="backdrop" onclick="closeSheet()"></div>
 
@@ -150,26 +174,10 @@
       </div>
     </div>
 
-    <!-- Bottom dock -->
-    <div class="dock">
-      <div class="controls">
-        <button id="btn-toggle-sim" class="gbtn moss" onclick="toggleSim()">⏸️ หยุด</button>
-        <button class="gbtn amber" onclick="cycleSpeed()" id="btn-speed">⏩ 1x</button>
-        <button class="gbtn" onclick="addAIAgent('ชาย')">👨 +ชาย</button>
-        <button class="gbtn" onclick="addAIAgent('หญิง')">👩 +หญิง</button>
-      </div>
-      <div class="tabs">
-        <button class="tab-btn" data-title="🌳 เทคโนโลยี" onclick="switchTab('techtree', this)"><span class="ico">🌳</span>เทค<span class="cnt"><span id="cnt-tech">0</span>/10</span></button>
-        <button class="tab-btn" data-title="👥 ประชากร" onclick="switchTab('civ', this)"><span class="ico">🏕️</span>ประชากร<span class="cnt" id="cnt-pop">2</span></button>
-        <button class="tab-btn" data-title="🧪 ทดลอง & สถานี" onclick="switchTab('rnd', this)"><span class="ico">🧪</span>ทดลอง<span class="cnt" id="cnt-rnd">0</span></button>
-        <button class="tab-btn" data-title="⚛️ แปรธาตุ" onclick="switchTab('alchemy', this)"><span class="ico">🔮</span>แปรธาตุ<span class="cnt" id="cnt-elem">7</span></button>
-        <button class="tab-btn" data-title="📜 กระดานเควส & ความสัมพันธ์" onclick="switchTab('quest', this)"><span class="ico">📜</span>เควส<span class="cnt" id="cnt-quest">0</span></button>
-        <button class="tab-btn" data-title="🆘 วิกฤต & สัตว์ป่า" onclick="switchTab('crisis', this)"><span class="ico">🌙</span>วิกฤต<span class="cnt" id="cnt-sol">0</span></button>
-      </div>
-    </div>
   </div>
 </div>
 
+<script src="assets/chars.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
