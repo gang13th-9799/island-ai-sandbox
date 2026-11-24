@@ -2513,15 +2513,34 @@ function weatherTick() {
   const frozen = realms[tickingRealm] && realms[tickingRealm].def && realms[tickingRealm].def.winter && SEASONS[currentSeasonIdx].id === 'winter';
   const odds = frozen ? WEATHER_ODDS_FROZEN : WEATHER_ODDS[SEASONS[currentSeasonIdx].id]; const tot = Object.values(odds).reduce((x, y) => x + y, 0);
   let r = Math.random() * tot, k = 'clear'; for (const [w, p] of Object.entries(odds)) { if ((r -= p) <= 0) { k = w; break; } }
+  if (k === 'snow' && !Object.keys(ZONES).some(z => baseTemp(z) + WEATHER.rain.dt <= 2)) k = 'rain';
   if (k !== weather.kind && (k === 'storm' || k === 'snow' || k === 'rain')) addLog(`${WEATHER[k].icon} [อากาศเปลี่ยน] ${WEATHER[k].name}${k === 'snow' || k === 'storm' ? ' ใครอยู่ข้างนอกระวังหนาวตาย!' : ''}`, '#7dd3fc');
   weather = { kind: k, hours: 3 + Math.floor(Math.random() * 7) };
 }
-function airTemp(zone) {
+function baseTemp(zone) {
   fixWeather();
   const h = Math.floor(simMinutes / 60) % 24;
   const daily = h >= 12 && h < 16 ? 3 : h >= 21 || h < 5 ? -6 : h >= 5 && h < 8 ? -3 : 0;
   const realmCold = realms[tickingRealm] && realms[tickingRealm].def && realms[tickingRealm].def.winter ? -6 : 0;
-  return SEASON_BASE_T[SEASONS[currentSeasonIdx].id] + daily + WEATHER[weather.kind].dt + (GEO_DT[ZONES[zone].geo] || 0) + realmCold;
+  return SEASON_BASE_T[SEASONS[currentSeasonIdx].id] + daily + (GEO_DT[ZONES[zone].geo] || 0) + realmCold;
+}
+// Weather is shared by the realm, but what actually falls depends on the local temperature:
+// precipitation is snow only at <= 2°C, otherwise it falls as rain.
+function zoneWeather(zone) {
+  fixWeather();
+  const k = weather.kind;
+  if (k === 'snow' || k === 'rain' || k === 'storm') {
+    const t = baseTemp(zone) + WEATHER.rain.dt;
+    if (k === 'snow' && t > 2) return 'rain';
+    if (k === 'rain' && t <= 0) return 'snow';
+  }
+  return k;
+}
+function airTemp(zone) {
+  const k = zoneWeather(zone);
+  let t = baseTemp(zone) + WEATHER[k].dt;
+  if (k === 'snow') t = Math.min(t, 2);
+  return t;
 }
 function feltTemp(a) {
   let t = airTemp(a.zone);
@@ -2529,8 +2548,9 @@ function feltTemp(a) {
   const fire = stationInZone(a.zone, 'campfire');
   const nearFire = fire && Math.hypot(a.x - fire.x, a.y - fire.y) <= 8;
   t += OUTFIT_WARMTH[pupOutfit(a)] || 0;
-  if (indoors) t += 12 + WEATHER[weather.kind].wet * 3;         // walls keep the rain and wind off
-  else t -= WEATHER[weather.kind].wet * 3;                      // soaked
+  const wz = WEATHER[zoneWeather(a.zone)];
+  if (indoors) t += 12 + wz.wet * 3;         // walls keep the rain and wind off
+  else t -= wz.wet * 3;                      // soaked
   if (nearFire) t += 12;
   if (a.sleeping && aiAgents.filter(o => o !== a && o.sleeping && o.zone === a.zone && Math.hypot(o.x - a.x, o.y - a.y) <= 3).length >= 2) t += 3;   // huddling
   if (a.sleeping && a.sleepKind === 'ground') t -= 2;
@@ -2571,7 +2591,7 @@ function temperatureTick() {
     } else a.coldSeek = false;
   });
 }
-function weatherLabel() { return `${WEATHER[weather.kind].icon} ${WEATHER[weather.kind].name} ${airTemp(currentZoneId)}°C`; }
+function weatherLabel() { const w = WEATHER[zoneWeather(currentZoneId)]; return `${w.icon} ${w.name} ${airTemp(currentZoneId)}°C`; }
 
 function runAutonomousStep() {
   if (!isRunning) return;
@@ -2583,6 +2603,7 @@ function runAutonomousStep() {
     simDay++;
     if ((simDay - 1) % 3 === 0) {
       currentSeasonIdx = (currentSeasonIdx + 1) % SEASONS.length;
+      weather = { kind: 'cloudy', hours: 1 };
       addLog(`🌍 [เปลี่ยนฤดูกาล] เข้าสู่ "${SEASONS[currentSeasonIdx].name}" (${SEASONS[currentSeasonIdx].temp})`, '#fde047');
     }
     // 1 game year = 2 game days
@@ -2723,7 +2744,7 @@ function runAutonomousStep() {
     if (Math.random() < 0.4) addLog(`🤲 ${giver.name} แบ่งอาหาร ${amt} ให้ ${h.name} ที่กำลังหิวโซ`, '#86efac');
   });
   temperatureTick();
-  removeDead(aiAgents.filter(a => a.hp <= 0 && a.coldHurt), d => `🥶 [หนาวตาย] "${d.name}" ทนความหนาวไม่ไหว เสียชีวิตขณะ${d.sleeping || d.sleepKind === 'ground' ? 'นอนกลางแจ้ง' : 'อยู่ข้างนอก'} (${WEATHER[weather.kind].name} ${airTemp(d.zone)}°C)`);
+  removeDead(aiAgents.filter(a => a.hp <= 0 && a.coldHurt), d => `🥶 [หนาวตาย] "${d.name}" ทนความหนาวไม่ไหว เสียชีวิตขณะ${d.sleeping || d.sleepKind === 'ground' ? 'นอนกลางแจ้ง' : 'อยู่ข้างนอก'} (${WEATHER[zoneWeather(d.zone)].name} ${airTemp(d.zone)}°C)`);
   removeDead(aiAgents.filter(a => a.hp <= 0), d => `💀 [เสียชีวิต] "${d.name}" เสียชีวิตจากความหิวหรือบาดเจ็บหนัก!`);
   if (aiAgents.length && aiAgents.reduce((t, a) => t + (a.food || 0), 0) / aiAgents.length < 2) generateCrisisProposal('อาหารของทุกคนใกล้หมด');
 
@@ -3957,7 +3978,7 @@ function drawCanvas() {
   }
   // weather overlay (rain / snow)
   ctx.setTransform(d, 0, 0, d, 0, 0);
-  const wk = (weather && weather.kind) || 'clear';
+  const wk = zoneWeather(currentZoneId);
   if (wk === 'rain' || wk === 'storm' || wk === 'snow') {
     if (wk !== 'snow') { ctx.fillStyle = wk === 'storm' ? 'rgba(40,50,80,.28)' : 'rgba(60,80,110,.14)'; ctx.fillRect(0, 0, VIEW.w, VIEW.h); }
     const n = wk === 'storm' ? 160 : wk === 'rain' ? 90 : 70, t = now;
