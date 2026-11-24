@@ -453,13 +453,13 @@
       "degree": 25
     },
     {
-      "id": "game_drawcanvas",
-      "label": "drawCanvas()",
-      "degree": 25
-    },
-    {
       "id": "game_experiment",
       "label": "experiment()",
+      "degree": 24
+    },
+    {
+      "id": "game_drawcanvas",
+      "label": "drawCanvas()",
       "degree": 24
     },
     {

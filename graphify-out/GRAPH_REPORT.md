@@ -4,12 +4,12 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 375 nodes · 1148 edges · 16 communities (15 shown, 1 thin omitted)
+- 375 nodes · 1147 edges · 16 communities (15 shown, 1 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 11 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `72956678`
+- Built from commit: `9fbf97d8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -37,8 +37,8 @@
 3. `addLog()` - 38 edges
 4. `runQuests()` - 27 edges
 5. `st()` - 25 edges
-6. `drawCanvas()` - 25 edges
-7. `experiment()` - 24 edges
+6. `experiment()` - 24 edges
+7. `drawCanvas()` - 24 edges
 8. `villageOf()` - 22 edges
 9. `rel()` - 22 edges
 10. `pick()` - 21 edges
