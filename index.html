@@ -389,6 +389,7 @@
     <!-- Left edge: chronicle + god requests -->
     <div class="side-left">
       <button class="side-btn" onclick="document.getElementById('log-bar').classList.toggle('hide')" title="บันทึกเหตุการณ์">💬</button>
+      <button class="side-btn" data-title="🙏 คำอธิษฐานถึงพระเจ้า" onclick="switchTab('prayer', this); renderPrayers()" title="คำอธิษฐานจาก AI">🙏<span class="dot on" id="cnt-pray" style="display:none; width:auto; min-width:18px; height:18px; font-size:10px; color:#fff; line-height:14px; text-align:center;">0</span></button>
       <button class="side-btn" onclick="openLobby()" title="คำขอจากพระเจ้า">✉️<span class="dot" id="god-dot"></span></button>
       <button class="side-btn sm" onclick="addAIAgent('ชาย')" title="เพิ่มผู้ชาย">👨</button>
       <button class="side-btn sm" onclick="addAIAgent('หญิง')" title="เพิ่มผู้หญิง">👩</button>
@@ -495,6 +496,14 @@
         <div id="quest-list"></div>
         <h4 style="color:#f9a8d4;">💞 ความสัมพันธ์ที่น่าสนใจ</h4>
         <div id="rel-list"></div>
+      </div>
+
+      <div id="tab-prayer" class="tab-content">
+        <div class="sec-note">AI จะอธิษฐานขอพืช สัตว์ แร่ หรือธาตุ เมื่อขาดแคลนจริงๆ คุณคือพระเจ้า: <b>อนุมัติ</b> แล้วสิ่งนั้นจะปรากฏในโลกและถูกบันทึกลงฐานข้อมูลพระเจ้า · <b>ปฏิเสธ</b> แล้ว AI จะกลับไปคิดคำขอที่สมเหตุสมผลกว่าเดิม (★ = ความสมเหตุสมผล)</div>
+        <h4 style="color:var(--amber-2);">🙏 คำอธิษฐานที่รอคำตอบ</h4>
+        <div id="prayer-list"></div>
+        <h4 style="color:var(--violet);">📖 ฐานข้อมูลพระเจ้า <button class="gbtn ghost" style="margin-left:auto; padding:4px 10px; font-size:11px;" onclick="exportGodDB()">⬇️ ส่งออก JSON</button></h4>
+        <div id="god-db-list"></div>
       </div>
 
       <div id="tab-crisis" class="tab-content">
@@ -2708,7 +2717,7 @@ function saveGameState() {
     if (huntLogs.length > 30) huntLogs.length = 30;
     if (aiCrisisProposals.length > 15) aiCrisisProposals.length = 15;
     realms[activeRealm].state = captureRealm();
-    const data = { v: 20, activeRealm, godRequests, realmLogs, realms: realms.map(r => ({ def: r.def, state: Object.assign({}, r.state, { zoneTerrainGrid: {}, zoneNodes: {} }) })) };
+    const data = { v: 20, activeRealm, godRequests, realmLogs, prayers: prayers.slice(0, 60), realms: realms.map(r => ({ def: r.def, state: Object.assign({}, r.state, { zoneTerrainGrid: {}, zoneNodes: {} }) })) };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     document.getElementById('save-status').innerText = `💾 เซฟแล้ว · ${realms.length} ดินแดน`;
   } catch (e) {
@@ -2724,7 +2733,7 @@ function loadGameState() {
     if (!raw) return false;
     const d = JSON.parse(raw);
     if (d.v !== 20) return false;
-    realms = d.realms; godRequests = d.godRequests || []; realmLogs = d.realmLogs || [];
+    realms = d.realms; godRequests = d.godRequests || []; realmLogs = d.realmLogs || []; prayers = d.prayers || [];
     activeRealm = d.activeRealm || 0;
     realms.forEach(r => {
       r.state.aiAgents = (r.state.aiAgents || []).map(ensureAgent);
@@ -3110,6 +3119,170 @@ function temperatureTick() {
 }
 function weatherLabel() { const w = WEATHER[zoneWeather(currentZoneId)]; return `${w.icon} ${w.name} ${airTemp(currentZoneId)}°C`; }
 
+// ==========================================
+// PRAYERS: AI ask God (the player) for new plants, animals, minerals or elements.
+// Approved wishes become part of the world and are written to the god database.
+// Rejected wishes make the AI rethink and ask for something more reasonable next time.
+// ==========================================
+let prayers = [];          // all realms: [{id, realm, agentId, agentName, zone, need, kind, tier, ...}]
+let godArchive = [];       // the "database" of every decision the god made
+const GOD_DB_KEY = 'island_ai_god_db';
+let prayerSeq = 1;
+const PRAYER_FOOD_RX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
+const KIND_LABEL = { plant: '🌱 พืช', animal: '🐾 สัตว์', mineral: '⛏️ แร่', element: '⚛️ ธาตุ' };
+// Each need has 3 versions, from greedy (tier 3) to sensible (tier 1)
+const PRAYER_CATALOG = {
+  food: { kind: 'plant', tiers: {
+    3: { name: 'ต้นกล้วยทองคำ', desc: 'ต้นกล้วยวิเศษ ออกผลทุกวันตลอดปี กินเท่าไหร่ก็ไม่หมด', props: { food: 3, fiber: 1 }, zones: 3 },
+    2: { name: 'ต้นกล้วยหอมป่า', desc: 'กล้วยป่าพันธุ์ผลดก ออกเครือใหญ่ตามฤดู', props: { fiber: 1, wet: 1 }, zones: 2 },
+    1: { name: 'เห็ดฟางป่า', desc: 'เห็ดที่ขึ้นตามกองใบไม้ผุ เก็บกินได้ทุกวันในโซนที่เราอยู่', props: { wet: 1 }, zones: 1 } } },
+  fuel: { kind: 'plant', tiers: {
+    3: { name: 'ต้นไม้นิรันดร์', desc: 'ตัดแล้วงอกใหม่ทันที ไม้เผาไฟได้ทั้งคืนไม่มีวันมอด', props: { wood: 2, fuel: 3, dry: 1 }, zones: 3 },
+    2: { name: 'ต้นไม้สนยางเยอะ', desc: 'ไม้สนมียางติดไฟดี ให้ความอบอุ่นนาน', props: { wood: 1, fuel: 2 }, zones: 2 },
+    1: { name: 'พุ่มไม้แห้งโตเร็ว', desc: 'พุ่มไม้เตี้ยที่โตเร็ว เก็บกิ่งมาก่อไฟได้ทุกวัน', props: { wood: 1, fuel: 1, dry: 1 }, zones: 1 } } },
+  meat: { kind: 'animal', tiers: {
+    3: { name: 'วัวทองคำ', desc: 'วัวเชื่องไม่หนีคน เนื้อเยอะ ออกลูกทุกวัน', sprite: 'boar', color: '#facc15', pop: 10, maxPop: 30, reproDays: 1, lootFood: 20, lootMat: { 'หนังวัวทอง': 2 }, rel: 0.6 },
+    2: { name: 'ควายป่า', desc: 'ควายป่าตัวใหญ่ เนื้อมาก หนังหนา แต่วิ่งหนีเก่ง', sprite: 'boar', color: '#4b5563', pop: 5, maxPop: 12, reproDays: 4, lootFood: 14, lootMat: { 'หนังควายหนา': 1, 'เขาควาย': 1 }, rel: 0.6 },
+    1: { name: 'กระต่ายป่า', desc: 'กระต่ายตัวเล็กออกลูกเร็ว จับง่าย พอให้มีเนื้อกินในโซนนี้', sprite: 'deer', color: '#d6c7b0', pop: 6, maxPop: 16, reproDays: 2, lootFood: 4, lootMat: { 'ขนกระต่ายนุ่ม': 1 }, rel: 0.3 } } },
+  metal: { kind: 'mineral', tiers: {
+    3: { name: 'แร่เหล็กบริสุทธิ์', desc: 'แร่เหล็กที่ไม่ต้องถลุง หยิบไปตีเป็นเครื่องมือได้เลย', props: { metal: 1, hard: 1 }, zones: 3 },
+    2: { name: 'แร่เหล็กลำธาร', desc: 'สายแร่เหล็กในลำธาร เก็บง่าย ได้เนื้อเหล็กมาก', props: { metal: 0.6, mineral: 1, hard: 1 }, zones: 2 },
+    1: { name: 'แร่เหล็กบึง', desc: 'ก้อนแร่เหล็กในโคลนบึงใกล้หมู่บ้าน ต้องถลุงเอง', props: { metal: 0.5, mineral: 1 }, zones: 1 } } },
+  element: { kind: 'element', tiers: {
+    3: { name: 'ผลึกพลังงานไร้ขีดจำกัด', desc: 'ธาตุที่ให้พลังงานไม่สิ้นสุด', props: { elem: 'U', fuel: 3 }, zones: 2 },
+    2: { name: 'ผลึกกำมะถันใส', desc: 'กำมะถันบริสุทธิ์ใช้ทดลองแปรธาตุได้มาก', props: { elem: 'S', mineral: 1 }, zones: 1 },
+    1: { name: 'เกลือหินสีชมพู', desc: 'ก้อนเกลือแร่ในหน้าผา มีธาตุให้ทดลองเล็กน้อย', props: { elem: 'Na', mineral: 1 }, zones: 1 } } }
+};
+const TIER_STARS = { 3: 1, 2: 3, 1: 5 };
+function materialWish(item, tier) {
+  const p = MAT[item] || propsOf(item) || { mineral: 1 };
+  return { 3: { name: item, desc: `ขอให้มี${item}เกิดขึ้นทั่วเกาะ ไม่มีวันหมด`, props: p, zones: 4 },
+           2: { name: item, desc: `ขอแหล่ง${item}ขนาดใหญ่ใกล้หมู่บ้าน`, props: p, zones: 2 },
+           1: { name: item, desc: `ขอ${item}เพียงเล็กน้อยในโซนที่เราอยู่ พอให้ทำของที่ขาดได้`, props: p, zones: 1 } }[tier];
+}
+function prayerNeeds(a) {
+  const out = [];
+  const here = aiAgents.filter(o => o.zone === a.zone);
+  const zonesNear = [a.zone].concat(getAdjacentZones(a.zone));
+  const foodNodes = zonesNear.some(z => ZONES[z].res.some(r => PRAYER_FOOD_RX.test(r)));
+  if (here.filter(o => (o.food || 0) < 6 || o.hunger >= 60).length >= Math.max(1, here.length / 2) && !foodNodes)
+    out.push(['food', `คนใน${a.zone} หิว ${here.filter(o => o.hunger >= 60).length}/${here.length} คน และโซนใกล้ๆ ไม่มีของกินให้เก็บเลย`]);
+  const prey = faunaSpecies.some(f => isPrey(f) && zonesNear.some(z => (f.zp[z] || 0) > 0));
+  if (!prey && (a.role || '').includes('ล่า')) out.push(['meat', `เป็นนักล่าแต่แถว${a.zone}ไม่มีสัตว์ให้ล่าเลย`]);
+  const cold = here.filter(o => (o.warmth ?? 100) < 60).length;
+  const wood = zonesNear.some(z => ZONES[z].res.some(r => (MAT[r] || {}).fuel));
+  if ((cold >= 1 || SEASONS[currentSeasonIdx].id === 'winter') && !wood) out.push(['fuel', `หนาวกันอยู่ ${cold} คน แถวนี้ไม่มีไม้ให้ก่อไฟ`]);
+  if (a.wantItem && !Object.values(ZONES).some(z => z.res.includes(a.wantItem)))
+    out.push(['mat:' + a.wantItem, `อยากทำของแต่ขาด "${a.wantItem}" ซึ่งไม่มีที่ไหนบนเกาะเลย`]);
+  if ((stationsOf('smelter').length || discoveredProducts.crucible) && !Object.values(ZONES).some(z => z.res.some(r => (MAT[r] || {}).metal)))
+    out.push(['metal', 'มีเตาถลุงแล้ว แต่ไม่มีแร่โลหะให้ถลุงเลย']);
+  if (stationsOf('lab').length && Math.random() < 0.3) out.push(['element', 'ห้องแล็บว่าง ไม่มีธาตุใหม่ให้ทดลอง']);
+  return out;
+}
+function prayerTick() {
+  if (simMinutes % 360 !== 0) return;                                     // think about it 4 times a day
+  const pending = prayers.filter(p => p.realm === tickingRealm && p.status === 'pending');
+  if (pending.length >= 3) return;
+  const cand = aiAgents.filter(a => a.age >= 15 && !pending.some(p => p.agentId === a.id) && !a.sleeping);
+  for (const a of cand.sort(() => Math.random() - 0.5)) {
+    if (Math.random() > 0.25) continue;
+    const needs = prayerNeeds(a); if (!needs.length) continue;
+    const [need, reason] = pick(needs);
+    a.prayMemo = a.prayMemo || {};
+    const memo = a.prayMemo[need] || { tier: (a.kind || 0.5) < 0.35 || Math.random() < 0.6 ? 3 : 2, rejects: 0, lastDay: -99 };
+    if (simDay - memo.lastDay < 2) continue;                              // wait a bit after the last answer
+    if (memo.tier < 1 && simDay - memo.lastDay > 10) { memo.tier = 1; memo.rejects = 0; }   // after a long while, try once more, humbly
+    if (memo.tier < 1) continue;                                          // gave up on this need
+    const cat = need.startsWith('mat:') ? { kind: 'mineral' } : PRAYER_CATALOG[need];
+    const wish = need.startsWith('mat:') ? materialWish(need.slice(4), memo.tier) : cat.tiers[memo.tier];
+    const better = memo.rejects ? ` (คิดใหม่ครั้งที่ ${memo.rejects}: ลดคำขอให้สมเหตุสมผลขึ้น)` : '';
+    const p = { id: 'pr' + (prayerSeq++) + '_' + Date.now().toString(36), realm: tickingRealm, realmName: realms[tickingRealm].def.name, agentId: a.id, agentName: a.name,
+      zone: a.zone, need, kind: cat.kind, tier: memo.tier, stars: TIER_STARS[memo.tier], wish, reason: reason + better, day: simDay, status: 'pending', attempt: memo.rejects + 1 };
+    prayers.unshift(p);
+    a.prayMemo[need] = memo;
+    a.bubble = `🙏 อธิษฐานขอ${wish.name}`;
+    addLog(`🙏 [คำอธิษฐาน] ${a.name} ขอพระเจ้า: "${wish.name}" — ${wish.desc}`, '#fde68a');
+    if (prayers.filter(q => q.status === 'pending').length >= 3) break;
+    return;
+  }
+}
+function inRealm(i, fn) {
+  if (i === activeRealm) return fn();
+  realms[activeRealm].state = captureRealm();
+  const keep = tickingRealm; tickingRealm = i; restoreRealm(realms[i].state);
+  const r = fn();
+  realms[i].state = captureRealm(); tickingRealm = keep; restoreRealm(realms[activeRealm].state);
+  return r;
+}
+function applyWish(p) {
+  const w = p.wish; const placed = [];
+  if (p.kind === 'animal') {
+    let f = faunaSpecies.find(x => x.name === w.name);
+    if (!f) {
+      f = { id: 'f_god_' + p.id, sprite: w.sprite, name: w.name, zones: [p.zone], pop: 0, maxPop: w.maxPop, reproDays: w.reproDays, reproProgress: 0, lootFood: w.lootFood, lootMat: w.lootMat, godGift: true, sizeRel: w.rel };
+      f.zp = {}; faunaSpecies.push(f);
+    }
+    const zs = [p.zone].concat(getAdjacentZones(p.zone)).filter(z => z !== START_ZONE || !f.predator).slice(0, 2);
+    for (let i = 0; i < w.pop; i++) { const z = zs[i % zs.length]; f.zp[z] = (f.zp[z] || 0) + 1; }
+    zs.forEach(z => { trOf(f, z).color = w.color; placed.push(z); });
+    syncFauna(f);
+  } else {
+    MAT[w.name] = Object.assign({}, MAT[w.name] || {}, w.props);
+    const zs = [p.zone].concat(getAdjacentZones(p.zone)).concat(Object.keys(ZONES).sort(() => Math.random() - 0.5)).filter((z, i, arr) => arr.indexOf(z) === i).slice(0, w.zones || 1);
+    zs.forEach(z => { if (!ZONES[z].res.includes(w.name)) ZONES[z].res.push(w.name); delete zoneTerrainGrid[z]; buildZoneTerrain(z); placed.push(z); });
+  }
+  return placed;
+}
+function saveGodDB() { try { localStorage.setItem(GOD_DB_KEY, JSON.stringify(godArchive)); } catch (e) { console.warn(e); } }
+function loadGodDB() {
+  try { godArchive = JSON.parse(localStorage.getItem(GOD_DB_KEY) || '[]'); } catch (e) { godArchive = []; }
+  godArchive.filter(e => e.decision === 'approved' && e.kind !== 'animal').forEach(e => { MAT[e.wish.name] = Object.assign({}, MAT[e.wish.name] || {}, e.wish.props); });
+}
+function answerPrayer(id, ok) {
+  const p = prayers.find(x => x.id === id); if (!p || p.status !== 'pending') return;
+  const note = ok ? '' : (document.getElementById('pr-note-' + id) || {}).value || '';
+  p.status = ok ? 'approved' : 'rejected'; p.decidedDay = p.day;
+  inRealm(p.realm, () => {
+    const a = byId(p.agentId); p.decidedDay = simDay;
+    if (ok) {
+      p.placed = applyWish(p);
+      if (a) { a.bubble = `🙌 พระเจ้าประทาน${p.wish.name}!`; a.rep = (a.rep || 0) + 1; if (a.prayMemo) delete a.prayMemo[p.need]; }
+      addLog(`✨ [พระเจ้าอนุมัติ] "${p.wish.name}" ปรากฏขึ้นที่ ${p.placed.join(', ')} ตามคำอธิษฐานของ ${p.agentName}`, '#fde68a');
+    } else if (a) {
+      const m = (a.prayMemo = a.prayMemo || {})[p.need] || { tier: p.tier, rejects: 0 };
+      m.rejects++; m.tier = p.tier - 1; m.lastDay = simDay; a.prayMemo[p.need] = m;
+      a.bubble = m.tier >= 1 ? '🤔 คงขอมากเกินไป ต้องคิดให้สมเหตุสมผลกว่านี้' : '😔 พระเจ้าไม่ให้ ต้องพึ่งตัวเองแล้ว';
+      addLog(`⛔ [พระเจ้าปฏิเสธ] คำขอ "${p.wish.name}" ของ ${p.agentName}${note ? ` (เหตุผล: ${note})` : ''} ${m.tier >= 1 ? '— จะกลับไปคิดคำขอที่สมเหตุสมผลกว่านี้' : '— ยอมแพ้เรื่องนี้ จะหาทางเอง'}`, '#fca5a5');
+      if (m.tier < 1 && p.need.startsWith('mat:')) createQuest(a, 'gather', { title: `ช่วยหาของแทน ${p.need.slice(4)}`, item: p.need.slice(4), qty: 2, zone: a.zone, difficulty: 3 });
+    }
+  });
+  godArchive.unshift({ id: p.id, at: new Date().toISOString(), realm: p.realmName, day: p.decidedDay, agent: p.agentName, zone: p.zone, need: p.need, kind: p.kind,
+    tier: p.tier, stars: p.stars, wish: p.wish, reason: p.reason, decision: p.status, note, placed: p.placed || [] });
+  saveGodDB(); saveGameState(); renderPrayers(); renderAllUI();
+}
+function exportGodDB() {
+  const blob = new Blob([JSON.stringify(godArchive, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'god-database.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function renderPrayers() {
+  const box = document.getElementById('prayer-list'); if (!box) return;
+  const pend = prayers.filter(p => p.status === 'pending');
+  const cnt = document.getElementById('cnt-pray'); if (cnt) { cnt.innerText = pend.length; cnt.style.display = pend.length ? '' : 'none'; }
+  box.innerHTML = pend.length ? pend.map(p => `<div class="card pray-card">
+      <div class="card-title"><span>${KIND_LABEL[p.kind]} ${p.wish.name}</span><span class="tag tag-warn" title="ความสมเหตุสมผล">${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}</span></div>
+      <div>🗣️ <b>${p.agentName}</b> (${p.realmName} · ${p.zone} · วันที่ ${p.day}) ขอว่า: “${p.wish.desc}”</div>
+      <div class="sec-note" style="margin:6px 0;">💭 เหตุผล: ${p.reason}</div>
+      <input id="pr-note-${p.id}" placeholder="เหตุผลที่ปฏิเสธ (ไม่บังคับ)" style="width:100%; padding:7px 9px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.25); color:var(--text); margin-bottom:6px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <button class="gbtn moss" onclick="answerPrayer('${p.id}', true)">✅ อนุมัติ</button>
+        <button class="gbtn ember" onclick="answerPrayer('${p.id}', false)">⛔ ปฏิเสธ</button>
+      </div></div>`).join('') : '<div class="sec-note">ยังไม่มีคำอธิษฐานใหม่ AI จะอธิษฐานเมื่อขาดแคลนจริงๆ เช่น ไม่มีของกิน ไม่มีสัตว์ให้ล่า หนาวแต่ไม่มีไม้ หรือขาดวัตถุดิบที่ไม่มีบนเกาะ</div>';
+  const hist = document.getElementById('god-db-list');
+  if (hist) hist.innerHTML = godArchive.slice(0, 40).map(e => `<div class="card" style="padding:8px 10px;">
+      <div class="card-title" style="font-size:12px;"><span>${e.decision === 'approved' ? '✅' : '⛔'} ${KIND_LABEL[e.kind]} ${e.wish.name}</span><span class="tag ${e.decision === 'approved' ? 'tag-ok' : 'tag-fail'}">${e.decision === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ'}</span></div>
+      <div style="font-size:11px; color:var(--muted);">${e.realm} · วันที่ ${e.day} · ขอโดย ${e.agent} · ${'★'.repeat(e.stars)}${e.placed && e.placed.length ? ' · เกิดที่ ' + e.placed.join(', ') : ''}${e.note ? ' · เหตุผล: ' + e.note : ''}</div></div>`).join('') || '<div class="sec-note">ยังไม่มีบันทึก</div>';
+}
+
 function runAutonomousStep() {
   if (!isRunning) return;
   simMinutes += 60;
@@ -3272,6 +3445,7 @@ function runAutonomousStep() {
   runQuests();
   socialTick();
   staminaTick();
+  prayerTick();
 
   // Movement
   const night = isNightTime();
@@ -3644,6 +3818,8 @@ function updateSkyHud() {
 }
 
 function renderAllUI() {
+  { const n = prayers.filter(p => p.status === 'pending').length; const c = document.getElementById('cnt-pray'); if (c) { c.innerText = n; c.style.display = n ? '' : 'none'; }
+    if (openTab === 'prayer' && !(document.activeElement && document.activeElement.id && document.activeElement.id.startsWith('pr-note-'))) renderPrayers(); }
   if (bgTick) return;
   const unlockedCount = Object.keys(techDiscovered).length;
   document.getElementById('cnt-tech').innerText = unlockedCount;
@@ -4455,7 +4631,7 @@ function drawCanvas() {
     items.push({ y: pos.x + pos.y + 1, draw: () => {
       const tt = trOf(f, currentZoneId);
       const rc = tt.color ? { [MAIN_COLOR_CH[f.sprite] || 'O']: tt.color } : null;
-      const key = f.sprite || 'deer', rel = (SIZE_REL[key] || 0.6) * (1 + (tt.str || 0) * 0.08);
+      const key = f.sprite || 'deer', rel = (f.sizeRel || SIZE_REL[key] || 0.6) * (1 + (tt.str || 0) * 0.08);
       const [cx, fy] = groundAt(pos.x + 0.5, pos.y + 0.5);
       const mat = SPRITES[key], h = rel * HUMAN_H, p = h / mat.length, w = mat[0].length * p, ax = cx - w / 2, ay = fy - h, ps = p;
       ctx.fillStyle = 'rgba(40,30,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * 0.45, w * 0.1, 0, 0, 7); ctx.fill();
@@ -4653,6 +4829,7 @@ const BASE_ZONES = JSON.parse(JSON.stringify(ZONES));
 const INITIAL_REALM = JSON.parse(JSON.stringify(captureRealm()));
 
 window.addEventListener('DOMContentLoaded', () => {
+  loadGodDB();
   initAmbient();
   if (window.innerWidth < 520) document.getElementById('minimap-box').classList.add('collapsed');
   resizeView();
