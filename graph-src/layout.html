@@ -53,6 +53,7 @@
     <!-- Left edge: chronicle + god requests -->
     <div class="side-left">
       <button class="side-btn" onclick="document.getElementById('log-bar').classList.toggle('hide')" title="บันทึกเหตุการณ์">💬</button>
+      <button class="side-btn" data-title="🙏 คำอธิษฐานถึงพระเจ้า" onclick="switchTab('prayer', this); renderPrayers()" title="คำอธิษฐานจาก AI">🙏<span class="dot on" id="cnt-pray" style="display:none; width:auto; min-width:18px; height:18px; font-size:10px; color:#fff; line-height:14px; text-align:center;">0</span></button>
       <button class="side-btn" onclick="openLobby()" title="คำขอจากพระเจ้า">✉️<span class="dot" id="god-dot"></span></button>
       <button class="side-btn sm" onclick="addAIAgent('ชาย')" title="เพิ่มผู้ชาย">👨</button>
       <button class="side-btn sm" onclick="addAIAgent('หญิง')" title="เพิ่มผู้หญิง">👩</button>
@@ -159,6 +160,14 @@
         <div id="quest-list"></div>
         <h4 style="color:#f9a8d4;">💞 ความสัมพันธ์ที่น่าสนใจ</h4>
         <div id="rel-list"></div>
+      </div>
+
+      <div id="tab-prayer" class="tab-content">
+        <div class="sec-note">AI จะอธิษฐานขอพืช สัตว์ แร่ หรือธาตุ เมื่อขาดแคลนจริงๆ คุณคือพระเจ้า: <b>อนุมัติ</b> แล้วสิ่งนั้นจะปรากฏในโลกและถูกบันทึกลงฐานข้อมูลพระเจ้า · <b>ปฏิเสธ</b> แล้ว AI จะกลับไปคิดคำขอที่สมเหตุสมผลกว่าเดิม (★ = ความสมเหตุสมผล)</div>
+        <h4 style="color:var(--amber-2);">🙏 คำอธิษฐานที่รอคำตอบ</h4>
+        <div id="prayer-list"></div>
+        <h4 style="color:var(--violet);">📖 ฐานข้อมูลพระเจ้า <button class="gbtn ghost" style="margin-left:auto; padding:4px 10px; font-size:11px;" onclick="exportGodDB()">⬇️ ส่งออก JSON</button></h4>
+        <div id="god-db-list"></div>
       </div>
 
       <div id="tab-crisis" class="tab-content">
