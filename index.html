@@ -573,7 +573,7 @@ const CROWD_LIMIT = 20;   // more residents than this in one zone feels crowded
 let isRunning = true, simSpeed = 1, simTimer = null;
 let simMinutes = 480, simDay = 1;
 let currentZoneId = 'C1';
-let tileSize = 7, showLabels = true, showGrid = true;
+let tileSize = 7, showLabels = true, showGrid = false;
 let ticksSinceLastSave = 0;
 let worldSeed = Math.floor(Math.random() * 1e9);
 
@@ -4275,39 +4275,53 @@ function jitterColor(hex, j) {
   const n = parseInt(hex.slice(1), 16); const f = v => Math.max(0, Math.min(255, Math.round(v * (1 + j))));
   return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
 }
+// ---------- isometric projection ----------
+const IW = 32, IH = 16, EH = 9, TOPPAD = 4 * EH, ISO_OX = 80 * IW / 2;
+const ELEV = { mountain_peak: 3, mountain_cliff: 2, hill_slope: 1, ocean: -0.45, river: -0.35, swamp_water: -0.3 };
+const elevOf = t => ELEV[t] || 0;
+const isoXY = (tx, ty) => [ISO_OX + (tx - ty) * IW / 2, TOPPAD + (tx + ty) * IH / 2];
+function groundAt(tx, ty, zId) {
+  const g = zoneTerrainGrid[zId || currentZoneId]; const cx = Math.max(0, Math.min(79, Math.floor(tx))), cy = Math.max(0, Math.min(79, Math.floor(ty)));
+  const [x, y] = isoXY(tx, ty); return [x, y - Math.max(0, g ? elevOf(g[cy][cx]) : 0) * EH];
+}
+const ISO_W = 80 * IW, ISO_H = TOPPAD + 80 * IH + EH * 2;
+function shade(hex, f) { const n = parseInt(hex.slice(1), 16); const c = v => Math.max(0, Math.min(255, Math.round(v * f))); return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`; }
 function getTerrainCanvas(zId) {
   const key = (typeof activeRealm !== 'undefined' ? activeRealm : 0) + '|' + zId + '|' + currentSeasonIdx;
   if (terrainCache[key]) return terrainCache[key];
   buildZoneTerrain(zId);
   const grid = zoneTerrainGrid[zId];
-  const cv = document.createElement('canvas'); cv.width = cv.height = 80 * WT;
+  const cv = document.createElement('canvas'); cv.width = ISO_W; cv.height = ISO_H;
   const c = cv.getContext('2d');
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let y = 0; y < 80; y++) for (let x = 0; x < 80; x++) {
-    const t = grid[y][x];
-    c.fillStyle = jitterColor(NATURE[t] || TERRAIN_STYLES[t].color, (rnd() - 0.5) * 0.06);
-    c.fillRect(x * WT, y * WT, WT, WT);
-  }
-  // soft decorations
-  for (let y = 0; y < 80; y++) for (let x = 0; x < 80; x++) {
-    const t = grid[y][x], px = x * WT, py = y * WT, r = rnd();
-    if (t === 'grass' && r < 0.12) { c.strokeStyle = 'rgba(60,120,40,.45)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px + 6, py + 12); c.lineTo(px + 5, py + 7); c.moveTo(px + 8, py + 12); c.lineTo(px + 9, py + 6); c.stroke(); }
-    else if (t === 'grass' && r < 0.15) { c.fillStyle = ['#fff7ae', '#ffd1e1', '#ffffff'][Math.floor(r * 100) % 3]; c.beginPath(); c.arc(px + 8, py + 8, 1.6, 0, 7); c.fill(); }
-    else if (t === 'tall_grass' && r < 0.5) { c.strokeStyle = 'rgba(50,110,35,.55)'; c.lineWidth = 1.3; c.beginPath(); for (let i = 0; i < 3; i++) { c.moveTo(px + 4 + i * 4, py + 14); c.lineTo(px + 3 + i * 4, py + 4); } c.stroke(); }
-    else if (t === 'forest' && r < 0.35) { c.fillStyle = 'rgba(40,90,40,.35)'; c.beginPath(); c.ellipse(px + 8, py + 13, 9, 3.5, 0, 0, 7); c.fill(); c.fillStyle = ['#4d9443', '#5aa24c', '#3f8738'][Math.floor(r * 30) % 3]; c.beginPath(); c.arc(px + 8, py + 6, 8, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,.15)'; c.beginPath(); c.arc(px + 6, py + 3, 3.5, 0, 7); c.fill(); }
-    else if ((t === 'river' || t === 'ocean') && r < 0.1) { c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1.2; c.beginPath(); c.arc(px + 8, py + 10, 5, 1.15 * Math.PI, 1.85 * Math.PI); c.stroke(); }
-    else if ((t === 'mountain_cliff' || t === 'hill_slope') && r < 0.12) { c.fillStyle = 'rgba(90,90,100,.5)'; c.beginPath(); c.ellipse(px + 8, py + 10, 5, 3.5, 0, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,.35)'; c.beginPath(); c.ellipse(px + 7, py + 9, 2.5, 1.5, 0, 0, 7); c.fill(); }
-    else if (t === 'sand_bank' && r < 0.05) { c.fillStyle = 'rgba(180,150,90,.5)'; c.beginPath(); c.arc(px + 8, py + 8, 1.2, 0, 7); c.fill(); }
-    else if (t === 'mud_flat' && r < 0.08) { c.fillStyle = 'rgba(90,60,30,.35)'; c.beginPath(); c.ellipse(px + 8, py + 8, 4, 2, 0, 0, 7); c.fill(); }
-  }
-  // shoreline: darken water next to land
-  c.fillStyle = 'rgba(255,255,255,.35)';
-  for (let y = 0; y < 80; y++) for (let x = 0; x < 80; x++) {
-    if (!WATER.includes(grid[y][x])) continue;
-    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const g = grid[y + dy] && grid[y + dy][x + dx]; if (g && !WATER.includes(g)) c.fillRect(x * WT + (dx > 0 ? WT - 2 : 0), y * WT + (dy > 0 ? WT - 2 : 0), dx ? 2 : WT, dy ? 2 : WT); });
+  const eAt = (x, y) => (x < 0 || y < 0 || x > 79 || y > 79) ? -0.6 : elevOf(grid[y][x]);
+  const poly = (pts, fill) => { c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); c.fillStyle = fill; c.fill(); };
+  for (let s = 0; s <= 158; s++) for (let x = Math.max(0, s - 79); x <= Math.min(79, s); x++) {
+    const y = s - x, t = grid[y][x], e = eAt(x, y), h = e * EH;
+    const base = NATURE[t] || TERRAIN_STYLES[t].color;
+    const col = jitterColor(base, (rnd() - 0.5) * 0.07);
+    const T = isoXY(x, y), R = isoXY(x + 1, y), B = isoXY(x + 1, y + 1), L = isoXY(x, y + 1);
+    const up = p => [p[0], p[1] - h];
+    // side faces toward the viewer (+y = left face, +x = right face)
+    const dl = e - eAt(x, y + 1), dr = e - eAt(x + 1, y);
+    const sideCol = WATER.includes(t) ? base : (e >= 1 ? '#8f8577' : '#a0815a');
+    if (dl > 0) poly([up(L), up(B), [B[0], B[1] - h + dl * EH], [L[0], L[1] - h + dl * EH]], shade(sideCol, 0.78));
+    if (dr > 0) poly([up(B), up(R), [R[0], R[1] - h + dr * EH], [B[0], B[1] - h + dr * EH]], shade(sideCol, 0.62));
+    poly([up(T), up(R), up(B), up(L)], col);
+    // decorations at tile centre
+    const [cx, cy0] = isoXY(x + 0.5, y + 0.5), cy = cy0 - h, r = rnd();
+    if (t === 'grass' && r < 0.12) { c.strokeStyle = 'rgba(60,120,40,.5)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(cx - 2, cy + 2); c.lineTo(cx - 3, cy - 4); c.moveTo(cx + 1, cy + 2); c.lineTo(cx + 2, cy - 5); c.stroke(); }
+    else if (t === 'grass' && r < 0.15) { c.fillStyle = ['#fff7ae', '#ffd1e1', '#ffffff'][Math.floor(r * 100) % 3]; c.beginPath(); c.arc(cx, cy, 1.6, 0, 7); c.fill(); }
+    else if (t === 'tall_grass' && r < 0.55) { c.strokeStyle = 'rgba(50,110,35,.6)'; c.lineWidth = 1.3; c.beginPath(); for (let i = -1; i <= 1; i++) { c.moveTo(cx + i * 4, cy + 3); c.lineTo(cx + i * 4 - 1, cy - 7); } c.stroke(); }
+    else if (t === 'forest' && r < 0.3) { c.fillStyle = 'rgba(30,70,30,.3)'; c.beginPath(); c.ellipse(cx, cy + 2, 9, 4, 0, 0, 7); c.fill(); c.fillStyle = ['#4d9443', '#5aa24c', '#3f8738'][Math.floor(r * 30) % 3]; c.beginPath(); c.arc(cx, cy - 5, 8, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,.18)'; c.beginPath(); c.arc(cx - 3, cy - 8, 3.5, 0, 7); c.fill(); }
+    else if (WATER.includes(t) && r < 0.12) { c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(cx, cy, 6, 2.5, 0, 1.1 * Math.PI, 1.9 * Math.PI); c.stroke(); }
+    else if ((t === 'mountain_cliff' || t === 'hill_slope' || t === 'mountain_peak') && r < 0.14) { c.fillStyle = 'rgba(90,85,80,.55)'; c.beginPath(); c.ellipse(cx, cy, 5, 3, 0, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,.4)'; c.beginPath(); c.ellipse(cx - 1, cy - 1, 2.5, 1.3, 0, 0, 7); c.fill(); }
+    else if (t === 'sand_bank' && r < 0.06) { c.fillStyle = 'rgba(180,150,90,.5)'; c.beginPath(); c.arc(cx, cy, 1.2, 0, 7); c.fill(); }
+    else if (t === 'mud_flat' && r < 0.08) { c.fillStyle = 'rgba(90,60,30,.35)'; c.beginPath(); c.ellipse(cx, cy, 5, 2, 0, 0, 7); c.fill(); }
+    if (t === 'mountain_peak' && r < 0.5) { c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.ellipse(cx, cy, 7, 3, 0, 0, 7); c.fill(); }
   }
   const season = SEASONS[currentSeasonIdx];
-  c.fillStyle = season.tint; c.globalAlpha = 0.5; c.fillRect(0, 0, cv.width, cv.height); c.globalAlpha = 1;
+  c.globalCompositeOperation = 'source-atop'; c.fillStyle = season.tint; c.globalAlpha = 0.5; c.fillRect(0, 0, cv.width, cv.height); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
   return (terrainCache[key] = cv);
 }
 
@@ -4317,24 +4331,25 @@ function resizeView() {
   VIEW.w = host.clientWidth; VIEW.h = host.clientHeight;
   cv.width = Math.round(VIEW.w * VIEW.dpr); cv.height = Math.round(VIEW.h * VIEW.dpr);
   cv.style.width = VIEW.w + 'px'; cv.style.height = VIEW.h + 'px';
-  if (!VIEW.zoomSet) { VIEW.zoom = Math.max(1.4, Math.min(3.2, Math.min(VIEW.w, VIEW.h) / (20 * WT))); }
+  if (!VIEW.zoomSet) VIEW.zoom = Math.max(1.3, Math.min(2.4, Math.min(VIEW.w, VIEW.h) / 290));
 }
 function clampView() {
-  const hw = VIEW.w / 2 / VIEW.zoom, hh = VIEW.h / 2 / VIEW.zoom, W = 80 * WT;
-  VIEW.cx = hw * 2 >= W ? W / 2 : Math.max(hw, Math.min(W - hw, VIEW.cx));
-  VIEW.cy = hh * 2 >= W ? W / 2 : Math.max(hh, Math.min(W - hh, VIEW.cy));
+  const hw = VIEW.w / 2 / VIEW.zoom, hh = VIEW.h / 2 / VIEW.zoom;
+  VIEW.cx = hw * 2 >= ISO_W ? ISO_W / 2 : Math.max(hw, Math.min(ISO_W - hw, VIEW.cx));
+  VIEW.cy = hh * 2 >= ISO_H ? ISO_H / 2 : Math.max(hh - HUMAN_H, Math.min(ISO_H - hh, VIEW.cy));
 }
 function centerOnZone() {
   const here = aiAgents.filter(a => a.zone === currentZoneId);
-  if (here.length) { VIEW.cx = (here.reduce((s, a) => s + a.x, 0) / here.length + 0.5) * WT; VIEW.cy = (here.reduce((s, a) => s + a.y, 0) / here.length + 0.5) * WT; }
-  else { VIEW.cx = VIEW.cy = 40 * WT; }
+  const [x, y] = here.length ? isoXY(here.reduce((s, a) => s + a.x, 0) / here.length + 0.5, here.reduce((s, a) => s + a.y, 0) / here.length + 0.5) : isoXY(40, 40);
+  VIEW.cx = x; VIEW.cy = y - HUMAN_H * 0.5;
   clampView();
 }
 const screenOf = (wx, wy) => [(wx - VIEW.cx) * VIEW.zoom + VIEW.w / 2, (wy - VIEW.cy) * VIEW.zoom + VIEW.h / 2];
 const worldOf = (sx, sy) => [(sx - VIEW.w / 2) / VIEW.zoom + VIEW.cx, (sy - VIEW.h / 2) / VIEW.zoom + VIEW.cy];
+const tileOf = (wx, wy) => { const u = (wx - ISO_OX) / (IW / 2), v = (wy - TOPPAD) / (IH / 2); return [(u + v) / 2, (v - u) / 2]; };
 
 // ---------- real-ish scale: every object is sized relative to an adult AI ----------
-const HUMAN_H = WT * 2.9;          // adult height on the map (world px)
+const HUMAN_H = 46;          // adult height on the map (world px)
 const SIZE_REL = {                 // height in "adult heights"
   shelter_hut: 1.6, st_store: 1.5, shelter_kiln: 1.0, st_smelter: 1.2, st_lab: 1.3, st_bench: 0.55, st_fire: 0.45, st_wall: 0.9,
   st_gate: 2.2, shelter_farm: 0.4, shelter_reactor: 2.0, res_tree: 2.4, res_bamboo: 2.0, res_rock: 0.35,
@@ -4375,32 +4390,37 @@ function drawCanvas() {
   const ctx = canvas.getContext('2d');
   const now = performance.now() / 1000, dt = Math.min(0.1, now - (VIEW.last || now)); VIEW.last = now;
   // follow selected agent
-  if (VIEW.follow) { const f = aiAgents.find(a => a.id === VIEW.follow); if (f && f.zone === currentZoneId) { VIEW.cx += ((f._rx ?? f.x) * WT + 8 - VIEW.cx) * Math.min(1, dt * 4); VIEW.cy += ((f._ry ?? f.y) * WT - 12 - VIEW.cy) * Math.min(1, dt * 4); clampView(); } }
+  if (VIEW.follow) { const f = aiAgents.find(a => a.id === VIEW.follow); if (f && f.zone === currentZoneId) { const [gx, gy] = groundAt((f._rx ?? f.x) + 0.5, (f._ry ?? f.y) + 0.5); VIEW.cx += (gx - VIEW.cx) * Math.min(1, dt * 4); VIEW.cy += (gy - HUMAN_H * 0.6 - VIEW.cy) * Math.min(1, dt * 4); clampView(); } }
   const z = VIEW.zoom, d = VIEW.dpr;
   ctx.setTransform(d, 0, 0, d, 0, 0);
-  ctx.fillStyle = '#8cc8e8'; ctx.fillRect(0, 0, VIEW.w, VIEW.h);
+  const bgG = ctx.createLinearGradient(0, 0, 0, VIEW.h); bgG.addColorStop(0, '#9fd3ee'); bgG.addColorStop(1, '#5aa6d6'); ctx.fillStyle = bgG; ctx.fillRect(0, 0, VIEW.w, VIEW.h);
   ctx.setTransform(d * z, 0, 0, d * z, d * (VIEW.w / 2 - VIEW.cx * z), d * (VIEW.h / 2 - VIEW.cy * z));
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(getTerrainCanvas(currentZoneId), 0, 0);
-  if (showGrid && z > 2.2) {
+  if (showGrid && z > 1.8) {
     ctx.strokeStyle = 'rgba(0,0,0,0.05)'; ctx.lineWidth = 1 / z; ctx.beginPath();
-    for (let i = 0; i <= 80; i++) { ctx.moveTo(i * WT, 0); ctx.lineTo(i * WT, 80 * WT); ctx.moveTo(0, i * WT); ctx.lineTo(80 * WT, i * WT); }
+    for (let i = 0; i <= 80; i++) { ctx.moveTo(...isoXY(i, 0)); ctx.lineTo(...isoXY(i, 80)); ctx.moveTo(...isoXY(0, i)); ctx.lineTo(...isoXY(80, i)); }
     ctx.stroke();
   }
   // collect drawables, depth-sorted by feet y
   const items = [];
   const labels = [];
-  shelters.filter(s => s.zone === currentZoneId).forEach(s => items.push({ y: (s.y + 3) * WT, draw: () => {
-    const cx = (s.x + 1.5) * WT, fy = (s.y + 3) * WT, key = s.sprite || 'shelter_hut';
+  shelters.filter(s => s.zone === currentZoneId).forEach(s => items.push({ y: s.x + s.y + 3, draw: () => {
+    const [cx, fy] = groundAt(s.x + 1.5, s.y + 1.5), key = s.sprite || 'shelter_hut';
     const w = (SPRITES[key] ? SPRITES[key][0].length / SPRITES[key].length : 1.4) * (SIZE_REL[key] || 1) * HUMAN_H;
     ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * 0.55, w * 0.13, 0, 0, 7); ctx.fill();
     const d = drawSized(ctx, key, cx, fy);
     if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
-  (zoneNodes[currentZoneId] || []).forEach(n => items.push({ y: (n.y + 1) * WT, draw: () => {
-    const cx = (n.x + 0.5) * WT, fy = (n.y + 1) * WT, ic = resIcon(n.name), tall = n.sprite === 'res_tree' || n.sprite === 'res_bamboo';
+  (zoneNodes[currentZoneId] || []).forEach(n => items.push({ y: n.x + n.y + 1, draw: () => {
+    const [cx, fy] = groundAt(n.x + 0.5, n.y + 0.5), ic = resIcon(n.name), tall = n.sprite === 'res_tree' || n.sprite === 'res_bamboo';
     ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(cx, fy, WT * (tall ? 1.6 : 0.7), WT * 0.32, 0, 0, 7); ctx.fill();
-    if (tall) drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
+    if (tall) {
+      const hidden = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < n.x + n.y && Math.abs(a._feet[0] - cx) < HUMAN_H * 1.1 && a._feet[1] < fy && a._feet[1] > fy - HUMAN_H * 2.6);
+      if (hidden) ctx.globalAlpha = 0.45;
+      drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
+      ctx.globalAlpha = 1;
+    }
     const isz = HUMAN_H * 0.36;
     ctx.font = `${isz}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(ic, cx + (tall ? WT * 0.9 : 0), fy);
@@ -4411,11 +4431,11 @@ function drawCanvas() {
     if (!f.zoneCoords) f.zoneCoords = {};
     if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = findValidTile(currentZoneId, f.sprite === 'fish');
     const pos = f.zoneCoords[currentZoneId];
-    items.push({ y: (pos.y + 1) * WT, draw: () => {
+    items.push({ y: pos.x + pos.y + 1, draw: () => {
       const tt = trOf(f, currentZoneId);
       const rc = tt.color ? { [MAIN_COLOR_CH[f.sprite] || 'O']: tt.color } : null;
       const key = f.sprite || 'deer', rel = (SIZE_REL[key] || 0.6) * (1 + (tt.str || 0) * 0.08);
-      const cx = (pos.x + 0.5) * WT, fy = (pos.y + 1) * WT;
+      const [cx, fy] = groundAt(pos.x + 0.5, pos.y + 0.5);
       const mat = SPRITES[key], h = rel * HUMAN_H, p = h / mat.length, w = mat[0].length * p, ax = cx - w / 2, ay = fy - h, ps = p;
       ctx.fillStyle = 'rgba(40,30,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * 0.45, w * 0.1, 0, 0, 7); ctx.fill();
       if (tt.parts.includes('ปีก')) { ctx.fillStyle = 'rgba(226,232,240,.9)'; ctx.beginPath(); ctx.moveTo(ax + ps * 5, ay + ps * 3); ctx.lineTo(ax + ps * 2, ay - ps * 3); ctx.lineTo(ax + ps * 9, ay + ps * 2); ctx.closePath(); ctx.fill(); }
@@ -4434,9 +4454,9 @@ function drawCanvas() {
     const speed = Math.max(2.2, dist / Math.max(0.4, tickDur * 0.6));
     const step = Math.min(dist, speed * dt);
     if (dist > 0.001) { a._rx += dx / dist * step; a._ry += dy / dist * step; }
-    if (Math.abs(dx) > 0.05) a._face = dx > 0 ? 1 : -1;
+    if (Math.abs(dx - dy) > 0.05) a._face = dx - dy > 0 ? 1 : -1;
     a._moving = dist > 0.06; a._fast = speed > 5;
-    items.push({ y: (a._ry + 1) * WT + 0.1, draw: () => drawAgent(ctx, a, now, labels) });
+    items.push({ y: a._rx + a._ry + 1.05, draw: () => drawAgent(ctx, a, now, labels) });
   });
   items.sort((p, q) => p.y - q.y).forEach(it => it.draw());
 
@@ -4445,7 +4465,7 @@ function drawCanvas() {
     ctx.fillStyle = 'rgba(30, 26, 80, 0.42)'; ctx.fillRect(0, 0, VIEW.w, VIEW.h);
     ctx.globalCompositeOperation = 'lighter';
     shelters.filter(s => s.zone === currentZoneId && s.station === 'campfire').forEach(s => {
-      const [fx, fy] = screenOf(s.x * WT + WT, s.y * WT + WT); const R = WT * 9 * z;
+      const [fx, fy] = screenOf(...groundAt(s.x + 1.5, s.y + 1.5)); const R = WT * 9 * z;
       const g = ctx.createRadialGradient(fx, fy, 4, fx, fy, R);
       g.addColorStop(0, 'rgba(255,170,80,0.45)'); g.addColorStop(1, 'rgba(255,170,80,0)');
       ctx.fillStyle = g; ctx.fillRect(fx - R, fy - R, R * 2, R * 2);
@@ -4510,14 +4530,14 @@ function drawAgentTag(ctx, l, sx, sy) {
   // quest marker / selection ring
   const myQ = quests.find(q => q.giverId === a.id && (q.status === 'open' || q.status === 'accepted'));
   if (myQ) {
-    const [hx, hy] = screenOf(a._rx * WT + 8, (a._ry + 1) * WT - WT * 3.3);
+    const [hx, hy] = screenOf(a._feet[0], a._feet[1] - HUMAN_H * 1.2);
     ctx.fillStyle = myQ.status === 'open' ? '#f5a524' : '#a78bfa'; ctx.beginPath(); ctx.arc(hx, hy, 9, 0, 7); ctx.fill();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(myQ.status === 'open' ? '!' : '?', hx, hy + 4); ctx.textAlign = 'left';
   }
 }
 function drawAgent(ctx, a, now, labels) {
   const H = HUMAN_H;
-  const fx = a._rx * WT + WT * 0.5, feetY = (a._ry + 1) * WT;
+  const [fx, feetY] = groundAt(a._rx + 0.5, a._ry + 0.5); a._feet = [fx, feetY];
   ctx.fillStyle = 'rgba(40,30,20,0.25)'; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.2, H * 0.06, 0, 0, 7); ctx.fill();
   if (VIEW.follow === a.id) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.28, H * 0.09, 0, 0, 7); ctx.stroke(); }
   const anim = pupActivity(a, a._moving, a._fast);
@@ -4551,10 +4571,10 @@ function changeZoom(delta) { setZoom(VIEW.zoom * (delta > 0 ? 1.25 : 0.8)); }
 function mapTap(e) {
   const rect = e.target.getBoundingClientRect(); const [wx, wy] = worldOf(e.clientX - rect.left, e.clientY - rect.top);
   const hit = aiAgents.filter(a => a.zone === currentZoneId && a._hit && wx >= a._hit.x && wx <= a._hit.x + a._hit.w && wy >= a._hit.y && wy <= a._hit.y + a._hit.h)
-    .sort((p, q) => q._ry - p._ry)[0];
+    .sort((p, q) => (q._rx + q._ry) - (p._rx + p._ry))[0];
   if (hit) { openAgentCard(hit.id); return; }
   closeAgentCard();
-  const lx = Math.max(0, Math.min(79, Math.floor(wx / WT))), ly = Math.max(0, Math.min(79, Math.floor(wy / WT)));
+  const [tx, ty] = tileOf(wx, wy); const lx = Math.max(0, Math.min(79, Math.floor(tx))), ly = Math.max(0, Math.min(79, Math.floor(ty)));
   const node = (zoneNodes[currentZoneId] || []).find(n => Math.abs(n.x - lx) <= 1 && Math.abs(n.y - ly) <= 1);
   document.getElementById('hover-terrain').innerText = node ? `${resIcon(node.name)} ${node.name}` : `${TERRAIN_STYLES[zoneTerrainGrid[currentZoneId][ly][lx]].label} (${lx},${ly})`;
   document.getElementById('hover-terrain').classList.add('show'); clearTimeout(mapTap.t); mapTap.t = setTimeout(() => document.getElementById('hover-terrain').classList.remove('show'), 2500);
