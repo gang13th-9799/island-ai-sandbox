@@ -2928,6 +2928,85 @@ function stepFauna() {
   });
 }
 
+// ==========================================
+// STAMINA & SLEEP: everyone tires out and must rest at a shelter (or by a fire, or on the ground)
+// ==========================================
+const HUT_CAP = 4;
+function isRestShelter(s) { return s.rest || (!s.station && (s.sprite || 'shelter_hut') === 'shelter_hut'); }
+function restSpotIn(zone, a) {
+  const huts = shelters.filter(s => s.zone === zone && isRestShelter(s) && (!s.owner || s.public || s.owner === a.id || (villageOf(a) && s.villageId === villageOf(a).id) || rel(a, byId(s.owner) || a) >= 40));
+  const free = huts.filter(s => aiAgents.filter(o => o.sleepAt === s.name).length < HUT_CAP)
+    .sort((p, q) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(a.x - q.x, a.y - q.y))[0];
+  if (free) return { kind: 'bed', s: free, x: free.x + 1, y: free.y + 2 };
+  const fire = stationInZone(zone, 'campfire');
+  if (fire) return { kind: 'fire', s: fire, x: fire.x + 2, y: fire.y + 2 };
+  return null;
+}
+function staminaDrain(a) {
+  let d = a.age < 12 ? 2 : 3;
+  if (a.session) d += 1.5;
+  if (a.questId || (a.goal && a.goal.quest)) d += 1;
+  if (a.hunger >= 70) d += 1.5;
+  if (a.age >= 55) d += 1;
+  return d * (1 - Math.min(0.4, st(a, 'vit') * 0.012));
+}
+function staminaTick() {
+  const hr = Math.floor(simMinutes / 60) % 24;
+  const lateNight = hr >= 21 || hr < 5, morning = hr >= 6 && hr < 18;
+  aiAgents.forEach(a => {
+    if (a.stamina === undefined) a.stamina = 100;
+    if (a.age < 12) {                                   // small kids sleep with their guardian
+      const g = byId(a.guardian);
+      a.sleeping = !!(g && g.sleeping); a.sleepKind = g && g.sleepKind;
+      if (a.sleeping) { a.zone = g.zone; a.x = Math.min(79, g.x + 1); a.y = Math.min(79, g.y + 1); }
+      a.stamina = a.sleeping ? Math.min(100, a.stamina + 12) : Math.max(0, a.stamina - 2);
+      if (a.sleeping) a.bubble = '😴 หลับอยู่ข้างผู้ปกครอง';
+      return;
+    }
+    if (a.sleeping) {
+      const rate = a.sleepKind === 'bed' ? 15 : a.sleepKind === 'fire' ? 10 : 6;
+      a.stamina = Math.min(100, a.stamina + rate);
+      a.hp = Math.min(maxHp(a), a.hp + (a.sleepKind === 'bed' ? 3 : 1));
+      a.hunger = Math.max(0, a.hunger - 2);              // metabolism slows (hunger tick adds it back)
+      const wake = (a.stamina >= 100 && !lateNight) || (a.stamina >= 70 && morning) || a.hunger >= 85;
+      if (wake) {
+        a.sleeping = false; a.sleepAt = null;
+        a.bubble = a.sleepKind === 'bed' ? '🌅 ตื่นนอน สดชื่น!' : a.sleepKind === 'fire' ? '🌅 ตื่นข้างกองไฟ' : '🥱 ตื่นมาปวดหลัง นอนกับพื้น';
+        if (a.sleepKind === 'ground') gainExp(a, 'vit', 0.5);
+      } else a.bubble = a.sleepKind === 'bed' ? '😴 นอนหลับในที่พัก' : a.sleepKind === 'fire' ? '😴 นอนข้างกองไฟ' : '😪 นอนกับพื้น';
+      return;
+    }
+    a.stamina = Math.max(0, a.stamina - staminaDrain(a));
+    if (a.stamina <= 0) {                               // collapse where you stand
+      a.sleeping = true; a.sleepKind = 'ground'; a.goal = null; a.session = null; a.gatherT = null;
+      a.hp = Math.max(1, a.hp - 4);
+      a.bubble = '😵 หมดแรงล้มหลับ!';
+      addLog(`😵 [หมดแรง] "${a.name}" ทำงานหนักจนล้มหลับกลางทาง HP -4`, '#fb923c');
+      return;
+    }
+    const tired = a.stamina < 25 || (lateNight && a.stamina < 85);
+    if (!tired) { a.wantRest = false; a.restWait = 0; return; }
+    a.wantRest = true; a.restWait = (a.restWait || 0) + 1;
+    if (a.goal && a.goal.gate) return;                  // finish a realm crossing first
+    const spot = restSpotIn(a.zone, a);
+    if (spot && Math.hypot(a.x - spot.x, a.y - spot.y) > 3 && a.restWait <= 4) { a.goal = null; a.session = null; a.gatherT = null; for (let k = 0; k < 4; k++) moveToward(a, spot.x, spot.y); a.bubble = spot.kind === 'bed' ? `🥱 เหนื่อยแล้ว กลับไปพักที่${spot.s.name.split(' (')[0]}` : '🥱 เหนื่อยแล้ว ไปนอนข้างกองไฟ'; return; }
+    // arrived (or nowhere to go): sleep
+    a.sleeping = true; a.goal = null; a.session = null; a.gatherT = null;
+    const near = spot && Math.hypot(a.x - spot.x, a.y - spot.y) <= 3;
+    a.sleepKind = near ? spot.kind : 'ground'; a.sleepAt = near && spot.kind === 'bed' ? spot.s.name : null; a.restWait = 0;
+    if (near) { a.x = spot.x + Math.floor(Math.random() * 3) - 1; a.y = spot.y + Math.floor(Math.random() * 2); }
+    // nowhere to sleep? build a simple lean-to if you carry enough sticks
+    if (!near && (a.bag || {})['กิ่งไม้แห้ง'] >= 3 && !shelters.some(s => s.zone === a.zone && isRestShelter(s))) {
+      a.bag['กิ่งไม้แห้ง'] -= 3;
+      const hut = { id: 'hut_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `เพิงพักของ${a.name}`, sprite: 'shelter_hut', zone: a.zone, x: Math.max(1, a.x - 1), y: Math.max(1, a.y - 2), station: null, rest: true, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
+      shelters.push(hut);
+      a.sleepKind = 'bed'; a.sleepAt = hut.name;
+      gainExp(a, 'dex', 1);
+      addLog(`🛖 [สร้างที่พัก] "${a.name}" เอากิ่งไม้มาทำเพิงพักที่ ${ZONES[a.zone].name} ใครเหนื่อยก็มานอนได้`, '#a3e635');
+    }
+  });
+}
+
 function runAutonomousStep() {
   if (!isRunning) return;
   simMinutes += 60;
@@ -3086,11 +3165,13 @@ function runAutonomousStep() {
   assignQuests();
   runQuests();
   socialTick();
+  staminaTick();
 
   // Movement
   const night = isNightTime();
   aiAgents.forEach(a => {
     buildZoneTerrain(a.zone);
+    if (a.sleeping || a.wantRest) return;
     if (a.age < 12) {
       // Small children stay with their guardian (that's where they learn)
       let g = aiAgents.find(o => o.id === a.guardian && o.age >= 15);
@@ -3147,7 +3228,7 @@ function runAutonomousStep() {
 
   // Gathering: anyone (12+) standing near a resource picks some up
   aiAgents.forEach(a => {
-    if (a.age < 12) return;
+    if (a.age < 12 || a.sleeping) return;
     a.gatherCd = (a.gatherCd || 0) - 1;
     if (a.gatherCd > 0) return;
     const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= 7);
@@ -3171,6 +3252,7 @@ function runAutonomousStep() {
   aiAgents.forEach(a => {
     const beast = faunaSpecies.find(f => f.predator && (f.zp[a.zone] || 0) > 0);
     const crowd = aiAgents.filter(o => o.zone === a.zone && o.age >= 15).length;
+    if (a.sleeping && a.sleepKind === 'bed') return;      // safe inside a shelter
     if (beast && night && Math.random() < (beast.id === 'f_wolf' ? 0.025 : 0.04) * (1 + trOf(beast, a.zone).fer * 0.3) * Math.min(2, beast.zp[a.zone]) / Math.max(1, crowd) && !stationInZone(a.zone, 'campfire')) {
       const icon = beast.id === 'f_wolf' ? '🐺' : '🐆';
       if (hasTool('bow', a) && a.age >= 15) { a.bubble = `🏹 ยิงธนูไล่${beast.name}!`; gainExp(a, 'agi', 1); gainExp(a, 'str', 0.5); }
@@ -3179,7 +3261,7 @@ function runAutonomousStep() {
         const dmg = (beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3;
         a.hp = Math.max(0, a.hp - dmg);
         gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
-        a.bubble = `${icon} ถูก${beast.name}โจมตี!`;
+        a.bubble = `${icon} ถูก${beast.name}โจมตี!`; a.sleeping = false; a.wantRest = false;
         addLog(`${icon} [สัตว์ร้ายโจมตี!] "${a.name}" ถูก${beast.name}ขย้ำในโซน ${a.zone} (HP ${a.hp})`, '#ef4444');
         // Fighting back with a blade can kill it
         if (a.hp > 0 && a.age >= 15 && hasTool('blade', a) && Math.random() < 0.12 + st(a, 'str') * 0.01 && beast.pop > 2) {
@@ -3194,7 +3276,7 @@ function runAutonomousStep() {
 
   // Hunting (needs weapons to be reliable)
   const hunters = aiAgents.filter(a => {
-    if (a.age < 12 || a.questId || a.session) return false;
+    if (a.age < 12 || a.questId || a.session || a.sleeping || a.wantRest) return false;
     const v = villageOf(a);
     const isHunter = a.role.includes('ล่าสัตว์');
     const needFood = (a.food || 0) < 10 || (isHunter && v && v.food < v.members.length * 4);
@@ -3248,7 +3330,7 @@ function runAutonomousStep() {
   // Work: craft from own knowledge, or experiment
   const needs = computeNeeds();
   aiAgents.forEach(a => {
-    if (a.age < 12) return;
+    if (a.age < 12 || a.sleeping || a.wantRest) return;
     if (a.age < 15 && !aiAgents.some(o => o.age >= 15 && o.zone === a.zone)) return;
     if (a.goal && a.goal.quest) return;
     if (a.questId && (!a.goal || !a.goal.sig)) return;
@@ -3538,6 +3620,11 @@ function renderAllUI() {
           <span>🍖 หิว ${a.hunger}%</span>
           <div class="bar-wrap"><div class="bar-hg" style="width:${a.hunger}%; background:${a.hunger > 75 ? '#ef4444' : '#f59e0b'};"></div></div>
         </div>
+        <div class="stat-row">
+          <span>⚡ แรง ${Math.round(a.stamina ?? 100)}%</span>
+          <div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.stamina ?? 100)}%; background:${(a.stamina ?? 100) < 25 ? '#ef4444' : '#38bdf8'};"></div></div>
+          <span>${a.sleeping ? (a.sleepKind === 'bed' ? '🛖 นอนในที่พัก' : a.sleepKind === 'fire' ? '🔥 นอนข้างกองไฟ' : '😪 นอนกับพื้น') : a.wantRest ? '🥱 กำลังไปพัก' : '🏃 ตื่นอยู่'}</span>
+        </div>
         ${(() => {
           const others = aiAgents.filter(o => o !== a).map(o => [o, rel(a, o)]);
           const fr = others.filter(x => x[1] >= 20).sort((p, q) => q[1] - p[1])[0];
@@ -3695,7 +3782,7 @@ function getMood(a) {
   if (b.startsWith('❌') || b.startsWith('😓') || b.startsWith('😅') || b.startsWith('🤔')) return 'confused';
   if (a.hunger >= 70 || (a.crowd || 0) >= 2) return 'sad';
   if (b.startsWith('🏹') || b.startsWith('🚶') || b.startsWith('🔬')) return 'focus';
-  if (isNightTime() && !a.goal && !a.session) return 'sleepy';
+  if (a.sleeping || ((a.stamina ?? 100) < 25)) return 'sleepy';
   return 'happy';
 }
 
@@ -3910,6 +3997,7 @@ const PUP_ANIM = {
   bow: { dur: 2.2, item: 'bow', f: u => pupKeys([[0, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: 65 })], [0.22, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -2, draw: 0.06, lean: 2 })],
     [0.48, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -4, draw: 1, lean: 4 })], [0.6, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -4, draw: 1, lean: 4 })],
     [0.63, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -5, draw: 0, hold: 1, lean: 5 })], [0.86, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -6, hold: 0.95, lean: 4 })], [1, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: 65 })]], u) },
+  sleep: { dur: 4, f: u => { const b = Math.sin(u * 2 * Math.PI); return pr({ lean: 84, dy: 25.5, dx: 6, thN: 8 + b, thF: -6, knN: -10, knF: -14, upN: 20 + b * 2, foN: 70, upF: 10, foF: 30, capeRot: 0, cape: 3 }); } },
   sit: { dur: 4, f: u => { const b = Math.sin(u * 2 * Math.PI); return pr({ dy: 14 + b * 0.2, lean: 6 + b * 0.8, thN: 125, knN: -115, thF: 118, knF: -110, upN: 62 + b * 2, foN: 55, upF: 55, foF: 50, capeRot: 60 }); } }
 };
 
@@ -3926,6 +4014,7 @@ function pupOutfit(a) {
 }
 function pupActivity(a, moving, fast) {
   const b = a.bubble || '';
+  if (a.sleeping && !moving) return 'sleep';
   if (moving) return fast || b.startsWith('💨') || b.startsWith('⚠️') || b.includes('โจมตี') ? 'run' : 'walk';
   if (b.startsWith('🏹')) return 'bow';
   if (b.startsWith('🩸') || b.includes('โจมตี') || b.startsWith('💢')) return 'slash';
@@ -3934,7 +4023,7 @@ function pupActivity(a, moving, fast) {
     if (/ไม้|ไผ่/.test(b) && getEquip(a).hand === 'axe') return 'chop';
     return 'gather';
   }
-  if (isNightTime() && !a.goal) return 'sit';
+  if (isNightTime() && !a.goal && stationInZone(a.zone, 'campfire')) return 'sit';
   return 'idle';
 }
 function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
@@ -4252,8 +4341,9 @@ function drawLabel(ctx, l) {
 }
 function statusIcon(a) {
   const b = a.bubble || ''; const m = b.match(/^\p{Extended_Pictographic}️?/u);
+  if (a.sleeping) return '💤';
+  if (a.wantRest || (a.stamina ?? 100) < 25) return '🥱';
   if (a.hunger >= 70) return '🍖';
-  if (isNightTime() && !a.goal) return '💤';
   return m ? m[0] : (b.startsWith('เก็บ') ? '🧺' : '');
 }
 function drawAgentTag(ctx, l, sx, sy) {
@@ -4270,6 +4360,9 @@ function drawAgentTag(ctx, l, sx, sy) {
   const hp = Math.max(0, Math.min(1, a.hp / maxHp(a)));
   ctx.fillStyle = 'rgba(30,24,60,.6)'; ctx.fillRect(sx - 15, y + 18, 30, 4);
   ctx.fillStyle = hp > 0.5 ? '#4ade80' : hp > 0.25 ? '#facc15' : '#f87171'; ctx.fillRect(sx - 15, y + 18, 30 * hp, 4);
+  const sta = Math.max(0, Math.min(1, (a.stamina ?? 100) / 100));
+  ctx.fillStyle = 'rgba(30,24,60,.6)'; ctx.fillRect(sx - 15, y + 23, 30, 3);
+  ctx.fillStyle = sta < 0.25 ? '#f87171' : '#38bdf8'; ctx.fillRect(sx - 15, y + 23, 30 * sta, 3);
   // quest marker / selection ring
   const myQ = quests.find(q => q.giverId === a.id && (q.status === 'open' || q.status === 'accepted'));
   if (myQ) {
@@ -4286,6 +4379,8 @@ function drawAgent(ctx, a, now, labels) {
   const anim = pupActivity(a, a._moving, a._fast);
   const ok = PUP.ready && drawPuppet(ctx, a, fx, feetY, H, anim, now);
   if (!ok) drawStickFigure(ctx, a, fx, feetY, H);
+  if (a.sleeping) { const t = now * 0.8 + (a._ry || 0); ctx.fillStyle = 'rgba(70,90,160,.85)'; ctx.font = `bold ${WT * 0.55}px sans-serif`;
+    [0, 1, 2].forEach(i => { const ph = (t + i * 0.33) % 1; ctx.globalAlpha = 1 - ph; ctx.fillText(i % 2 ? 'Z' : 'z', fx - WT * 0.6 + ph * WT * 0.6 + i * 3, feetY - WT * 1.2 - ph * WT * 1.2); }); ctx.globalAlpha = 1; }
   if (showLabels) labels.push({ x: fx, y: feetY, agent: a });
 }
 
@@ -4330,7 +4425,7 @@ function renderAgentCard() {
   const el = document.getElementById('agent-card'); if (!cardAgentId) return;
   const a = aiAgents.find(x => x.id === cardAgentId); if (!a) { closeAgentCard(); return; }
   const stage = getAgeStage(a.age), v = villages.find(v => v.members && v.members.includes(a.id));
-  const hp = Math.round(a.hp / maxHp(a) * 100), hg = Math.round(a.hunger || 0);
+  const hp = Math.round(a.hp / maxHp(a) * 100), hg = Math.round(a.hunger || 0), sta = Math.round(a.stamina ?? 100);
   const stats = ['str', 'agi', 'vit', 'int', 'dex', 'cha'].map(k => `<span class="st"><b>${k.toUpperCase()}</b> ${st(a, k)}</span>`).join('');
   const kn = Object.keys(a.know || {}).length;
   el.innerHTML = `<div class="ac-head"><canvas id="ac-avatar" width="84" height="96"></canvas><div class="ac-info">
@@ -4339,7 +4434,9 @@ function renderAgentCard() {
       <div class="ac-bubble">${a.bubble || '...'}</div></div>
       <button class="gbtn ghost round close" onclick="closeAgentCard()">✕</button></div>
     <div class="ac-bars"><span>❤️</span><div class="bar-wrap"><div class="bar-hp" style="width:${hp}%;background:${hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171'}"></div></div><span>${hp}%</span>
-      <span>🍖</span><div class="bar-wrap"><div class="bar-hg" style="width:${hg}%;background:#f5a524"></div></div><span>${hg}%</span></div>
+      <span>🍖</span><div class="bar-wrap"><div class="bar-hg" style="width:${hg}%;background:#f5a524"></div></div><span>${hg}%</span>
+      <span>⚡</span><div class="bar-wrap"><div class="bar-hp" style="width:${sta}%;background:${sta < 25 ? '#ef4444' : '#38bdf8'}"></div></div><span>${sta}%</span>
+      <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
     <div class="ac-sub">🧠 รู้ ${kn} สูตร · 🎒 ${Object.entries(a.bag || {}).filter(([, n]) => n > 0).slice(0, 5).map(([k, n]) => `${k}×${n}`).join(', ') || 'กระเป๋าว่าง'}</div>`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
