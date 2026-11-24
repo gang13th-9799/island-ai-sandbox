@@ -665,14 +665,27 @@ let logBuffer = [];     // per-realm chronicle
 let bgTick = false;     // true while a background realm is ticking (no UI work)
 
 let faunaSpecies = [
-  { id: 'f_deer', sprite: 'deer', name: 'กวางป่า', zones: ['S2', 'C3', 'E1'], pop: 8, maxPop: 14, reproDays: 3, reproProgress: 0, lootFood: 8, lootMat: { 'หนังกวางนิ่ม': 2, 'เขากวางแข็ง': 1 } },
-  { id: 'f_boar', sprite: 'boar', name: 'หมูป่าเขี้ยวตัน', zones: ['S1', 'S3', 'C3'], pop: 6, maxPop: 12, reproDays: 3, reproProgress: 0, lootFood: 10, lootMat: { 'ไขมันหมู': 2, 'หนังหมูหนา': 1 } },
-  { id: 'f_fish', sprite: 'fish', name: 'ฝูงปลาแม่น้ำ', zones: ['E1', 'E2', 'C2', 'E3'], pop: 24, maxPop: 45, reproDays: 1, reproProgress: 0, lootFood: 5, lootMat: { 'เกล็ดปลา': 1 } },
+  { id: 'f_deer', sprite: 'deer', name: 'กวางป่า', zones: ['S2', 'C3', 'E1', 'S1'], pop: 16, maxPop: 32, reproDays: 2, reproProgress: 0, lootFood: 8, lootMat: { 'หนังกวางนิ่ม': 2, 'เขากวางแข็ง': 1 } },
+  { id: 'f_boar', sprite: 'boar', name: 'หมูป่าเขี้ยวตัน', zones: ['S1', 'S3', 'C3', 'W2'], pop: 12, maxPop: 26, reproDays: 2, reproProgress: 0, lootFood: 10, lootMat: { 'ไขมันหมู': 2, 'หนังหมูหนา': 1 } },
+  { id: 'f_rabbit', sprite: 'deer', name: 'กระต่ายป่า', zones: ['C3', 'S2', 'E1', 'W2', 'C4', 'S4'], pop: 18, maxPop: 40, reproDays: 1, reproProgress: 0, lootFood: 3, lootMat: { 'ขนกระต่ายนุ่ม': 1 }, color: '#d6c2a0', sizeRel: 0.3 },
+  { id: 'f_goat', sprite: 'deer', name: 'แพะภูเขา', zones: ['N1', 'N2', 'N3', 'C2'], pop: 10, maxPop: 22, reproDays: 3, reproProgress: 0, lootFood: 7, lootMat: { 'ขนแพะ': 1, 'เขาแพะ': 1 }, color: '#9ca3af', sizeRel: 0.5 },
+  { id: 'f_fish', sprite: 'fish', name: 'ฝูงปลาแม่น้ำ', zones: ['E1', 'E2', 'C2', 'E3', 'W1', 'S4'], pop: 40, maxPop: 80, reproDays: 1, reproProgress: 0, lootFood: 5, lootMat: { 'เกล็ดปลา': 1 } },
   { id: 'f_leopard', sprite: 'leopard', name: 'เสือดาวเกาะ', zones: ['N1', 'S3'], pop: 3, maxPop: 6, reproDays: 6, reproProgress: 0, lootFood: 0,
     lootMat: { 'เนื้อเสือดาว': 2, 'หนังเสือดาวหนา': 1, 'เขี้ยวเสือดาว': 1, 'กรงเล็บเสือดาว': 2 }, predator: true, power: 3, solitary: true },
   { id: 'f_wolf', sprite: 'wolf', name: 'หมาป่าเกาะ', zones: ['N4', 'W3'], pop: 5, maxPop: 10, reproDays: 5, reproProgress: 0, lootFood: 0,
     lootMat: { 'เนื้อหมาป่า': 1, 'หนังหมาป่า': 1, 'เขี้ยวหมาป่า': 1 }, predator: true, power: 1 }
 ];
+const FAUNA_BASE = JSON.parse(JSON.stringify(faunaSpecies));
+// older saves: add new species and raise caps so the wild feels alive
+function upgradeFauna(list) {
+  FAUNA_BASE.forEach(base => {
+    let f = list.find(x => x.id === base.id);
+    if (!f) { if (base.predator) return; f = JSON.parse(JSON.stringify(base)); delete f.zp; list.push(f); initFauna(f); return; }
+    f.maxPop = Math.max(f.maxPop, base.maxPop); f.reproDays = Math.min(f.reproDays, base.reproDays);
+    if (base.color && !f.color) f.color = base.color; if (base.sizeRel && !f.sizeRel) f.sizeRel = base.sizeRel;
+    if (!f.predator && f.pop < base.pop / 2) addAnimals(f, Math.round(base.pop / 2 - f.pop));
+  });
+}
 let animalLogs = [];
 // ---- Per-zone animal populations ----
 function initFauna(f) {
@@ -2742,7 +2755,7 @@ function loadGameState() {
     activeRealm = d.activeRealm || 0;
     realms.forEach(r => {
       r.state.aiAgents = (r.state.aiAgents || []).map(ensureAgent);
-      r.state.faunaSpecies.forEach(initFauna);
+      r.state.faunaSpecies.forEach(initFauna); upgradeFauna(r.state.faunaSpecies);
     });
     restoreRealm(realms[activeRealm].state);
     return true;
@@ -4813,21 +4826,47 @@ function drawCanvas() {
   faunaSpecies.filter(f => (f.zp[currentZoneId] || 0) > 0).forEach(f => {
     if (!f.zoneCoords) f.zoneCoords = {};
     if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = findValidTile(currentZoneId, f.sprite === 'fish');
-    const pos = f.zoneCoords[currentZoneId];
-    items.push({ y: pos.x + pos.y + 1, draw: () => {
-      const tt = trOf(f, currentZoneId);
-      const rc = tt.color ? { [MAIN_COLOR_CH[f.sprite] || 'O']: tt.color } : null;
-      const key = f.sprite || 'deer', rel = (f.sizeRel || SIZE_REL[key] || 0.6) * (1 + (tt.str || 0) * 0.08);
-      const [cx, fy] = groundAt(pos.x + 0.5, pos.y + 0.5);
-      const mat = SPRITES[key], h = rel * HUMAN_H, p = h / mat.length, w = mat[0].length * p, ax = cx - w / 2, ay = fy - h, ps = p;
-      ctx.fillStyle = 'rgba(40,30,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * 0.45, w * 0.1, 0, 0, 7); ctx.fill();
-      if (tt.parts.includes('ปีก')) { ctx.fillStyle = 'rgba(226,232,240,.9)'; ctx.beginPath(); ctx.moveTo(ax + ps * 5, ay + ps * 3); ctx.lineTo(ax + ps * 2, ay - ps * 3); ctx.lineTo(ax + ps * 9, ay + ps * 2); ctx.closePath(); ctx.fill(); }
-      drawSized(ctx, key, cx, fy, rc, rel);
-      if (tt.parts.includes('เขา')) { ctx.strokeStyle = '#f5f5f4'; ctx.lineWidth = Math.max(1, ps * 0.6); ctx.beginPath(); ctx.moveTo(ax + ps * 3, ay + ps); ctx.lineTo(ax + ps * 1, ay - ps * 2); ctx.moveTo(ax + ps * 5, ay + ps); ctx.lineTo(ax + ps * 6, ay - ps * 2); ctx.stroke(); }
-      if (tt.parts.includes('หาง')) { ctx.strokeStyle = tt.color || '#78350f'; ctx.lineWidth = Math.max(1, ps * 0.6); ctx.beginPath(); ctx.moveTo(ax + ps * 13, ay + ps * 4); ctx.quadraticCurveTo(ax + ps * 17, ay + ps * 2, ax + ps * 18, ay + ps * 6); ctx.stroke(); }
-      if (tt.parts.includes('เกล็ด')) { ctx.fillStyle = 'rgba(147,197,253,.9)'; for (let i = 0; i < 4; i++) ctx.fillRect(ax + ps * (3 + i * 2), ay + ps * 4, ps * 0.8, ps * 0.8); }
-      if (showLabels) labels.push({ x: cx, y: ay - 3, text: `${f.predator ? '⚠️ ' : ''}${variantLabel(f, currentZoneId)} ×${f.zp[currentZoneId]}`, color: f.predator ? '#b91c1c' : '#334155', bg: f.predator ? 'rgba(254,226,226,.95)' : 'rgba(255,255,255,.85)', small: true, center: true });
-    } });
+    const pos = f.zoneCoords[currentZoneId], grid = zoneTerrainGrid[currentZoneId];
+    const n = Math.min(f.zp[currentZoneId], f.sprite === 'fish' ? 8 : 12), aquatic = f.sprite === 'fish';
+    f._herd = f._herd || {};
+    const key0 = currentZoneId + ':' + n + ':' + pos.x + ',' + pos.y;
+    if (!f._herd[currentZoneId] || f._herd[currentZoneId].key !== key0) {
+      // scatter the herd around its centre on suitable ground (or water for fish)
+      let sd = (pos.x * 73 + pos.y * 31 + f.id.length * 17) | 0; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      const spread = f.solitary ? 14 : f.predator ? 7 : 6, homes = [];
+      for (let i = 0; i < n; i++) {
+        let hx = pos.x, hy = pos.y;
+        for (let t = 0; t < 25; t++) {
+          const tx = Math.round(pos.x + (rnd() - 0.5) * 2 * spread), ty = Math.round(pos.y + (rnd() - 0.5) * 2 * spread);
+          if (tx < 1 || ty < 1 || tx > 78 || ty > 78) continue;
+          if (WATER.includes(grid[ty][tx]) === aquatic) { hx = tx; hy = ty; break; }
+        }
+        homes.push({ x: hx, y: hy, ph: rnd() * 6.28, sp: 0.15 + rnd() * 0.25, r: 0.6 + rnd() * 1.6 });
+      }
+      f._herd[currentZoneId] = { key: key0, homes };
+    }
+    const tt = trOf(f, currentZoneId), color = tt.color || f.color;
+    const rc = color ? { [MAIN_COLOR_CH[f.sprite] || 'O']: color } : null;
+    const keyS = f.sprite || 'deer', rel = (f.sizeRel || SIZE_REL[keyS] || 0.6) * (1 + (tt.str || 0) * 0.08);
+    f._herd[currentZoneId].homes.forEach((h, i) => {
+      const t = now * h.sp + h.ph, graze = Math.sin(t * 0.7) > 0.3;   // sometimes stop to graze
+      const ox = graze ? Math.cos(h.ph) * h.r : Math.cos(t) * h.r, oy = graze ? Math.sin(h.ph) * h.r * 0.6 : Math.sin(t * 0.8) * h.r * 0.6;
+      const vx = -Math.sin(t) - Math.cos(t * 0.8) * 0.48, face = graze ? (h.ph > 3.14 ? 1 : -1) : (vx > 0 ? 1 : -1);
+      const tx = h.x + ox, ty = h.y + oy;
+      items.push({ y: tx + ty + 1, draw: () => {
+        const [cx, fy0] = groundAt(tx + 0.5, ty + 0.5), bob = graze ? 0 : Math.abs(Math.sin(t * 6)) * 1.2, fy = fy0 - bob;
+        const mat = SPRITES[keyS], hh = rel * HUMAN_H, p = hh / mat.length, w = mat[0].length * p, ax = cx - w / 2, ay = fy - hh, ps = p;
+        ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.42, w * 0.09, 0, 0, 7); ctx.fill();
+        ctx.save(); if (face < 0) { ctx.translate(cx * 2, 0); ctx.scale(-1, 1); }
+        if (tt.parts.includes('ปีก')) { ctx.fillStyle = 'rgba(226,232,240,.9)'; ctx.beginPath(); ctx.moveTo(ax + ps * 5, ay + ps * 3); ctx.lineTo(ax + ps * 2, ay - ps * 3); ctx.lineTo(ax + ps * 9, ay + ps * 2); ctx.closePath(); ctx.fill(); }
+        drawSized(ctx, keyS, cx, fy, rc, rel);
+        if (tt.parts.includes('เขา')) { ctx.strokeStyle = '#f5f5f4'; ctx.lineWidth = Math.max(1, ps * 0.6); ctx.beginPath(); ctx.moveTo(ax + ps * 3, ay + ps); ctx.lineTo(ax + ps * 1, ay - ps * 2); ctx.moveTo(ax + ps * 5, ay + ps); ctx.lineTo(ax + ps * 6, ay - ps * 2); ctx.stroke(); }
+        if (tt.parts.includes('หาง')) { ctx.strokeStyle = color || '#78350f'; ctx.lineWidth = Math.max(1, ps * 0.6); ctx.beginPath(); ctx.moveTo(ax + ps * 13, ay + ps * 4); ctx.quadraticCurveTo(ax + ps * 17, ay + ps * 2, ax + ps * 18, ay + ps * 6); ctx.stroke(); }
+        if (tt.parts.includes('เกล็ด')) { ctx.fillStyle = 'rgba(147,197,253,.9)'; for (let k = 0; k < 4; k++) ctx.fillRect(ax + ps * (3 + k * 2), ay + ps * 4, ps * 0.8, ps * 0.8); }
+        ctx.restore();
+        if (i === 0 && showLabels) labels.push({ x: cx, y: ay - 3, text: `${f.predator ? '⚠️ ' : ''}${variantLabel(f, currentZoneId)} ×${f.zp[currentZoneId]}`, color: f.predator ? '#b91c1c' : '#334155', bg: f.predator ? 'rgba(254,226,226,.95)' : 'rgba(255,255,255,.85)', small: true, center: true });
+      } });
+    });
   });
   const tickDur = 10 / simSpeed;
   aiAgents.filter(a => a.zone === currentZoneId).forEach(a => {
@@ -4842,6 +4881,25 @@ function drawCanvas() {
     items.push({ y: a._rx + a._ry + 1.05, draw: () => drawAgent(ctx, a, now, labels) });
   });
   items.sort((p, q) => p.y - q.y).forEach(it => it.draw());
+
+  // ambient wildlife (decorative): butterflies by day, fireflies at night, birds crossing the sky
+  { const night = isNightTime(), wz = zoneWeather(currentZoneId);
+    if (wz !== 'storm' && wz !== 'snow') {
+      const [vx0, vy0] = worldOf(0, 0), [vx1, vy1] = worldOf(VIEW.w, VIEW.h);
+      for (let i = 0; i < (night ? 14 : 9); i++) {
+        const t = now * (0.25 + (i % 5) * 0.05) + i * 2.1;
+        const wx = vx0 + ((i * 197.3 + Math.sin(t) * 60 + now * 6) % (vx1 - vx0 + 1) + (vx1 - vx0)) % (vx1 - vx0), wy = vy0 + ((i * 131.7 + Math.cos(t * 1.3) * 40) % (vy1 - vy0) + (vy1 - vy0)) % (vy1 - vy0);
+        if (night) { ctx.fillStyle = `rgba(220,255,140,${0.35 + 0.6 * Math.abs(Math.sin(t * 3))})`; ctx.beginPath(); ctx.arc(wx, wy, 1.6, 0, 7); ctx.fill(); }
+        else if (wz !== 'rain') { const fl = Math.abs(Math.sin(now * 12 + i)); ctx.fillStyle = ['#fbbf24', '#f472b6', '#ffffff', '#a78bfa'][i % 4];
+          ctx.beginPath(); ctx.ellipse(wx - 2 * fl, wy, 2.2 * fl + 0.4, 1.6, 0, 0, 7); ctx.ellipse(wx + 2 * fl, wy, 2.2 * fl + 0.4, 1.6, 0, 0, 7); ctx.fill(); }
+      }
+      if (!night) for (let i = 0; i < 3; i++) {
+        const span = vx1 - vx0 + 200, px = vx0 - 100 + ((now * (18 + i * 5) + i * 400) % span), py = vy0 + (vy1 - vy0) * (0.15 + i * 0.12) + Math.sin(now + i) * 10;
+        ctx.strokeStyle = 'rgba(50,50,70,.55)'; ctx.lineWidth = 1.2; const fl = Math.sin(now * 8 + i) * 2.5;
+        [[0, 0], [9, 4], [-7, 6]].forEach(([ox, oy]) => { ctx.beginPath(); ctx.moveTo(px + ox - 4, py + oy - fl); ctx.lineTo(px + ox, py + oy); ctx.lineTo(px + ox + 4, py + oy - fl); ctx.stroke(); });
+      }
+    }
+  }
 
   if (isNightTime()) {
     ctx.setTransform(d, 0, 0, d, 0, 0);
