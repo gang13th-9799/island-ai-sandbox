@@ -1,1 +1,1 @@
-{"0": "game.js", "1": "experiment", "2": "runAutonomousStep", "3": "addLog", "4": "renderAllUI", "5": "rel", "6": "buildZoneTerrain", "7": "drawCanvas", "8": "ecologyTick", "9": "drawPuppet", "10": "clampView", "11": "pupKeys", "12": "closeSheet", "13": "toolsOfType"}
+{"0": "game.js", "1": "runQuests", "2": "runAutonomousStep", "3": "addLog", "4": "rel", "5": "drawCanvas", "6": "renderAllUI", "7": "propsOf", "8": "villageOf", "9": "drawPuppet", "10": "newAgent", "11": "makeSoul", "12": "clampView", "13": "pupKeys", "14": "closeSheet", "15": "toolsOfType"}

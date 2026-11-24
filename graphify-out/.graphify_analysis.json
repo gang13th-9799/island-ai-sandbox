@@ -90,197 +90,168 @@
       "game_zoneterraingrid"
     ],
     "1": [
+      "game_accessiblestations",
+      "game_addownlog",
+      "game_addrel",
       "game_addteachlog",
-      "game_buildequivalents",
+      "game_asktouse",
+      "game_avail",
+      "game_canuse",
       "game_completequest",
+      "game_computeneeds",
       "game_consume",
       "game_craftknown",
       "game_depthof",
-      "game_electchief",
-      "game_electchief_score",
       "game_experiment",
       "game_failcap",
+      "game_failquest",
       "game_gainexp",
+      "game_generatequests",
+      "game_getequip",
       "game_gettool",
-      "game_hashstr",
-      "game_hrand",
+      "game_hasmaterials",
+      "game_hastool",
       "game_istoolname",
       "game_keybyname",
       "game_markdiscovery",
-      "game_naturelaw",
-      "game_newtool",
-      "game_observe",
-      "game_outname",
-      "game_produce",
-      "game_productdef",
-      "game_propsimilarity",
-      "game_propsof",
-      "game_pushtrial",
-      "game_react",
-      "game_realmrawset",
-      "game_recipecap",
-      "game_removetoolformaterial",
-      "game_secrettick",
-      "game_st",
-      "game_synctoolstock",
-      "game_transferknowledge",
-      "game_trimfails",
-      "game_trimmemory",
-      "game_usetool",
-      "game_world"
-    ],
-    "2": [
-      "game_accessiblestations",
-      "game_addanimals",
-      "game_applyaisolution",
-      "game_atgoal",
-      "game_avail",
-      "game_beststat",
-      "game_canuse",
-      "game_computeneeds",
-      "game_createquest",
-      "game_creditgather",
-      "game_generatecrisisproposal",
-      "game_generatequests",
-      "game_getequip",
-      "game_givesoul",
-      "game_hasmaterials",
-      "game_hastool",
-      "game_inherittalent",
       "game_maxhp",
       "game_methodusable",
       "game_neareststation",
       "game_nearto",
+      "game_newtool",
       "game_nowh",
-      "game_pick",
+      "game_observe",
+      "game_outname",
+      "game_ownerof",
       "game_planfor",
+      "game_produce",
+      "game_productdef",
+      "game_pushtrial",
       "game_questgoalto",
-      "game_questnode",
-      "game_runautonomousstep",
+      "game_recipecap",
+      "game_removetoolformaterial",
       "game_runquests",
-      "game_sigof",
+      "game_st",
       "game_stationnear",
       "game_stationsof",
+      "game_synctoolstock",
+      "game_transferknowledge",
+      "game_trimfails",
+      "game_trimmemory",
+      "game_trysneak",
+      "game_usetool"
+    ],
+    "2": [
+      "game_addanimals",
+      "game_animalpower",
+      "game_applyaisolution",
+      "game_atgoal",
+      "game_bagcap",
+      "game_bagcount",
+      "game_beststat",
+      "game_buildstation",
+      "game_buildzoneterrain",
+      "game_carrytraits",
+      "game_clampc",
+      "game_creditgather",
+      "game_deposittick",
+      "game_ecologytick",
+      "game_extraloot",
+      "game_findvalidtile",
+      "game_gainitems",
+      "game_generatecrisisproposal",
+      "game_getadjacentzones",
+      "game_huntpenalty",
+      "game_inherittalent",
+      "game_isnighttime",
+      "game_isprey",
+      "game_knowledgeexchange",
+      "game_makerealmstate",
+      "game_moveanimals",
+      "game_movetoward",
+      "game_pick",
+      "game_pickchildname",
+      "game_placestorehouse",
+      "game_pupactivity",
+      "game_put",
+      "game_questnode",
+      "game_removedead",
+      "game_runautonomousstep",
+      "game_socialtick",
+      "game_stationinzone",
+      "game_stepfauna",
+      "game_syncfauna",
+      "game_tostore",
+      "game_traveltogoal",
       "game_triggerseasonaldisaster",
-      "game_zonedist"
+      "game_trof",
+      "game_updatehudchips",
+      "game_zoneappeal"
     ],
     "3": [
-      "game_addaiagent",
       "game_addlog",
+      "game_assignquests",
+      "game_canhelp",
       "game_capturerealm",
-      "game_closelobby",
+      "game_createquest",
       "game_crossrealm",
       "game_cyclespeed",
-      "game_ensureagent",
-      "game_freshstats",
       "game_gateof",
       "game_godtick",
       "game_initfauna",
-      "game_ismember",
       "game_loadgamestate",
       "game_logtorealm",
-      "game_makerealmstate",
-      "game_newagent",
+      "game_negotiate",
       "game_openlobby",
-      "game_pickchildname",
-      "game_randomtalent",
       "game_realmlog",
       "game_realmstatus",
       "game_realmtraveltick",
       "game_renderlobby",
       "game_requestsynthesis",
       "game_restorerealm",
-      "game_savegamestate",
-      "game_startsimloop",
-      "game_switchrealm",
-      "game_syncfauna",
-      "game_testcollapse",
-      "game_tickallrealms",
-      "game_updatehudchips"
-    ],
-    "4": [
-      "game_addfood",
-      "game_agentlevel",
-      "game_atstore",
-      "game_bagcap",
-      "game_bagcount",
-      "game_bagvalue",
-      "game_cantradefor",
-      "game_choosekept",
-      "game_deposittick",
-      "game_expneed",
-      "game_gainitems",
-      "game_itemvalue",
-      "game_keepcount",
-      "game_knowersof",
-      "game_makesoul",
-      "game_payfor",
-      "game_put",
-      "game_rellabel",
-      "game_removedead",
-      "game_renderallui",
-      "game_shareratio",
-      "game_storekeys",
-      "game_take",
-      "game_talentgrade",
-      "game_tostore",
-      "game_villageof"
-    ],
-    "5": [
-      "game_addownlog",
-      "game_addrel",
-      "game_asktouse",
-      "game_assignjobs",
-      "game_assignquests",
-      "game_byid",
-      "game_canhelp",
-      "game_failquest",
-      "game_holdfoundingmeeting",
-      "game_holdvillagemeeting",
-      "game_jobfit",
-      "game_namevillage",
-      "game_negotiate",
-      "game_negotiatetax",
-      "game_ownerof",
-      "game_proposetax",
-      "game_proposevillagename",
-      "game_rel",
       "game_rewardpackage",
       "game_rewardtext",
       "game_rewardvalue",
-      "game_souldecides",
-      "game_trysneak",
-      "game_villagemembers",
-      "game_villagetick"
+      "game_savegamestate",
+      "game_startsimloop",
+      "game_testcollapse",
+      "game_tickallrealms"
     ],
-    "6": [
-      "game_buildstation",
-      "game_buildzoneterrain",
-      "game_clampc",
+    "4": [
+      "game_assignjobs",
+      "game_byid",
       "game_crowdtick",
-      "game_findvalidtile",
-      "game_getadjacentzones",
-      "game_getterraincanvas",
-      "game_getzoneat",
+      "game_electchief",
+      "game_electchief_score",
+      "game_holdfoundingmeeting",
+      "game_holdvillagemeeting",
       "game_homecounts",
-      "game_jittercolor",
-      "game_movetoward",
-      "game_placestorehouse",
-      "game_renderminimap",
-      "game_socialtick",
-      "game_stationinzone",
-      "game_stepfauna",
-      "game_switchzone",
-      "game_traveldir",
-      "game_traveltogoal"
+      "game_ismember",
+      "game_isrestshelter",
+      "game_jobfit",
+      "game_namevillage",
+      "game_negotiatetax",
+      "game_proposetax",
+      "game_proposevillagename",
+      "game_rel",
+      "game_restspotin",
+      "game_secrettick",
+      "game_souldecides",
+      "game_staminadrain",
+      "game_staminatick",
+      "game_villagemembers",
+      "game_villagetick",
+      "game_zonedist"
     ],
-    "7": [
+    "5": [
       "game_closeagentcard",
       "game_drawagenttag",
       "game_drawcanvas",
       "game_drawlabel",
       "game_drawpixelsprite",
       "game_getagestage",
+      "game_getterraincanvas",
+      "game_jittercolor",
       "game_maptap",
       "game_openagentcard",
       "game_renderagentcard",
@@ -293,22 +264,50 @@
       "game_togglelabels",
       "game_worldof"
     ],
-    "8": [
+    "6": [
       "game_animallog",
-      "game_animalpower",
-      "game_carrytraits",
-      "game_ecologytick",
+      "game_closelobby",
       "game_evolveone",
       "game_evolvetick",
-      "game_extraloot",
-      "game_huntpenalty",
-      "game_isprey",
-      "game_moveanimals",
+      "game_expneed",
+      "game_getzoneat",
+      "game_knowersof",
+      "game_rellabel",
+      "game_renderallui",
+      "game_renderminimap",
+      "game_switchrealm",
+      "game_switchzone",
+      "game_talentgrade",
       "game_traitscore",
       "game_traittext",
-      "game_trof",
-      "game_variantlabel",
-      "game_zoneappeal"
+      "game_traveldir",
+      "game_updateskyhud",
+      "game_variantlabel"
+    ],
+    "7": [
+      "game_buildequivalents",
+      "game_givesoul",
+      "game_hashstr",
+      "game_hrand",
+      "game_naturelaw",
+      "game_propsimilarity",
+      "game_propsof",
+      "game_react",
+      "game_realmrawset",
+      "game_sigof",
+      "game_world"
+    ],
+    "8": [
+      "game_addfood",
+      "game_atstore",
+      "game_bagvalue",
+      "game_cantradefor",
+      "game_itemvalue",
+      "game_payfor",
+      "game_shareratio",
+      "game_storekeys",
+      "game_take",
+      "game_villageof"
     ],
     "9": [
       "game_armlen",
@@ -318,54 +317,65 @@
       "game_drawpuppet",
       "game_drawstickfigure",
       "game_getmood",
-      "game_isnighttime",
-      "game_knowledgeexchange",
-      "game_pupactivity",
       "game_puparmik",
-      "game_pupoutfit",
-      "game_updateskyhud"
+      "game_pupoutfit"
     ],
     "10": [
+      "game_addaiagent",
+      "game_ensureagent",
+      "game_freshstats",
+      "game_newagent",
+      "game_randomtalent"
+    ],
+    "11": [
+      "game_agentlevel",
+      "game_choosekept",
+      "game_keepcount",
+      "game_makesoul"
+    ],
+    "12": [
       "game_centeronzone",
       "game_changezoom",
       "game_clampview",
       "game_setzoom"
     ],
-    "11": [
+    "13": [
       "game_pr",
       "game_pupkeys",
       "game_smooth"
     ],
-    "12": [
+    "14": [
       "game_closesheet",
       "game_switchtab"
     ],
-    "13": [
+    "15": [
       "game_toolnames",
       "game_toolsoftype"
     ]
   },
   "cohesion": {
     "0": 0.022988505747126436,
-    "1": 0.1251778093883357,
-    "2": 0.13636363636363635,
-    "3": 0.11088709677419355,
-    "4": 0.14461538461538462,
-    "5": 0.14666666666666667,
-    "6": 0.15789473684210525,
-    "7": 0.15441176470588236,
-    "8": 0.20952380952380953,
-    "9": 0.1794871794871795,
-    "10": 0.5,
-    "11": 0.6666666666666666,
-    "12": 1.0,
-    "13": 1.0
+    "1": 0.1126530612244898,
+    "2": 0.09696969696969697,
+    "3": 0.1282051282051282,
+    "4": 0.15217391304347827,
+    "5": 0.13450292397660818,
+    "6": 0.1568627450980392,
+    "7": 0.2545454545454545,
+    "8": 0.37777777777777777,
+    "9": 0.25,
+    "10": 0.6,
+    "11": 0.5,
+    "12": 0.5,
+    "13": 0.6666666666666666,
+    "14": 1.0,
+    "15": 1.0
   },
   "gods": [
     {
       "id": "game_runautonomousstep",
       "label": "runAutonomousStep()",
-      "degree": 78
+      "degree": 79
     },
     {
       "id": "game_renderallui",
@@ -375,7 +385,7 @@
     {
       "id": "game_addlog",
       "label": "addLog()",
-      "degree": 32
+      "degree": 33
     },
     {
       "id": "game_runquests",
@@ -390,7 +400,17 @@
     {
       "id": "game_st",
       "label": "st()",
-      "degree": 22
+      "degree": 23
+    },
+    {
+      "id": "game_rel",
+      "label": "rel()",
+      "degree": 21
+    },
+    {
+      "id": "game_villageof",
+      "label": "villageOf()",
+      "degree": 21
     },
     {
       "id": "game_pick",
@@ -398,19 +418,9 @@
       "degree": 20
     },
     {
-      "id": "game_rel",
-      "label": "rel()",
-      "degree": 20
-    },
-    {
       "id": "game_drawcanvas",
       "label": "drawCanvas()",
       "degree": 20
-    },
-    {
-      "id": "game_villageof",
-      "label": "villageOf()",
-      "degree": 19
     }
   ],
   "surprises": [
@@ -423,44 +433,22 @@
       ],
       "confidence": "INFERRED",
       "relation": "indirect_call",
-      "note": "Bridges community 1 → community 4"
+      "note": "Bridges community 1 → community 2"
     },
     {
-      "source": "applyAISolution()",
-      "target": "isPrey()",
+      "source": "loadGameState()",
+      "target": "ensureAgent()",
       "source_files": [
         "game.js",
         "game.js"
       ],
       "confidence": "INFERRED",
       "relation": "indirect_call",
-      "note": "Bridges community 2 → community 8"
+      "note": "Bridges community 10 → community 3"
     },
     {
       "source": "addOwnLog()",
-      "target": "addTeachLog()",
-      "source_files": [
-        "game.js",
-        "game.js"
-      ],
-      "confidence": "EXTRACTED",
-      "relation": "calls",
-      "note": "Bridges community 1 → community 5"
-    },
-    {
-      "source": "runQuests()",
-      "target": "addTeachLog()",
-      "source_files": [
-        "game.js",
-        "game.js"
-      ],
-      "confidence": "EXTRACTED",
-      "relation": "calls",
-      "note": "Bridges community 1 → community 2"
-    },
-    {
-      "source": "crossRealm()",
-      "target": "buildEquivalents()",
+      "target": "addLog()",
       "source_files": [
         "game.js",
         "game.js"
@@ -468,12 +456,34 @@
       "confidence": "EXTRACTED",
       "relation": "calls",
       "note": "Bridges community 1 → community 3"
+    },
+    {
+      "source": "holdFoundingMeeting()",
+      "target": "addRel()",
+      "source_files": [
+        "game.js",
+        "game.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 1 → community 4"
+    },
+    {
+      "source": "avail()",
+      "target": "canTradeFor()",
+      "source_files": [
+        "game.js",
+        "game.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 1 → community 8"
     }
   ],
   "questions": [
     {
       "type": "bridge_node",
-      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `experiment`, `addLog`, `renderAllUI`, `rel`, `buildZoneTerrain`, `drawCanvas`, `ecologyTick`, `drawPuppet`?",
+      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `runQuests`, `addLog`, `rel`, `drawCanvas`, `renderAllUI`, `propsOf`, `villageOf`, `newAgent`?",
       "why": "High betweenness centrality (0.025) - this node is a cross-community bridge."
     },
     {
@@ -483,28 +493,28 @@
     },
     {
       "type": "bridge_node",
-      "question": "Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `experiment`, `runAutonomousStep`, `addLog`, `rel`, `buildZoneTerrain`, `drawCanvas`, `ecologyTick`, `drawPuppet`?",
-      "why": "High betweenness centrality (0.007) - this node is a cross-community bridge."
+      "question": "Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `runQuests`, `runAutonomousStep`, `addLog`, `rel`, `drawCanvas`, `propsOf`, `villageOf`, `drawPuppet`, `newAgent`, `makeSoul`?",
+      "why": "High betweenness centrality (0.006) - this node is a cross-community bridge."
     },
     {
       "type": "low_cohesion",
-      "question": "Should `experiment` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.1251778093883357 - nodes in this community are weakly interconnected."
+      "question": "Should `runQuests` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.1126530612244898 - nodes in this community are weakly interconnected."
     },
     {
       "type": "bridge_node",
-      "question": "Why does `st()` connect `experiment` to `game.js`, `runAutonomousStep`, `renderAllUI`, `rel`, `buildZoneTerrain`, `drawCanvas`, `drawPuppet`?",
+      "question": "Why does `st()` connect `runQuests` to `game.js`, `runAutonomousStep`, `rel`, `drawCanvas`, `makeSoul`?",
       "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
     },
     {
       "type": "low_cohesion",
       "question": "Should `runAutonomousStep` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.13636363636363635 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.09696969696969697 - nodes in this community are weakly interconnected."
     },
     {
       "type": "low_cohesion",
       "question": "Should `addLog` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.11088709677419355 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.1282051282051282 - nodes in this community are weakly interconnected."
     }
   ]
 }
