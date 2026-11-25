@@ -2885,38 +2885,72 @@ function findValidTile(zId, isAquatic) {
   return pick(candidates);
 }
 
+// One continuous island: every zone is an 80x80 window onto the same world map, so coasts, rivers,
+// mountain ranges and forests run across zone borders instead of stopping at them.
+const ISLE = { seed: null, map: null };
+const GEO_HEIGHT = { mountain_peak: 1.0, mountain_cliff: 0.86, mountain_cave: 0.8, waterfall_river: 0.62, hill_forest: 0.5, hill_grassland: 0.46,
+  open_grassland: 0.3, deep_forest: 0.32, river_grassland: 0.26, wetland: 0.12, river_beach: 0.1, rocky_beach: 0.16, beach_ocean: 0.06 };
+const GEO_SEA = { beach_ocean: 26, river_beach: 20, rocky_beach: 22, wetland: 7, mountain_cliff: 4, mountain_peak: 4 };
+const GEO_FOREST = { deep_forest: 1, hill_forest: 0.75, open_grassland: 0.25, hill_grassland: 0.3, river_grassland: 0.15, waterfall_river: 0.35 };
+const GEO_WET = { wetland: 1, river_beach: 0.25 };
+function isleNoise(seed) {
+  const h = (x, y) => { let n = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(seed, 2246822519); n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+  const sm = t => t * t * (3 - 2 * t);
+  const v = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = sm(x - xi), yf = sm(y - yi);
+    const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1); return a + (b - a) * xf + (c - a) * yf + (a - b - c + d) * xf * yf; };
+  return (x, y, oct = 3, f = 1 / 24) => { let t = 0, amp = 1, sum = 0; for (let o = 0; o < oct; o++) { t += v(x * f, y * f) * amp; sum += amp; amp *= 0.5; f *= 2; } return t / sum; };
+}
+function buildIsland() {
+  const seed = (worldSeed || 1) | 0;
+  if (ISLE.seed === seed && ISLE.map) return ISLE.map;
+  const W = 400, H = 320, n1 = isleNoise(seed), n2 = isleNoise(seed + 77), n3 = isleNoise(seed + 151);
+  // smooth (bilinear between zone centres) value of a per-geo table
+  const field = (tbl, gx, gy, def = 0) => {
+    const fx = Math.max(0, Math.min(3.999, gx / 80 - 0.5)), fy = Math.max(0, Math.min(2.999, gy / 80 - 0.5));
+    const c0 = Math.floor(fx), r0 = Math.floor(fy), tx = fx - c0, ty = fy - r0, s = t => t * t * (3 - 2 * t);
+    const val = (r, c) => { const id = getZoneAt(r, c); return id ? (tbl[ZONES[id].geo] ?? def) : def; };
+    const a = val(r0, c0), b = val(r0, c0 + 1), c = val(r0 + 1, c0), d = val(r0 + 1, c0 + 1), u = s(tx), w = s(ty);
+    return (a * (1 - u) + b * u) * (1 - w) + (c * (1 - u) + d * u) * w;
+  };
+  const zoneGeo = (gx, gy) => { const id = getZoneAt(Math.min(3, Math.floor(gy / 80)), Math.min(4, Math.floor(gx / 80))); return id ? ZONES[id].geo : ''; };
+  // rivers: from the waterfall (C2) east across the plains to the sea, one arm south to the river mouth
+  const RIV = [[[205, 92], [210, 125], [250, 122], [285, 118], [330, 126], [372, 120], [404, 124]], [[285, 118], [292, 150], [300, 185], [326, 205], [360, 208]]];
+  const riverDist = (gx, gy) => {
+    let best = 1e9;
+    for (const line of RIV) for (let k = 0; k < line.length - 1; k++) {
+      const [x1, y1] = line[k], [x2, y2] = line[k + 1], dx = x2 - x1, dy = y2 - y1, t = Math.max(0, Math.min(1, ((gx - x1) * dx + (gy - y1) * dy) / (dx * dx + dy * dy)));
+      best = Math.min(best, Math.hypot(gx - x1 - t * dx, gy - y1 - t * dy));
+    }
+    return best;
+  };
+  const map = Array.from({ length: H }, () => Array(W).fill('grass'));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const edge = Math.min(x, y, W - 1 - x, H - 1 - y) + (n2(x, y, 2, 1 / 14) - 0.5) * 12;
+    const sea = field(GEO_SEA, x, y, 3), geo = zoneGeo(x, y);
+    if (edge < sea) { map[y][x] = 'ocean'; continue; }
+    const beachW = /beach/.test(geo) ? 6 : 1.5;
+    if (edge < sea + beachW && !/mountain/.test(geo)) { map[y][x] = 'sand_bank'; continue; }
+    // river with meanders and sandy banks
+    const wig = (n3(x, y, 2, 1 / 18) - 0.5) * 14, rd = riverDist(x + wig, y + wig * 0.6);
+    const hgt = field(GEO_HEIGHT, x, y, 0.3) + (n1(x, y) - 0.5) * 0.42;
+    if (rd < 3.6 && hgt < 0.86) { map[y][x] = 'river'; continue; }
+    if (rd < 5.6 && hgt < 0.6) { map[y][x] = 'sand_bank'; continue; }
+    if (hgt > 0.9) { map[y][x] = 'mountain_peak'; continue; }
+    if (hgt > 0.74) { map[y][x] = 'mountain_cliff'; continue; }
+    const wet = field(GEO_WET, x, y) + (n2(x, y, 3, 1 / 16) - 0.5) * 0.7;
+    if (wet > 0.8) { map[y][x] = 'swamp_water'; continue; }
+    if (wet > 0.42) { map[y][x] = 'mud_flat'; continue; }
+    if (hgt > 0.58) { map[y][x] = 'hill_slope'; continue; }
+    const fo = field(GEO_FOREST, x, y) + (n3(x, y, 3, 1 / 12) - 0.5) * 0.8;
+    map[y][x] = fo > 0.62 ? 'forest' : fo > 0.42 && n1(x + 999, y, 1, 1 / 5) > 0.55 ? 'tall_grass' : 'grass';
+  }
+  ISLE.seed = seed; ISLE.map = map;
+  return map;
+}
 function buildZoneTerrain(zId) {
   if (zoneTerrainGrid[zId]) return;
-  const z = ZONES[zId];
-  const grid = Array.from({ length: 80 }, () => Array(80).fill('grass'));
-  for (let y = 0; y < 80; y++) for (let x = 0; x < 80; x++) {
-    const d = Math.hypot(x - 40, y - 40);
-    if (z.geo === 'mountain_cave' || z.geo === 'mountain_cliff' || z.geo === 'mountain_peak') {
-      grid[y][x] = d < 18 ? 'mountain_peak' : d < 28 ? 'mountain_cliff' : d < 42 ? 'hill_slope' : 'grass';
-    } else if (z.geo === 'waterfall_river') {
-      if (y < 22 && x > 25 && x < 55) grid[y][x] = 'mountain_cliff';
-      else if (Math.abs(x - (40 + Math.sin(y / 8) * 6)) < 6) grid[y][x] = 'river';
-      else grid[y][x] = y < 38 ? 'hill_slope' : 'grass';
-    } else if (z.geo === 'river_grassland') {
-      const ry = 38 + Math.sin(x / 10) * 8;
-      if (Math.abs(y - ry) < 6) grid[y][x] = 'river';
-      else if (Math.abs(y - ry) < 9) grid[y][x] = 'sand_bank';
-      else grid[y][x] = (x + y) % 7 === 0 ? 'tall_grass' : 'grass';
-    } else if (z.geo === 'river_beach' || z.geo === 'beach_ocean') {
-      if (x > 55) grid[y][x] = 'ocean';
-      else if (x > 40) grid[y][x] = 'sand_bank';
-      else if (z.geo === 'river_beach' && Math.abs(y - 40) < 6) grid[y][x] = 'river';
-      else grid[y][x] = 'grass';
-    } else if (z.geo === 'hill_grassland' || z.geo === 'hill_forest') {
-      grid[y][x] = d < 25 ? 'hill_slope' : (z.geo === 'hill_forest' ? 'forest' : 'grass');
-    } else if (z.geo === 'deep_forest') {
-      grid[y][x] = (x * y) % 5 === 0 ? 'grass' : 'forest';
-    } else if (z.geo === 'wetland') {
-      grid[y][x] = Math.hypot(x - 35, y - 45) < 16 ? 'swamp_water' : 'mud_flat';
-    } else {
-      grid[y][x] = (x * 3 + y) % 9 === 0 ? 'tall_grass' : 'grass';
-    }
-  }
+  const z = ZONES[zId], M = buildIsland();
+  const grid = Array.from({ length: 80 }, (_, y) => M[z.r * 80 + y].slice(z.c * 80, z.c * 80 + 80));
   zoneTerrainGrid[zId] = grid;
   const nodes = [];
   z.res.forEach(rName => {
