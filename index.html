@@ -1633,12 +1633,15 @@ function templeStep(a, night) {
   // labour
   if (!atT) { goT(); a.bubble = '🏛️ เดินไปช่วยซ่อมวิหาร'; return true; }
   q.prog += 1; a.bubble = `🛠️ ช่วยซ่อมวิหาร (${Math.min(q.prog, q.hrs)}/${q.hrs} ชม.)`; gainExp(a, 'str', 0.4); gainExp(a, 'dex', 0.3);
+  a.lit = Math.min(1.5, (a.lit || 0) + 0.02);
   a.stamina = Math.max(0, (a.stamina ?? 100) - 3);
   if (q.prog >= q.hrs) templeDone(a, t, q);
   return true;
 }
 function templeDone(a, t, q) {
   q.done = true; a.templeQ = null; t.tDone++;
+  const lit0 = a.lit || 0; a.lit = Math.min(1.5, lit0 + 0.16 + t.tStage * 0.03);   // the temple walls are covered in the divine script
+  if (lit0 < 0.87 && a.lit >= 0.87) addLog(`📜✨ [อักษรเทพ] ${a.name} เรียนรู้อักษรเทพจากผนังวิหารจนอ่านศิลาได้เข้าใจทั้งหมดแล้ว`, '#fcd34d');
   const f = q.type === 'bring' ? 4 + t.tStage : 3 + t.tStage; a.faith = (a.faith || 0) + f; a.rep = (a.rep || 0) + 1;
   // what the temple teaches while you help rebuild it
   let learned = null;
@@ -6440,7 +6443,7 @@ function steleTarget(a) {
   let best = null, bd = 90;
   for (const s of steles) {
     if (s.zone !== a.zone || s.dead || s.holder || s.vill) continue;
-    if (steleReadable(s) && ((a.readS || {})[s.id] || 0) >= 1) continue;
+    if (steleReadable(s) && ((a.readS || {})[s.id] || 0) >= Math.min(1, readCap(a)) - 0.001) continue;
     const d = Math.hypot(s.x - a.x, s.y - a.y); if (d < bd) { bd = d; best = s; }
   }
   return best;
@@ -6472,10 +6475,11 @@ function steleAct(a) {
   }
   if (near.n > 1) return false;
   // read: speed depends on INT and how well this person already knows the script
-  const p0 = a.readS[near.id] || 0; if (p0 >= 1) return false;
+  const p0 = a.readS[near.id] || 0, cap = readCap(a); if (p0 >= 1 || p0 >= cap - 0.001) return false;
   const step = 0.08 + st(a, 'int') * 0.012 + Math.min(1, a.lit || 0) * 0.15;
-  const p = a.readS[near.id] = Math.min(1, p0 + step);
-  a.lit = Math.min(1.5, (a.lit || 0) + 0.03 + st(a, 'int') * 0.002);
+  const p = a.readS[near.id] = Math.min(cap, p0 + step);
+  if ((a.lit || 0) < 0.4) a.lit = Math.min(0.4, (a.lit || 0) + 0.03 + st(a, 'int') * 0.002);   // staring at glyphs alone only gets you so far
+  if (p >= cap && cap < 1) { gainExp(a, 'int', 0.6); a.bubble = `📜 อ่าน${steleName(near)}ได้แค่ ${Math.round(p * 100)}% ยังเข้าใจอักษรเทพไม่พอ`; if (p0 < 0.5 && p >= 0.5 && !a.know[sigOf(near.rec.a, near.rec.b, near.rec.m)]) a.hunch = { items: [near.rec.a, near.rec.b], m: near.rec.m, ttl: 10 }; return true; }
   gainExp(a, 'int', 0.6);
   const r = near.rec, sig = sigOf(r.a, r.b, r.m);
   a.bubble = `📜 อ่าน${steleName(near)} ${Math.round(p * 100)}%`;
@@ -6488,6 +6492,8 @@ function steleAct(a) {
   }
   return true;
 }
+// how much of a stele a person can make sense of: the divine script is learned mostly by helping restore the temple
+function readCap(a) { return Math.min(1, 0.35 + (a.lit || 0) * 0.75); }
 function tryAssemble(set) {
   const parts = steles.filter(s => s.set === set && s.n > 1);
   if (!parts.length || parts.some(s => !s.vill || s.vill !== parts[0].vill)) return;
@@ -7266,6 +7272,7 @@ function renderAgentCard() {
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
+    <div class="ac-sub">📜 อักษรเทพ ${Math.round(readCap(a) * 100)}% ${readCap(a) >= 1 ? '· อ่านศิลาเข้าใจทั้งหมด' : '· ช่วยซ่อมวิหารเพื่อเรียนอักษรเทพ'}${(a.lit || 0) >= 1 ? ' · ✍️ สลักศิลาได้' : ''}</div>
     ${(a.buffs || []).length ? `<div class="ac-sub">🧪 ${(a.buffs || []).map(b => `${b.stat.toUpperCase()} +${b.n} (${b.from}, เหลือ ${Math.max(0, Math.round((b.until - nowH()) / 24 * 10) / 10)} วัน)`).join(' · ')}</div>` : ''}
     <div class="ac-sub">ปัจจัย 4: ${Object.entries(needsOf(a)).map(([k, v]) => `<span style="margin-right:6px;${v.ok ? '' : 'color:#dc2626;font-weight:600'}">${NEED_LABEL[k]} ${v.ok ? '✓' : '✗'}</span>`).join('')}</div>
 ${(a.godQuests || []).length ? `<div class="ac-gq">📯 เควสพระเจ้าวันนี้ · ✨ ศรัทธา <b>${a.faith || 0}</b>${(a.faith || 0) >= 10 ? ' (อธิษฐานได้)' : ''}${a.godQuests.map(q => `<div class="gq ${q.done ? 'done' : ''}">${q.done ? '✅' : q.accepted ? '⏳' : '💤'} ${q.title} <span class="d">${DIFF_STARS(q.diff)} +${q.faith}✨</span> ${q.done ? '' : q.accepted ? `<span class="p">${q.prog}/${q.qty}</span>` : '<span class="p">ไม่รับ</span>'}</div>`).join('')}</div>` : `<div class="ac-sub">✨ ศรัทธา ${a.faith || 0}</div>`}
