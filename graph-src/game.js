@@ -4372,7 +4372,7 @@ const ANIM_ART = { f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: '
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
 // animal height (head included) in adult-human heights, real-world proportions
-const ANIM_REL = { deer: 1.1, boar: 0.74, rabbit: 0.42, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.27 };
+const ANIM_REL = { deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
 // mutated look: recolour (keeps shading) + Gemini part art (horns, wings, tails, scales, thick hide, back armor)
 WA.mut = {};
