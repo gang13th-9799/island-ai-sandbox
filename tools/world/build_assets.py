@@ -35,11 +35,12 @@ LEGS={k:[] for k in ['deer','boar','rabbit','goat','wolf','leopard','fish']}
 # per-animal back line, measured by eye on each sheet: armor from rump to shoulder, wings over the front legs
 SPAN={'deer':(0.12,0.58,0.48,0.58),'boar':(0.12,0.66,0.52,0.64),'rabbit':(0.08,0.5,0.3,0.45),'goat':(0.1,0.56,0.45,0.56),
       'wolf':(0.14,0.6,0.48,0.6),'leopard':(0.12,0.62,0.5,0.62),'fish':(0.2,0.7,0.45,0.6)}
-for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.45),('leopard',0.45),('fish',0.12)]:
+ANRES=4   # animals are stored sharper: the map zooms in a lot
+for n,rel in [('deer',1.1),('boar',0.74),('rabbit',0.84),('goat',0.93),('wolf',0.8),('leopard',0.75),('fish',0.54)]:
   import os
   ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(6) if os.path.exists(f'/home/claude/fauna/{n}_{i}.png')]
   if n=='boar': ims=[im.transpose(Image.FLIP_LEFT_RIGHT) for im in ims]      # Gemini drew the boar facing left
-  sc=rel*HUMAN*RES/ims[0].height
+  sc=rel*HUMAN*ANRES/ims[0].height
   AN[n]=[]
   for pi,im in enumerate(ims):
     q=im.resize((max(1,round(im.width*sc)),max(1,round(im.height*sc))),Image.LANCZOS)
@@ -72,12 +73,12 @@ for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.
     fx=float(np.mean(fl)) if fl else x0+bw*0.65; hxl=float(np.mean(hl)) if hl else x0+bw*0.25
     def topx(x): xs=[c for c in cols if abs(c-x)<=bw*0.04]; return float(np.mean([tops[c] for c in xs]))
     p1=(hxl,topx(hxl)); p2=(fx,topx(fx))
-    LEGS[n].append((round((fx-W_/2)/RES,1),round((hxl-W_/2)/RES,1)))
-    arm=[(p1[0]+p2[0])/2,(p1[1]+p2[1])/2, (p2[0]-p1[0])*1.25/RES, float(np.arctan2(p2[1]-p1[1],p2[0]-p1[0]))]
+    LEGS[n].append((round((fx-W_/2)/ANRES,1),round((hxl-W_/2)/ANRES,1)))
+    arm=[(p1[0]+p2[0])/2,(p1[1]+p2[1])/2, (p2[0]-p1[0])*1.25/ANRES, float(np.arctan2(p2[1]-p1[1],p2[0]-p1[0]))]
     bx,by=p2[0]-bw*0.03, p2[1]
     extra={'armor':None}
-    f=lambda x,y:[round((x-W_/2)/RES,2),round((y-H_)/RES,2)]
-    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry),'mid':f(ax_,ay_),'arm':f(arm[0],arm[1])+[round(arm[2],2),round(arm[3],3)]})
+    f=lambda x,y:[round((x-W_/2)/ANRES,2),round((y-H_)/ANRES,2)]
+    AN[n].append({'img':b64(q),'w':round(q.width/ANRES,2),'h':round(q.height/ANRES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry),'mid':f(ax_,ay_),'arm':f(arm[0],arm[1])+[round(arm[2],2),round(arm[3],3)]})
 MU={}
 for f in sorted(glob.glob('/home/claude/mut/*.png')):
   k=f.split('/')[-1][:-4]; im=Image.open(f).convert('RGBA')
