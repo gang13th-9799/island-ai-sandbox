@@ -801,7 +801,7 @@ function trySneak(agent, thing, label, o) {
   return true;
 }
 function stationNear(agent, type, ask = true) {
-  const near = shelters.filter(s => s.station === type && s.zone === agent.zone && Math.hypot(s.x - agent.x, s.y - agent.y) <= 2);   // must stand at it
+  const near = shelters.filter(s => s.station === type && s.zone === agent.zone && structDist(agent, s) <= 2);   // must stand at it
   const ok = near.find(s => canUse(agent, s));
   if (ok) return ok;
   if (ask && near.length) { const s = near[0]; if (askToUse(agent, s, s.name.split(' (')[0])) return s; }
@@ -1009,8 +1009,8 @@ function templeStep(a, night) {
   }
   if (a.hunger >= 62 || (a.warmth ?? 100) < 50 || a.hp < maxHp(a) * 0.5 || (a.stamina ?? 100) < 20) return false;   // look after yourself first, then carry on
   if (nowH() - (q.since || 0) > 48) { q.helper = null; a.templeQ = null; a.bubble = '😓 ทำงานวิหารไม่ไหว ขอวางมือก่อน'; return false; }
-  const atT = a.zone === t.zone && Math.hypot(a.x - t.x - 1, a.y - t.y - 1) <= 2.2;
-  const goT = () => { if (a.zone !== t.zone) { if (!a.goal) a.goal = { zone: t.zone, x: Math.round(t.x + 1), y: Math.round(t.y + 2), ttl: 14, enter: true }; travelToGoal(a); } else for (let k = 0; k < 3; k++) moveToward(a, Math.round(t.x + 1), Math.round(t.y + 2)); };
+  const atT = a.zone === t.zone && structDist(a, t) <= 2;
+  const goT = () => { if (a.zone !== t.zone) { if (!a.goal) a.goal = { zone: t.zone, x: Math.round(t.x + 1), y: Math.round(t.y + 5), ttl: 14, enter: true }; travelToGoal(a); } else { const p = approachOf(t, a); for (let k = 0; k < 3; k++) moveToward(a, p.x, p.y); } };
   if (q.type === 'bring') {
     if (avail(a, q.mat) < q.qty) {
       if (seekItem(a, new RegExp('^' + q.mat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), `🏛️ หา${q.mat}ไปซ่อมวิหาร (${avail(a, q.mat)}/${q.qty})`)) return true;
@@ -1079,7 +1079,7 @@ function drawTemple(ctx, t, cx, fy) {
 }
 // ===== Storage (box / yard / warehouse): used only when standing within 2 tiles =====
 const STASH_CAP = { chest: 20, yard: 40, warehouse: 80 };
-function stashesNear(a) { return a ? shelters.filter(s => STASH_CAP[s.station] && s.zone === a.zone && Math.hypot(s.x + 1 - a.x, s.y + 1 - a.y) <= 2.5 && (canUse(a, s) || (villageOf(a) && s.villageId === villageOf(a).id))) : []; }
+function stashesNear(a) { return a ? shelters.filter(s => STASH_CAP[s.station] && s.zone === a.zone && structDist(a, s) <= 2 && (canUse(a, s) || (villageOf(a) && s.villageId === villageOf(a).id))) : []; }
 function stashHas(a, n) { let t = 0; for (const s of stashesNear(a)) t += (s.store && s.store[n]) || 0; return t; }
 function stashCount(s) { return Object.values(s.store || {}).reduce((x, y) => x + y, 0); }
 function stashStep(a) {
@@ -1087,7 +1087,7 @@ function stashStep(a) {
   const mine = shelters.filter(s => STASH_CAP[s.station] && s.zone === a.zone && (s.owner === a.id || canUse(a, s)) && stashCount(s) < STASH_CAP[s.station] && Math.hypot(s.x - a.x, s.y - a.y) < 35)
     .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
   if (!mine) return false;
-  if (Math.hypot(mine.x + 1 - a.x, mine.y + 1 - a.y) > 2) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(mine.x + 1), Math.round(mine.y + 1)); a.bubble = `📦 เอาของไปเก็บที่${mine.name.split(' (')[0]}`; return true; }
+  if (structDist(a, mine) > 2) { const p = approachOf(mine, a); for (let k = 0; k < 2; k++) moveToward(a, p.x, p.y); a.bubble = `📦 เอาของไปเก็บที่${mine.name.split(' (')[0]}`; return true; }
   mine.store = mine.store || {}; let moved = 0;
   for (const [n, q] of Object.entries(a.bag).sort((x, y) => y[1] - x[1])) {
     if (n === BAG_NAME || q <= 2 || propsOf(n).food) continue;
@@ -2702,7 +2702,7 @@ function landNear(zId, x, y) {
   buildZoneTerrain(zId); const g = zoneTerrainGrid[zId];
   for (let r = 0; r < 40; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     const xx = Math.max(1, Math.min(78, x + dx)), yy = Math.max(1, Math.min(78, y + dy));
-    if (!WATER.includes(g[yy][xx])) return { x: xx, y: yy };
+    if (!WATER.includes(g[yy][xx]) && !(typeof isBlocked === 'function' && shelters && isBlocked(zId, xx, yy))) return { x: xx, y: yy };
   }
   return { x, y };
 }
@@ -2928,6 +2928,34 @@ function huntSpot(f, z, h) {
   if (hd && hd.homes.length) return hd.homes.slice().sort((p, q) => Math.hypot(p.x - h.x, p.y - h.y) - Math.hypot(q.x - h.x, q.y - h.y))[0];
   return f.zoneCoords[z];
 }
+// ===== Solid things: buildings, trees, rocks and big resource spots can't be walked through =====
+function footprint(s) {
+  if (s.station === 'temple') return { x0: s.x - 1, y0: s.y - 1, x1: s.x + 3, y1: s.y + 3 };
+  if (s.station === 'campfire') return { x0: s.x + 1, y0: s.y + 1, x1: s.x + 1, y1: s.y + 1 };
+  if (s.station === 'gate') return { x0: s.x + 1, y0: s.y + 1, x1: s.x + 1, y1: s.y + 1 };
+  if (!s.station) return (s.kind === 'leaf_hut' || /เพิง/.test(s.name)) ? { x0: s.x + 1, y0: s.y + 1, x1: s.x + 2, y1: s.y + 2 } : { x0: s.x, y0: s.y, x1: s.x + 2, y1: s.y + 2 };
+  return { x0: s.x + 1, y0: s.y + 1, x1: s.x + 2, y1: s.y + 2 };
+}
+function rectDist(a, R) { const dx = Math.max(R.x0 - a.x, 0, a.x - R.x1), dy = Math.max(R.y0 - a.y, 0, a.y - R.y1); return Math.hypot(dx, dy); }
+function structDist(a, s) { return rectDist(a, footprint(s)); }
+// the free tile next to a building that is closest to the person (where they stand to use it)
+function approachOf(s, a) {
+  const R = footprint(s);
+  let x = Math.max(R.x0 - 1, Math.min(R.x1 + 1, Math.round(a.x))), y = Math.max(R.y0 - 1, Math.min(R.y1 + 1, Math.round(a.y)));
+  if (x >= R.x0 && x <= R.x1 && y >= R.y0 && y <= R.y1) y = R.y1 + 1;            // standing inside: go out the front
+  return { x, y };
+}
+const BLK = {};
+function blockedSet(zone) {
+  const k = tickingRealm + ':' + zone, key = shelters.length + ':' + Math.floor(gameNow() / 5);
+  const c = BLK[k]; if (c && c.key === key) return c.set;
+  const set = new Set();
+  shelters.forEach(s => { if (s.zone !== zone || !s.x && s.x !== 0) return; const R = footprint(s); for (let y = Math.floor(R.y0); y <= R.y1; y++) for (let x = Math.floor(R.x0); x <= R.x1; x++) set.add(x * 100 + y); });
+  objsOf(zone).forEach(o => { if (!o.dead && (WOBJ[o.k].tall || /^rock_/.test(o.k))) set.add(Math.floor(o.x) * 100 + Math.floor(o.y)); });
+  (zoneNodes[zone] || []).forEach(n => { if (n.sprite === 'res_tree' || n.sprite === 'res_bamboo' || n.sprite === 'res_rock') set.add(n.x * 100 + n.y); });
+  BLK[k] = { key, set }; return set;
+}
+function isBlocked(zone, x, y) { return blockedSet(zone).has(x * 100 + y); }
 function moveToward(a, gx, gy) {
   const step = Math.min(6, 2 + Math.floor(st(a, 'agi') / 8));
   const cl = v => Math.max(-step, Math.min(step, Math.round(v)));   // never overshoot the target
@@ -2935,9 +2963,10 @@ function moveToward(a, gx, gy) {
   if (a.age >= 12 && Math.random() < 0.3) gainExp(a, 'agi', 0.15);
   const grid = zoneTerrainGrid[a.zone];
   const tries = [[dx, dy], [dx, 0], [0, dy], [Math.floor(Math.random() * 7) - 3, Math.floor(Math.random() * 7) - 3]];
+  const inside = isBlocked(a.zone, Math.round(a.x), Math.round(a.y));   // woke up inside a hut: just walk out
   for (const [ox, oy] of tries) {
     const nx = clampC(a.x + ox), ny = clampC(a.y + oy);
-    if (!DEEP.includes(grid[ny][nx])) { a.x = nx; a.y = ny; return; }
+    if (!DEEP.includes(grid[ny][nx]) && (inside || !isBlocked(a.zone, nx, ny))) { a.x = nx; a.y = ny; return; }
   }
 }
 
@@ -2959,7 +2988,7 @@ function crossZone(a, next) {
   const dc = Math.sign(B.c - A.c), dr = Math.sign(B.r - A.r);
   if (a._xz !== next || a._xzFrom !== a.zone) {               // plan a real walking path to a dry crossing point on the shared border
     a._xz = next; a._xzFrom = a.zone; buildZoneTerrain(next);
-    const ga = zoneTerrainGrid[a.zone], gb = zoneTerrainGrid[next], dry = (g, x, y) => !DEEP.includes(g[y][x]);
+    const ga = zoneTerrainGrid[a.zone], gb = zoneTerrainGrid[next], dry = (g, x, y) => !DEEP.includes(g[y][x]) && !(g === ga && isBlocked(a.zone, x, y));
     const isExit = (x, y) => (dc ? x === (dc > 0 ? 78 : 1) : y === (dr > 0 ? 78 : 1)) && dry(gb, dc ? (dc > 0 ? 1 : 78) : x, dc ? y : (dr > 0 ? 1 : 78));
     const sx = Math.max(1, Math.min(78, Math.round(a.x))), sy = Math.max(1, Math.min(78, Math.round(a.y)));
     const prev = new Int32Array(6400).fill(-1), Q = [sy * 80 + sx]; prev[Q[0]] = Q[0]; let end = -1;
@@ -3740,7 +3769,7 @@ function agentMove(a, night) {
     if (a.session) return;
     if (a.goal) {
       const g = a.goal, gg = zoneTerrainGrid[g.zone];
-      if (gg && gg[Math.round(g.y)] && DEEP.includes(gg[Math.round(g.y)][Math.round(g.x)])) { const p = landNear(g.zone, Math.round(g.x), Math.round(g.y)); g.x = p.x; g.y = p.y; }
+      if (gg && gg[Math.round(g.y)] && (DEEP.includes(gg[Math.round(g.y)][Math.round(g.x)]) || isBlocked(g.zone, Math.round(g.x), Math.round(g.y)))) { const p = landNear(g.zone, Math.round(g.x), Math.round(g.y)); g.x = p.x; g.y = p.y; }
       const arrived = a.zone === g.zone && (g.enter || Math.hypot(a.x - g.x, a.y - g.y) <= 2);
       if (arrived && !g.sig && !g.method) a.goal = null;          // got there: carry on with normal life
       else if (!arrived) {
