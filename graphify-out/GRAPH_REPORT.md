@@ -4,12 +4,12 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 468 nodes · 1414 edges · 18 communities (15 shown, 3 thin omitted)
+- 468 nodes · 1416 edges · 18 communities (15 shown, 3 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 11 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f67c56d9`
+- Built from commit: `9b71f457`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -64,11 +64,11 @@
 
 ### Community 0 - "game.js"
 Cohesion: 0.01
-Nodes (132): aiAgents, aiCrisisProposals, alchemyLogs, ANIM_ART, ANIM_REL, animalLogs, BACK_ITEMS, BASE_ZONES (+124 more)
+Nodes (133): aiAgents, aiCrisisProposals, alchemyLogs, ANIM_ART, ANIM_REL, animalLogs, BACK_ITEMS, BASE_ZONES (+125 more)
 
 ### Community 1 - "runAutonomousStep"
 Cohesion: 0.11
-Nodes (65): accessibleStations(), addFood(), addLog(), addRel(), addTeachLog(), applyWish(), assignGodQuests(), atGoal() (+57 more)
+Nodes (64): accessibleStations(), addFood(), addLog(), addRel(), addTeachLog(), applyWish(), assignGodQuests(), atGoal() (+56 more)
 
 ### Community 2 - "drawCanvas"
 Cohesion: 0.06
@@ -131,11 +131,11 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `drawCanvas`, `buildZoneTerrain`, `realmTravelTick`, `keyByName`, `renderAllUI`, `ecologyTick`, `rel`, `objsOf`, `drawPuppet`, `newAgent`, `steleTarget`?**
   _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Should `game.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.014084507042253521 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.013986013986013986 - nodes in this community are weakly interconnected._
 - **Why does `addLog()` connect `runAutonomousStep` to `game.js`, `drawCanvas`, `buildZoneTerrain`, `realmTravelTick`, `keyByName`, `renderAllUI`, `ecologyTick`, `rel`, `newAgent`?**
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
 - **Should `runAutonomousStep` be split into smaller, more focused modules?**
-  _Cohesion score 0.10721153846153846 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11011904761904762 - nodes in this community are weakly interconnected._
 - **Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `runAutonomousStep`, `drawCanvas`, `buildZoneTerrain`, `realmTravelTick`, `keyByName`, `ecologyTick`, `rel`, `drawPuppet`, `newAgent`, `itemArtKey`?**
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
 - **Should `drawCanvas` be split into smaller, more focused modules?**

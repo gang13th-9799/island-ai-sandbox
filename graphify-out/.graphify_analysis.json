@@ -10,6 +10,7 @@
       "game_animallogs",
       "game_back_items",
       "game_base_zones",
+      "game_beststat",
       "game_body_col",
       "game_creditgather",
       "game_discoveredelements",
@@ -154,7 +155,6 @@
       "game_assigngodquests",
       "game_atgoal",
       "game_avail",
-      "game_beststat",
       "game_completequest",
       "game_computeneeds",
       "game_craftknown",
@@ -506,8 +506,8 @@
     ]
   },
   "cohesion": {
-    "0": 0.014084507042253521,
-    "1": 0.10721153846153846,
+    "0": 0.013986013986013986,
+    "1": 0.11011904761904762,
     "2": 0.06280193236714976,
     "3": 0.11827956989247312,
     "4": 0.11330049261083744,
@@ -643,7 +643,7 @@
     {
       "type": "low_cohesion",
       "question": "Should `game.js` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.014084507042253521 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.013986013986013986 - nodes in this community are weakly interconnected."
     },
     {
       "type": "bridge_node",
@@ -653,7 +653,7 @@
     {
       "type": "low_cohesion",
       "question": "Should `runAutonomousStep` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.10721153846153846 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.11011904761904762 - nodes in this community are weakly interconnected."
     },
     {
       "type": "bridge_node",

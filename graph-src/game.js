@@ -5462,6 +5462,17 @@ function renderAgentCard() {
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
 ${(a.godQuests || []).length ? `<div class="ac-gq">📯 เควสพระเจ้าวันนี้ · ✨ ศรัทธา <b>${a.faith || 0}</b>${(a.faith || 0) >= 10 ? ' (อธิษฐานได้)' : ''}${a.godQuests.map(q => `<div class="gq ${q.done ? 'done' : ''}">${q.done ? '✅' : q.accepted ? '⏳' : '💤'} ${q.title} <span class="d">${DIFF_STARS(q.diff)} +${q.faith}✨</span> ${q.done ? '' : q.accepted ? `<span class="p">${q.prog}/${q.qty}</span>` : '<span class="p">ไม่รับ</span>'}</div>`).join('')}</div>` : `<div class="ac-sub">✨ ศรัทธา ${a.faith || 0}</div>`}
+${(() => {   // quests this person asked for, or is helping with
+      const mine = quests.filter(q => (q.giverId === a.id || q.helperId === a.id) && (q.status === 'open' || q.status === 'accepted'));
+      if (!mine.length) return '';
+      return `<div class="ac-gq">📜 เควสของชาวเกาะ${mine.map(q => {
+        const hrs = Math.max(0, Math.round(q.deadlineH - nowH()));
+        const who = q.giverId === a.id ? (q.status === 'accepted' ? `🤝 ${q.helperName} รับช่วยแล้ว` : `⏳ รอคนช่วย${q.refused.length ? ` (ปฏิเสธไป ${q.refused.length} คน)` : ''}`) : `🙋 กำลังช่วย ${q.giverName}`;
+        const prog = q.qty ? ` <span class="p">${q.progress || 0}/${q.qty}</span>` : '';
+        const last = q.talk && q.talk.length ? `<div class="d" style="margin-left:18px;font-size:11px;opacity:.8">💬 ${q.talk[q.talk.length - 1]}</div>` : '';
+        return `<div class="gq">${q.giverId === a.id ? '🙏' : '🛠️'} ${q.title}${prog}<div class="d" style="margin-left:18px;font-size:11px">${who} · ตอบแทน ${rewardText(q.agreed || q.offer)} · เหลือ ${hrs} ชม.</div>${last}</div>`;
+      }).join('')}</div>`;
+    })()}
     <div class="ac-sub">🧠 รู้ ${kn} สูตร · 🎒 ${Object.entries(a.bag || {}).filter(([, n]) => n > 0).slice(0, 5).map(([k, n]) => `${k}×${n}`).join(', ') || 'กระเป๋าว่าง'}</div>`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
   if (PUP.ready) { const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, 42, 90, 80, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); }
