@@ -362,7 +362,7 @@ let discoveredElements = [
 ];
 
 let shelters = [
-  { name: 'กระท่อมฐานบัญชาการ (E1)', sprite: 'shelter_hut', zone: 'E1', x: 30, y: 18, station: null, cap: 8 }
+  { name: 'วิหารเทพ (E1)', sprite: 'temple', zone: 'E1', x: 30, y: 18, station: 'temple', rest: true, cap: 4, public: true, owner: null, ownerName: 'พระเจ้า', tStage: 0, tDone: 0, tNeed: 7, tQ: [], tSeq: 0 }
 ];
 
 let families = [];
@@ -549,6 +549,9 @@ const PRODUCTS = {
   // bamboo: the island's basic plant, good for many things
   split_bamboo:  { name: 'ไม้ไผ่ผ่าซีก', kind: 'item', props: { wood: 1, bamboo: 1, split: 1, fuel: 0.5 } },
   bamboo_basket: { name: 'ตะกร้าไม้ไผ่สาน', kind: 'item', props: { wood: 1, basket: 1 } },
+  storage_box:   { name: 'กล่องเก็บของ', kind: 'station', station: 'chest' },
+  storage_yard:  { name: 'ลานเก็บวัตถุดิบ', kind: 'station', station: 'yard' },
+  warehouse:     { name: 'โกดังเก็บของ', kind: 'station', station: 'warehouse' },
   raw_tile:      { name: 'กระเบื้องดิบ', kind: 'item', props: { raw: 1, tile: 1 } },
   roof_tile:     { name: 'กระเบื้องดินเผา', kind: 'item', props: { hard: 1, tile: 1 } },
   // homes: places to sleep, from a lean-to up to a tiled brick house (better = warmer and sturdier)
@@ -560,8 +563,8 @@ const PRODUCTS = {
   tile_house:  { name: 'บ้านอิฐหลังคากระเบื้อง', kind: 'home', tier: 6, warm: 18, hp: 300 }
 };
 
-const STATION_SPRITE = { campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
-const STATION_LABEL = { campfire: 'กองไฟ', workbench: 'โต๊ะช่าง', kiln: 'เตาเผา', smelter: 'เตาถลุง', wall: 'กำแพงอิฐ', farm: 'คอกสัตว์', lab: 'ห้องแล็บ', reactor: 'หอปฏิกรณ์' };
+const STATION_SPRITE = { chest: 'st_store', yard: 'st_store', warehouse: 'st_store', campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
+const STATION_LABEL = { chest: 'กล่องเก็บของ', yard: 'ลานเก็บวัตถุดิบ', warehouse: 'โกดังเก็บของ', temple: 'วิหารเทพ', campfire: 'กองไฟ', workbench: 'โต๊ะช่าง', kiln: 'เตาเผา', smelter: 'เตาถลุง', wall: 'กำแพงอิฐ', farm: 'คอกสัตว์', lab: 'ห้องแล็บ', reactor: 'หอปฏิกรณ์' };
 const TOOL_LABEL = { blade: 'ของมีคม', vessel: 'ภาชนะใส่น้ำ', crucible: 'เบ้าหลอม', axe: 'ขวาน', bow: 'ธนู', pick: 'อีเต้อ', sickle: 'เคียว', hammer: 'ค้อน' };
 
 // Ways of working. These are actions any human could try; what they DO is hidden.
@@ -620,6 +623,9 @@ function natureLaw(a, b, m) {
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
       if (either(N('split_bamboo'), P => P.fiber && !P.rope && !P.bamboo)) return ok('bamboo_basket');
+      if (either(N('bamboo_basket'), is('rope'))) return ok('storage_box');
+      if (either(N('fence_posts'), N('bamboo_basket'))) return ok('storage_yard');
+      if (either(N('fence_posts'), N('storage_box'))) return ok('warehouse');
       if (A.fiber && B.fiber && !A.rope && !B.rope) return ok('rope');
       if (either(is('leaf'), P => P.wood && P.dry && !P.bamboo)) return ok('leaf_hut');
       if (A.fence && B.fence) return ok('wood_house');
@@ -833,7 +839,7 @@ function toolNames(type) { return [...new Set(toolsOfType(type).map(t => t.name)
 const TOOL_CARRY = 3;
 function carriedTools(a) { return toolItems.filter(t => t.holder === a.id); }
 function hasTool(type, user) { return user ? toolItems.some(t => t.type === type && t.holder === user.id) : toolsOfType(type).length > 0; }
-function campOf() { const b = shelters.find(x => /ฐานบัญชาการ/.test(x.name)) || shelters.find(x => x.station === 'campfire') || { zone: START_ZONE, x: 40, y: 40 }; return { zone: b.zone, x: b.x, y: b.y }; }
+function campOf() { const b = templeOf() || shelters.find(x => x.station === 'campfire') || { zone: START_ZONE, x: 40, y: 40 }; return { zone: b.zone, x: b.x, y: b.y }; }
 function getTool(type, user, ask = true) {
   const list = toolsOfType(type).sort((p, q) => (productDef(keyByName(q.name)).dur - q.wear) - (productDef(keyByName(p.name)).dur - p.wear));
   if (!user) return list[0] || null;
@@ -942,12 +948,150 @@ function payFor(agent, v, cost, except, what) {
 function avail(agent, n) {
   if (isToolName(n)) return agent ? toolItems.filter(t => t.name === n && t.owner === agent.id).length : 0;
   const v = villageOf(agent);
-  return ((agent && agent.bag && agent.bag[n]) || 0) + (v && canTradeFor(agent, n) ? 1 : 0);
+  return ((agent && agent.bag && agent.bag[n]) || 0) + (v && canTradeFor(agent, n) ? 1 : 0) + stashHas(agent, n);
+}
+// ===== วิหารเทพ: a ruined temple the people restore together =====
+// 4 stages (0→25→50→75→100%); each stage needs 5–10 temple quests. Helping teaches recipes and gives faith.
+// Around it is a sacred zone: inside, cold, starvation, poison, stings, heat and night beasts can't hurt anyone.
+const TEMPLE_TEACH = [
+  ['stone_blade', 'stone_axe', 'rope', 'leaf_hut', 'campfire', 'bamboo_basket', 'storage_box'],
+  ['stone_pick', 'stone_sickle', 'stone_hammer', 'split_bamboo', 'bamboo_hut', 'storage_yard', 'bow'],
+  ['fence_posts', 'workbench', 'wood_house', 'warehouse', 'clay_paste', 'ranch_pen'],
+  ['raw_brick', 'fired_brick', 'kiln', 'stone_house', 'clay_pot', 'raw_tile']
+];
+const TEMPLE_MATS = [
+  ['กิ่งไม้แห้ง', 'ใบไม้สด', 'หินกรวด', 'เถาวัลย์เล็ก', 'ใบตองสด'],
+  ['กอไผ่สด', 'หินกรวด', 'ดินร่วน', 'กิ่งง่ามไม้แข็ง', 'เถาวัลย์เล็ก'],
+  ['ต้นไม้เนื้อแข็ง', 'ดินร่วน', 'หินเหล็กไฟ', 'กอไผ่สด', 'หินกรวด'],
+  ['ดินร่วน', 'หินกรวด', 'ต้นไม้เนื้อแข็ง', 'ทรายละเอียด', 'หินเหล็กไฟ']
+];
+const TEMPLE_STAGE_TH = ['พังทลาย', 'เริ่มซ่อมแซม', 'ซ่อมไปมากแล้ว', 'ใกล้สมบูรณ์', 'สมบูรณ์'];
+function templeOf() { return shelters.find(x => x.station === 'temple') || null; }
+function templePct(t) { t = t || templeOf(); if (!t) return 0; return t.tStage >= 4 ? 100 : Math.min(99, Math.round(t.tStage * 25 + (t.tDone / Math.max(1, t.tNeed)) * 25)); }
+function auraR(t) { return 4 + templePct(t) * 0.16; }            // 4 tiles when ruined → 20 tiles when whole
+function inAura(a) { const t = templeOf(); return !!(t && a && a.zone === t.zone && Math.hypot(a.x - t.x - 1, a.y - t.y - 1) <= auraR(t)); }
+function templeTick() {
+  const t = templeOf(); if (!t || t.tStage >= 4) return;
+  t.tQ = t.tQ || []; t.tSeq = t.tSeq || 0;
+  t.cap = 4 + t.tStage * 4;
+  t.tQ = t.tQ.filter(q => !q.done && !(q.helper && !aiAgents.some(o => o.id === q.helper) && (q.helper = null, false)));
+  (t.tQ || []).forEach(q => { if (q.helper && nowH() - (q.since || 0) > 30) { const h = byId(q.helper); if (h) { h.templeQ = null; h.bubble = '😓 งานวิหารนานเกินไป ขอวางมือก่อน'; } q.helper = null; q.prog = q.type === 'labor' ? q.prog : 0; } });   // stalled jobs go back on the board
+  const near = new Set([t.zone].concat(getAdjacentZones(t.zone)).flatMap(z => (ZONES[z] && ZONES[z].res) || []));   // materials found close to the temple
+  const isle = new Set(Object.values(ZONES).flatMap(z => z.res));
+  while (t.tQ.length < 4 && t.tDone + t.tQ.length < t.tNeed) {
+    const notFood = m => !/ปลา|กุ้ง|หอย|ปู|ปะการัง|น้ำจืด/.test(m);
+    let mats = TEMPLE_MATS[t.tStage].filter(m => near.has(m));
+    if (!mats.length) mats = [...near].filter(notFood);
+    if (!mats.length) mats = TEMPLE_MATS[t.tStage].filter(m => isle.has(m));
+    const pool = mats.length ? mats : [...isle].filter(notFood);
+    const q = Math.random() < 0.65
+      ? { id: 'tq' + (++t.tSeq), type: 'bring', mat: pick(pool), qty: 3 + Math.floor(Math.random() * 4) + t.tStage, helper: null, prog: 0 }
+      : { id: 'tq' + (++t.tSeq), type: 'labor', hrs: 3 + Math.floor(Math.random() * 3) + t.tStage, helper: null, prog: 0 };
+    t.tQ.push(q);
+  }
+}
+function templeQuestText(q) { return q.type === 'bring' ? `ขนวัสดุ "${q.mat}" ${q.qty} ชิ้นมาซ่อมวิหาร` : `ช่วยแรงซ่อมวิหาร ${q.hrs} ชม.`; }
+// a person's turn at temple work: take a job, gather, haul, labour
+function templeStep(a, night) {
+  const t = templeOf(); if (!t || a.age < 12) return false;
+  let q = a.templeQ && (t.tQ || []).find(x => x.id === a.templeQ && !x.done);
+  if (q && a.questId) { q.helper = null; a.templeQ = null; return false; }   // took on a neighbour's request instead
+  if (!q) {
+    a.templeQ = null;
+    if (t.tStage >= 4 || night || a.hunger >= 55 || (a.stamina ?? 100) < 35 || a.questId || Math.random() > 0.3) return false;
+    const open = (t.tQ || []).filter(x => !x.helper && !x.done);
+    if (!open.length) return false;
+    q = open.find(x => x.type === 'bring' && (zoneNodes[a.zone] || []).some(n => n.name === x.mat)) || pick(open);
+    q.helper = a.id; q.since = nowH(); a.templeQ = q.id;
+    a.bubble = `🏛️ รับงานซ่อมวิหาร: ${templeQuestText(q)}`;
+    addLog(`🏛️ [วิหารเทพ] ${a.name} รับงาน "${templeQuestText(q)}"`, '#fde68a');
+    return true;
+  }
+  if (a.hunger >= 62 || (a.warmth ?? 100) < 50 || a.hp < maxHp(a) * 0.5 || (a.stamina ?? 100) < 20) return false;   // look after yourself first, then carry on
+  if (nowH() - (q.since || 0) > 48) { q.helper = null; a.templeQ = null; a.bubble = '😓 ทำงานวิหารไม่ไหว ขอวางมือก่อน'; return false; }
+  const atT = a.zone === t.zone && Math.hypot(a.x - t.x - 1, a.y - t.y - 1) <= 2.2;
+  const goT = () => { if (a.zone !== t.zone) { if (!a.goal) a.goal = { zone: t.zone, x: Math.round(t.x + 1), y: Math.round(t.y + 2), ttl: 14, enter: true }; travelToGoal(a); } else for (let k = 0; k < 3; k++) moveToward(a, Math.round(t.x + 1), Math.round(t.y + 2)); };
+  if (q.type === 'bring') {
+    if (avail(a, q.mat) < q.qty) {
+      if (seekItem(a, new RegExp('^' + q.mat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), `🏛️ หา${q.mat}ไปซ่อมวิหาร (${avail(a, q.mat)}/${q.qty})`)) return true;
+      const z = Object.keys(ZONES).filter(id => ZONES[id].res.includes(q.mat)).sort((p, r) => zoneDist(a.zone, p) - zoneDist(a.zone, r))[0];
+      if (z && z !== a.zone) { if (!a.goal) a.goal = { zone: z, x: 40, y: 40, ttl: 14, enter: true }; a.bubble = `🏛️ ไปหา${q.mat}ที่โซน ${z}`; travelToGoal(a); return true; }
+      return false;
+    }
+    if (!atT) { goT(); a.bubble = `🏛️ แบก${q.mat}ไปวิหาร`; return true; }
+    for (let i = 0; i < q.qty; i++) take(a, q.mat);
+    templeDone(a, t, q); return true;
+  }
+  // labour
+  if (!atT) { goT(); a.bubble = '🏛️ เดินไปช่วยซ่อมวิหาร'; return true; }
+  q.prog += 1; a.bubble = `🛠️ ช่วยซ่อมวิหาร (${Math.min(q.prog, q.hrs)}/${q.hrs} ชม.)`; gainExp(a, 'str', 0.4); gainExp(a, 'dex', 0.3);
+  a.stamina = Math.max(0, (a.stamina ?? 100) - 3);
+  if (q.prog >= q.hrs) templeDone(a, t, q);
+  return true;
+}
+function templeDone(a, t, q) {
+  q.done = true; a.templeQ = null; t.tDone++;
+  const f = q.type === 'bring' ? 4 + t.tStage : 3 + t.tStage; a.faith = (a.faith || 0) + f; a.rep = (a.rep || 0) + 1;
+  // what the temple teaches while you help rebuild it
+  let learned = null;
+  const list = TEMPLE_TEACH[Math.min(3, t.tStage)].filter(k => PRODUCTS[k] && !Object.values(a.know).some(e => e.out === k));
+  const R = revRecipes(), isle = new Set(Object.values(ZONES).flatMap(z => z.res));
+  for (const k of list.sort(() => Math.random() - 0.5)) {
+    const rs = (R[k] || []).slice().sort((p, r) => (isle.has(r.a) + isle.has(r.b)) - (isle.has(p.a) + isle.has(p.b)));
+    if (!rs.length) continue;
+    const r = rs[0]; a.know[sigOf(r.a, r.b, r.m)] = { a: r.a, b: r.b, m: r.m, out: k, from: 'วิหารเทพ', day: simDay, practice: 0 }; trimMemory(a); learned = k; break;
+  }
+  a.bubble = `🏛️ ซ่อมวิหารสำเร็จ! ✨ ศรัทธา +${f}${learned ? ` · ได้เรียนรู้ "${outName(learned)}"` : ''}`;
+  addLog(`🏛️ [วิหารเทพ] ${a.name} ${templeQuestText(q)} สำเร็จ · ✨ +${f}${learned ? ` · ระหว่างซ่อมได้เรียนรู้วิธีทำ "${outName(learned)}"` : ''} (วิหาร ${templePct(t)}%)`, '#fde68a');
+  if (t.tDone >= t.tNeed) {
+    t.tStage++; t.tDone = 0; t.tNeed = 5 + Math.floor(Math.random() * 6); t.tQ = (t.tQ || []).filter(x => !x.done && x.helper);
+    t.tQ.forEach(x => { x.done = true; const h = byId(x.helper); if (h) h.templeQ = null; });
+    t.tQ = []; t.cap = 4 + t.tStage * 4;
+    addLog(`🏛️✨ [วิหารเทพ] วิหารฟื้นคืน ${t.tStage * 25}% — ${TEMPLE_STAGE_TH[t.tStage]} อาณาเขตศักดิ์สิทธิ์กว้างขึ้นเป็น ${Math.round(auraR(t))} ช่อง`, '#fcd34d');
+  }
+}
+// art for the 4 restoration looks (assets/temple.js sets window.TEMPLE_ART = {s1..s4:{src,w,h}}); until then a stand-in
+const TEMPLE_IMG = {};
+function templeArtIdx(t) { const p = templePct(t); return p >= 100 ? 4 : p >= 75 ? 3 : p >= 50 ? 2 : 1; }
+function drawTemple(ctx, t, cx, fy) {
+  const i = templeArtIdx(t), A = window.TEMPLE_ART && TEMPLE_ART['s' + i];
+  const hh = HUMAN_H * 3.1;
+  if (A) {
+    let im = TEMPLE_IMG[i]; if (!im) { im = TEMPLE_IMG[i] = new Image(); im.src = A.src; }
+    if (im.complete && im.naturalWidth) { const hw = hh * A.w / A.h; ctx.drawImage(im, cx - hw / 2, fy - hh * 0.96, hw, hh); return { h: hh * 0.96 }; }
+  }
+  const HA = window.HOME_ART && HOME_ART.stone_house;
+  if (HA) {
+    const broken = i <= 2, im = homeImg('stone_house', broken && !!HA.dmg), src = broken && HA.dmg ? HA.dmg : HA;
+    if (im) { const h2 = HUMAN_H * 2.4, w2 = h2 * src.w / src.h; ctx.filter = i === 1 ? 'grayscale(.6) brightness(.85)' : i === 2 ? 'grayscale(.3)' : 'none'; ctx.drawImage(im, cx - w2 / 2, fy - h2 * 0.97, w2, h2); ctx.filter = 'none'; return { h: h2 * 0.97 }; }
+  }
+  return drawSized(ctx, 'shelter_hut', cx, fy);
+}
+// ===== Storage (box / yard / warehouse): used only when standing within 2 tiles =====
+const STASH_CAP = { chest: 20, yard: 40, warehouse: 80 };
+function stashesNear(a) { return a ? shelters.filter(s => STASH_CAP[s.station] && s.zone === a.zone && Math.hypot(s.x + 1 - a.x, s.y + 1 - a.y) <= 2.5 && (canUse(a, s) || (villageOf(a) && s.villageId === villageOf(a).id))) : []; }
+function stashHas(a, n) { let t = 0; for (const s of stashesNear(a)) t += (s.store && s.store[n]) || 0; return t; }
+function stashCount(s) { return Object.values(s.store || {}).reduce((x, y) => x + y, 0); }
+function stashStep(a) {
+  if (a.age < 12 || bagCount(a) < bagCap(a) * 0.75) return false;
+  const mine = shelters.filter(s => STASH_CAP[s.station] && s.zone === a.zone && (s.owner === a.id || canUse(a, s)) && stashCount(s) < STASH_CAP[s.station] && Math.hypot(s.x - a.x, s.y - a.y) < 35)
+    .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+  if (!mine) return false;
+  if (Math.hypot(mine.x + 1 - a.x, mine.y + 1 - a.y) > 2) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(mine.x + 1), Math.round(mine.y + 1)); a.bubble = `📦 เอาของไปเก็บที่${mine.name.split(' (')[0]}`; return true; }
+  mine.store = mine.store || {}; let moved = 0;
+  for (const [n, q] of Object.entries(a.bag).sort((x, y) => y[1] - x[1])) {
+    if (n === BAG_NAME || q <= 2 || propsOf(n).food) continue;
+    const room = STASH_CAP[mine.station] - stashCount(mine); if (room <= 0) break;
+    const k = Math.min(q - 2, room); a.bag[n] -= k; mine.store[n] = (mine.store[n] || 0) + k; moved += k;
+  }
+  a.bubble = moved ? `📦 เก็บของเข้า${mine.name.split(' (')[0]} ${moved} ชิ้น` : a.bubble;
+  return moved > 0;
 }
 function storeKeys(agent) { const v = villageOf(agent); return v && atStore(agent) ? Object.keys(v.store).filter(k => v.store[k] > 0 && canTradeFor(agent, k)) : []; }
 // Take one unit: own bag first, otherwise trade for it at the storehouse
 function take(agent, n) {
   if (agent && agent.bag && agent.bag[n] > 0) { agent.bag[n]--; if (!agent.bag[n]) delete agent.bag[n]; return 'bag'; }
+  for (const st of stashesNear(agent)) if (st.store && st.store[n] > 0) { st.store[n]--; if (!st.store[n]) delete st.store[n]; return 'stash'; }
   const v = villageOf(agent);
   if (v && canTradeFor(agent, n) && payFor(agent, v, itemValue(n, v), n, n)) { v.store[n]--; return 'trade'; }
   return null;
@@ -2065,6 +2209,7 @@ function restoreRealm(st) {
   if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
   zoneTerrainGrid = zoneTerrainGrid || {}; zoneNodes = zoneNodes || {}; logBuffer = logBuffer || [];
+  (shelters || []).forEach(x => { if (/ฐานบัญชาการ/.test(x.name)) Object.assign(x, { name: x.name.replace(/กระท่อมฐานบัญชาการ/, 'วิหารเทพ'), sprite: 'temple', station: 'temple', rest: true, cap: 4, public: true, owner: null, ownerName: 'พระเจ้า', tStage: 0, tDone: 0, tNeed: 7, tQ: [], tSeq: 0 }); });
   if (shelters && !SETTLED.has(shelters)) { SETTLED.add(shelters); try { settleStructures(); } catch (e) {} }
 }
 const SETTLED = new WeakSet();
@@ -2140,9 +2285,9 @@ function makeRealmState(def, idx) {
   Object.values(ZONES).forEach(z => { z.res = z.res.map(r => def.sub[r] || r); });
   zoneTerrainGrid = {}; zoneNodes = {}; logBuffer = [];
   placeFauna();
-  { const bh = shelters.find(x => /ฐานบัญชาการ/.test(x.name)); if (bh) { bh.zone = START_ZONE; bh.name = `กระท่อมฐานบัญชาการ (${START_ZONE})`; } }
+  { const bh = templeOf(); if (bh) { bh.zone = START_ZONE; bh.name = `วิหารเทพ (${START_ZONE})`; bh.tNeed = 5 + Math.floor(Math.random() * 6); } }
   if (def.winter) currentSeasonIdx = 3;
-  { const bh = shelters.find(x => /ฐานบัญชาการ/.test(x.name)); if (bh) { const p = landNear(bh.zone, bh.x, bh.y); bh.x = p.x; bh.y = p.y; } currentZoneId = START_ZONE; }
+  { const bh = templeOf(); if (bh) { const p = landNear(bh.zone, bh.x, bh.y); bh.x = p.x; bh.y = p.y; } currentZoneId = START_ZONE; }
   // founders
   if (def.empty) { aiAgents = []; usedNames = []; }
   else {
@@ -2897,7 +3042,7 @@ function bodyHunger(a, season, reactorMult, hrs) {
     a.hunger = Math.max(0, a.hunger - eat * 22);
     a.hp = Math.min(maxHp(a), a.hp + 4);
     a.bubble = `🔄 เอาของแลกอาหารที่โกดัง${v.name}`;
-  } else if (a.hunger >= 85) {
+  } else if (a.hunger >= 85 && !inAura(a)) {
     a.hp = Math.max(0, a.hp - Math.max(3, 7 - Math.floor(st(a, 'vit') / 5)) * hrs);
     gainExp(a, 'vit', hrs);
     a.bubble = '😵 หิวจัด! เลือดลด!';
@@ -3034,6 +3179,7 @@ function temperatureTick() {
   if (!RT_ON()) aiAgents.forEach(a => { bodyTemp(a, 1); coldMove(a, 4); });
 }
 function bodyTemp(a, hrs) {
+  if (inAura(a)) { a.felt = feltTemp(a); a.warmth = Math.min(100, (a.warmth ?? 100) + 12 * hrs); a.coldHurt = false; return; }   // sacred zone: never too cold or too hot
   if (a.warmth === undefined) a.warmth = 100;
   const t = feltTemp(a); a.felt = t;
   const vit = Math.min(0.4, st(a, 'vit') * 0.015);
@@ -3605,7 +3751,9 @@ function agentMove(a, night) {
     a.wantHunt = false;
     if (!night && a._hunt && a._hunt.ttl > 0) return;
     if (!night && a.age >= 12 && a.hunger < 60 && Math.random() < 0.25 && toolFetch(a)) return;           // stalking prey (handled in the hunting step)
+    if (templeStep(a, night)) return;
     if (!night && a.hunger < 70 && revelationStep(a)) return;
+    if (!night && a.hunger < 60 && stashStep(a)) return;
     if (needStep(a, night)) return;
 
     const nodes = zoneNodes[a.zone] || [];
@@ -3681,6 +3829,7 @@ function agentGather(a, season) {
 }
 function wantsHunt(a) {
     if (a.age < 12 || a.questId || a.session || a.sleeping || a.wantRest) return false;
+    if (a.templeQ && a.hunger < 55 && (a.food || 0) >= 3) { a._hunt = null; return false; }   // on temple duty and not hungry
     if (a._hunt && a._hunt.ttl > 0) return true;                // already stalking something: keep at it
     const v = villageOf(a);
     const isHunter = a.role.includes('ล่าสัตว์');
@@ -3752,6 +3901,7 @@ function agentHunt(hunter) {
 }
 function agentWork(a, needs) {
   const night = isNightTime();
+  { const t = a.templeQ && templeOf(), q = t && (t.tQ || []).find(x => x.id === a.templeQ); if (q && q.type === 'bring' && avail(a, q.mat) >= q.qty) return; }   // hauling temple materials: don't use them up
     if (a.age < 12 || a.sleeping || a.wantRest) return;
     if (a.age < 15 && !aiAgents.some(o => o.age >= 15 && o.zone === a.zone)) return;
     if (a.goal && a.goal.quest) return;
@@ -3983,6 +4133,7 @@ function runAutonomousStep() {
   if (!RT_ON()) aiAgents.filter(wantsHunt).slice(0, 6).forEach(agentHunt);
 
   // Work: craft from own knowledge, or experiment
+  templeTick();
   HOUR_NEEDS = computeNeeds();
   if (!RT_ON()) aiAgents.forEach(a => agentWork(a, HOUR_NEEDS));
   // background realms: nobody is watching, so their people live the same way but are worked out once an hour
@@ -4325,6 +4476,17 @@ function renderAllUI() {
   const active = quests.filter(q => q.status === 'open' || q.status === 'accepted');
   document.getElementById('cnt-quest').innerText = active.length;
   const ST = { open: ['รอคนช่วย', 'tag-warn'], accepted: ['กำลังช่วย', 'tag-tier'], done: ['สำเร็จ', 'tag-ok'], failed: ['ล้มเหลว', 'tag-fail'], expired: ['หมดเวลา', 'tag-fail'], cancelled: ['ยกเลิก', 'tag-fail'] };
+  { const T = templeOf(), el = document.getElementById('temple-panel');
+    if (el) el.innerHTML = !T ? '<div class="sec-note">ไม่มีวิหารในดินแดนนี้</div>' : (() => {
+      const p = templePct(T), teach = T.tStage < 4 ? TEMPLE_TEACH[T.tStage].filter(k => PRODUCTS[k]).map(k => outName(k)).join(', ') : '';
+      return `<div class="card" style="padding:10px;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;font-weight:700;"><span>${TEMPLE_STAGE_TH[T.tStage]} · ระดับ ${T.tStage}/4</span><span>${p}%</span></div>
+        <div class="bar-wrap" style="margin:6px 0;"><div class="bar-hp" style="width:${p}%;background:linear-gradient(90deg,#fbbf24,#fde68a)"></div></div>
+        <div>🌟 อาณาเขตศักดิ์สิทธิ์ รัศมี ${Math.round(auraR(T))} ช่อง — อยู่ข้างในแล้วไม่หนาว ไม่ร้อน ไม่อดตาย ไม่ติดพิษ แมลงไม่ต่อย สัตว์ร้ายไม่เข้า</div>
+        ${T.tStage < 4 ? `<div style="margin-top:4px;">🔨 งานระดับนี้ ${T.tDone}/${T.tNeed} · ช่วยซ่อมแล้วอาจได้เรียนรู้: ${teach}</div>
+        ${(T.tQ || []).filter(q => !q.done).map(q => { const h = q.helper && byId(q.helper); const have = q.type === 'bring' && h ? Math.min(q.qty, avail(h, q.mat)) : q.prog; const need = q.type === 'bring' ? q.qty : q.hrs;
+          return `<div style="margin-top:4px;padding:5px 8px;border-radius:10px;background:rgba(253,230,138,.15);">${q.type === 'bring' ? '🪵' : '🛠️'} ${templeQuestText(q)} <span style="opacity:.8">· ${h ? `🙋 ${h.name} (${have}/${need})` : '⏳ รอคนรับ'}</span></div>`; }).join('')}` : '<div style="margin-top:4px;">✨ วิหารสมบูรณ์แล้ว</div>'}
+      </div>`; })(); }
   document.getElementById('quest-list').innerHTML = quests.length ? quests.slice(0, 25).map(q => {
     const T = QUEST_TYPES[q.type], stt = ST[q.status] || ['-', ''];
     const left = Math.max(0, q.deadlineH - nowH());
@@ -5811,7 +5973,7 @@ const HOME_IMG = {};
 function homeImg(k, dmg) { const id = k + (dmg ? ':d' : ''); let im = HOME_IMG[id]; if (!im) { im = HOME_IMG[id] = new Image(); im.src = dmg ? HOME_ART[k].dmg.src : HOME_ART[k].src; } return im.complete && im.naturalWidth ? im : null; }
 function homeArtKey(s) {
   if (s.kind && PRODUCTS[s.kind] && PRODUCTS[s.kind].kind === 'home') return s.kind;
-  if ((s.sprite || 'shelter_hut') === 'shelter_hut' && !s.station) return /ฐานบัญชาการ/.test(s.name) ? 'wood_house' : 'leaf_hut';
+  if ((s.sprite || 'shelter_hut') === 'shelter_hut' && !s.station) return 'leaf_hut';
   return null;
 }
 // draw one world object
@@ -5859,6 +6021,7 @@ function insectsOf(zId) {
 }
 // night predators: the chance scales with how long the person was exposed (hrs)
 function beastCheck(a, night, hrs) {
+  if (inAura(a)) return;                                  // beasts won't enter the sacred zone
   const beast = faunaSpecies.find(f => f.predator && (f.zp[a.zone] || 0) > 0);
   const crowd = aiAgents.filter(o => o.zone === a.zone && o.age >= 15).length;
   if (a.sleeping && a.sleepKind === 'bed') return;      // safe inside a shelter
@@ -5920,6 +6083,7 @@ function insectAct(a, night, chance) {
 }
 // stings and poison over time
 function insectBody(a, night, hrs) {
+  if (inAura(a)) { if (a.poisonH > 0) a.poisonH = Math.max(0, a.poisonH - 6 * hrs); return; }   // no stings, poison fades fast
   if (a.sleeping && a.sleepKind === 'bed') { if (a.poisonH > 0) { a.poisonH = Math.max(0, a.poisonH - hrs); a.hp = Math.max(1, a.hp - hrs); } return; }
   const here = insectsOf(a.zone);
   for (const b of here) {
@@ -6001,8 +6165,9 @@ function drawCanvas() {
     const sw = art && window.WORLD_ART ? WORLD_ART.sprites[art].w * 0.8 : w;
     ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, sw * 0.55, sw * 0.16, 0, 0, 7); ctx.fill();
     let d;
-    const hk = homeArtKey(s), HA = hk && window.HOME_ART && HOME_ART[hk], him = HA && homeImg(hk);
-    if (him) {
+    const hk = s.station === 'temple' ? null : homeArtKey(s), HA = hk && window.HOME_ART && HOME_ART[hk], him = HA && homeImg(hk);
+    if (s.station === 'temple') { d = drawTemple(ctx, s, cx, fy); }
+    else if (him) {
       const hh = HUMAN_H * (hk === 'leaf_hut' ? 1.45 : 2.0), hw = hh * HA.w / HA.h;
       const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
       const hurt = s.maxHp && s.hp < s.maxHp * 0.5, dmi = hurt && HA.dmg && homeImg(hk, true);
@@ -6022,8 +6187,16 @@ function drawCanvas() {
       }
       d = { h: A.ay };
     } else d = drawSized(ctx, key, cx, fy);
-    if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
+    if (s.station === 'temple') labels.push({ x: cx, y: fy - d.h - 2, text: `🏛️ วิหารเทพ ${templePct(s)}%`, color: '#7c4a03', bg: 'rgba(255,240,200,.95)' });
+    else if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
+  { const T = templeOf(); if (T && T.zone === currentZoneId) items.push({ y: -1e9, draw: () => {      // sacred zone on the ground
+      const R = auraR(T), pts = []; for (let i = 0; i < 48; i++) { const an = i / 48 * 6.283; pts.push(groundAt(T.x + 1 + Math.cos(an) * R, T.y + 1 + Math.sin(an) * R)); }
+      const pul = 0.5 + 0.5 * Math.sin(performance.now() / 900);
+      ctx.save(); ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
+      ctx.fillStyle = `rgba(255,226,140,${0.07 + 0.04 * pul})`; ctx.fill();
+      ctx.setLineDash([10, 8]); ctx.lineWidth = 2.5; ctx.strokeStyle = `rgba(255,214,102,${0.55 + 0.3 * pul})`; ctx.stroke(); ctx.restore();
+    } }); }
   toolItems.forEach(t => { if (t.holder || t.zone !== currentZoneId) return;        // tools lying on the ground
     items.push({ y: t.x + t.y + 0.9, draw: () => {
       const [cx, fy] = groundAt(t.x + 0.5, t.y + 0.5), k = itemArtKey(t.name), sz = HUMAN_H * 0.42;
