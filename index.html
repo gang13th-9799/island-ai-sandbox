@@ -617,7 +617,7 @@ const CROWD_LIMIT = 20;   // more residents than this in one zone feels crowded
 
 let isRunning = true, simSpeed = 1, simTimer = null;
 let simMinutes = 480, simDay = 1;
-let currentZoneId = 'C1';
+let currentZoneId = 'E1';
 let tileSize = 7, showLabels = true, showGrid = false;
 let ticksSinceLastSave = 0;
 let worldSeed = Math.floor(Math.random() * 1e9);
@@ -739,7 +739,7 @@ function syncFauna(f) {
 }
 // leafy places: fresh leaves can be picked by hand (thatch for the first shelters)
 Object.values(ZONES).forEach(z => { if (/forest|grassland|wetland|river/.test(z.geo) && !z.res.includes('ใบไม้สด')) z.res.push('ใบไม้สด'); });
-const START_ZONE = 'C1';   // predators never enter the starting zone
+const START_ZONE = 'E1';   // castaways wash up on the river plain (fresh water); predators never enter the starting zone
 function moveAnimals(f, from, to, n) {
   if (f.predator && to === START_ZONE) return 0;
   n = Math.min(n, f.zp[from] || 0);
@@ -785,7 +785,7 @@ let discoveredElements = [
 ];
 
 let shelters = [
-  { name: 'กระท่อมฐานบัญชาการ (C1)', sprite: 'shelter_hut', zone: 'C1', x: 22, y: 22, station: null, cap: 8 }
+  { name: 'กระท่อมฐานบัญชาการ (E1)', sprite: 'shelter_hut', zone: 'E1', x: 30, y: 18, station: null, cap: 8 }
 ];
 
 let families = [];
@@ -841,7 +841,7 @@ function ensureAgent(a) {
   if (!a.bag) a.bag = {};
   if (a.food === undefined) a.food = 6;
   if (a.villageId === undefined) a.villageId = null;
-  if (!a.home) a.home = a.zone || 'C1';
+  if (!a.home) a.home = a.zone || START_ZONE;
   if (a.crowd === undefined) a.crowd = 0;
   return a;
 }
@@ -864,7 +864,7 @@ function gainExp(a, k, amt) {
 function newAgent(o) {
   const a = Object.assign({
     id: 'ai_' + Date.now() + '_' + Math.floor(Math.random() * 1e6),
-    gen: 1, age: 20, hp: 84, hunger: 15, zone: 'C1', x: 40, y: 40,
+    gen: 1, age: 20, hp: 84, hunger: 15, zone: START_ZONE, x: 40, y: 40,
     bubble: '', know: {}, guardian: null, goal: null
   }, freshStats(), o);
   if (!a.talent) a.talent = randomTalent();
@@ -876,8 +876,8 @@ function newAgent(o) {
 
 // Founders also start with ZERO knowledge
 let aiAgents = [
-  newAgent({ id: 'ai_1', name: 'อคิน', gender: 'ชาย', age: 24, zone: 'C1', x: 34, y: 26, bubble: 'ไม่รู้อะไรเลย ต้องลองเอง' }),
-  newAgent({ id: 'ai_2', name: 'ลินดา', gender: 'หญิง', age: 23, zone: 'C1', x: 44, y: 32, bubble: 'ลองผสมดูดีกว่า' })
+  newAgent({ id: 'ai_1', name: 'อคิน', gender: 'ชาย', age: 24, zone: 'E1', x: 34, y: 22, bubble: 'ไม่รู้อะไรเลย ต้องลองเอง' }),
+  newAgent({ id: 'ai_2', name: 'ลินดา', gender: 'หญิง', age: 23, zone: 'E1', x: 44, y: 24, bubble: 'ลองผสมดูดีกว่า' })
 ];
 usedNames = ['อคิน', 'ลินดา'];
 // Each founder carries half of what washed ashore, plus some food of their own
@@ -2503,11 +2503,12 @@ function makeRealmState(def, idx) {
   Object.values(ZONES).forEach(z => { z.res = z.res.map(r => def.sub[r] || r); });
   zoneTerrainGrid = {}; zoneNodes = {}; logBuffer = [];
   if (def.winter) currentSeasonIdx = 3;
+  { const bh = shelters.find(x => /ฐานบัญชาการ/.test(x.name)); if (bh) { const p = landNear(bh.zone, bh.x, bh.y); bh.x = p.x; bh.y = p.y; } currentZoneId = START_ZONE; }
   // founders
   if (def.empty) { aiAgents = []; usedNames = []; }
   else {
     aiAgents = def.founders.map(([name, gender], i) => {
-      const a = newAgent({ name, gender, age: 23 + i, zone: 'C1', home: 'C1', x: 36 + i * 6, y: 30 });
+      const p0 = landNear(START_ZONE, 36 + i * 6, 24), a = newAgent({ name, gender, age: 23 + i, zone: START_ZONE, home: START_ZONE, x: p0.x, y: p0.y });
       a.food = 14; return a;
     });
     aiAgents[0].rel[aiAgents[1].id] = 50; aiAgents[1].rel[aiAgents[0].id] = 50;
@@ -2516,7 +2517,7 @@ function makeRealmState(def, idx) {
     // the rest of the castaways: 20 people in total washed ashore together
     for (let i = aiAgents.length; i < START_POP; i++) {
       const gender = i % 2 ? 'หญิง' : 'ชาย', name = pickChildName(gender, 1);
-      const a = newAgent({ name, gender, age: 16 + Math.floor(Math.random() * 25), zone: 'C1', home: 'C1', x: 28 + Math.floor(Math.random() * 24), y: 24 + Math.floor(Math.random() * 18) });
+      const p0 = landNear(START_ZONE, 26 + Math.floor(Math.random() * 28), 14 + Math.floor(Math.random() * 16)), a = newAgent({ name, gender, age: 16 + Math.floor(Math.random() * 25), zone: START_ZONE, home: START_ZONE, x: p0.x, y: p0.y });
       a.food = 10; aiAgents.push(a);
     }
   }
@@ -2873,6 +2874,15 @@ function isTechUnlocked(nodeId) { return !!techDiscovered[nodeId]; }
 // ==========================================
 // 7. TERRAIN
 // ==========================================
+// nearest dry tile to (x, y) in a zone
+function landNear(zId, x, y) {
+  buildZoneTerrain(zId); const g = zoneTerrainGrid[zId];
+  for (let r = 0; r < 40; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const xx = Math.max(1, Math.min(78, x + dx)), yy = Math.max(1, Math.min(78, y + dy));
+    if (!WATER.includes(g[yy][xx])) return { x: xx, y: yy };
+  }
+  return { x, y };
+}
 function findValidTile(zId, isAquatic) {
   buildZoneTerrain(zId);
   const grid = zoneTerrainGrid[zId];
@@ -4190,6 +4200,7 @@ function miniMapTap(e) {
 }
 function renderMiniMap() {
   drawMiniMap();
+  { const t = document.getElementById('zone-title'); if (t && ZONES[currentZoneId]) t.innerText = `โซน ${ZONES[currentZoneId].name}`; }
   const grid = document.getElementById('minimap-grid');
   grid.innerHTML = '';
   const geoColors = {
@@ -5706,7 +5717,7 @@ function seedSteles() {
     if ((i === 0 || i === 3) && ZONES[START_ZONE]) { zs.splice(zs.indexOf(START_ZONE), 1); zs.unshift(START_ZONE); }   // one tablet and one fragment start near the castaways
     for (let p = 0; p < plan; p++) {
       const zone = zs[p % zs.length]; let s = landSpot(zone);
-      if (i === 0 && zone === START_ZONE) { for (let t = 0; t < 30; t++) { const q = landSpot(zone); if (Math.hypot(q.x - 38, q.y - 32) < 12) { s = q; break; } } }   // the first tablet stands near where the castaways land
+      if (i === 0 && zone === START_ZONE) { for (let t = 0; t < 30; t++) { const q = landSpot(zone); if (Math.hypot(q.x - 38, q.y - 24) < 12) { s = q; break; } } }   // the first tablet stands near where the castaways land
       steles.push({ id: 'st' + (++steleSeq), set, zone, x: s.x, y: s.y, art, rec, ancient: true, n: plan, idx: plan > 1 ? p : null, hp: 60, max: 60 });
     }
   });
@@ -5784,7 +5795,7 @@ function damageStele(s, dmg) {
 }
 function steleTick() {
   if (!steleSeeded) seedSteles();
-  steles.forEach(s => { if (s.holder && !aiAgents.some(a => a.id === s.holder)) { s.holder = null; s.zone = s.lastZone || 'C1'; s.x = s.lastX || 40; s.y = s.lastY || 40; } });
+  steles.forEach(s => { if (s.holder && !aiAgents.some(a => a.id === s.holder)) { s.holder = null; s.zone = s.lastZone || START_ZONE; s.x = s.lastX || 40; s.y = s.lastY || 40; } });
   steles.forEach(s => { if (s.holder) { const h = aiAgents.find(a => a.id === s.holder); if (h) { s.lastZone = h.zone; s.lastX = h.x; s.lastY = h.y; } } });
   // literate people carve what they know for those who come later
   aiAgents.forEach(a => {
