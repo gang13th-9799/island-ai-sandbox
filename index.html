@@ -4976,7 +4976,8 @@ function drawMouthArt(ctx, mood) {
 // Gemini item art: inventory icons + held tools (vertical art, handle down, edge facing right)
 const ITEM_HELD_IMG = {};
 (function () { const E = window.ITEM_ART; if (!E) return; for (const k in E) if (E[k].held) { const im = new Image(); im.src = E[k].held.src; ITEM_HELD_IMG[k] = im; } })();
-function itemArtKey(name) { const k = keyByName(name); return k && window.ITEM_ART && ITEM_ART[k] ? k : null; }
+const MAT_ART = { 'ใบไม้สด': 'leaf_fresh', 'ใบตองสด': 'leaf_fresh' };
+function itemArtKey(name) { const k = keyByName(name) || MAT_ART[name]; return k && window.ITEM_ART && ITEM_ART[k] ? k : null; }
 function itemIconHTML(name, sz = 18) { const k = itemArtKey(name); return k ? `<img src="${ITEM_ART[k].icon}" alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;vertical-align:-4px;margin-right:2px;">` : ''; }
 function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t => { if (!canUse(a, t)) return; const d = productDef(keyByName(t.name)); if (d && (!best || (d.tier || 1) > (best.tier || 1))) best = { tier: d.tier || 1, key: keyByName(t.name) }; }); return best; }
 // what the puppet actually holds for a pose: art for stone-age tools, code drawing for metal ones
@@ -6016,7 +6017,7 @@ function damageStation(s, dmg, why) {
 }
 // home art: recipe homes use their own picture; old lean-tos and the starting hut get the closest one
 const HOME_IMG = {};
-function homeImg(k) { let im = HOME_IMG[k]; if (!im) { im = HOME_IMG[k] = new Image(); im.src = HOME_ART[k].src; } return im.complete && im.naturalWidth ? im : null; }
+function homeImg(k, dmg) { const id = k + (dmg ? ':d' : ''); let im = HOME_IMG[id]; if (!im) { im = HOME_IMG[id] = new Image(); im.src = dmg ? HOME_ART[k].dmg.src : HOME_ART[k].src; } return im.complete && im.naturalWidth ? im : null; }
 function homeArtKey(s) {
   if (s.kind && PRODUCTS[s.kind] && PRODUCTS[s.kind].kind === 'home') return s.kind;
   if ((s.sprite || 'shelter_hut') === 'shelter_hut' && !s.station) return /ฐานบัญชาการ/.test(s.name) ? 'wood_house' : 'leaf_hut';
@@ -6162,10 +6163,9 @@ function drawCanvas() {
     if (him) {
       const hh = HUMAN_H * (hk === 'leaf_hut' ? 1.45 : 2.0), hw = hh * HA.w / HA.h;
       const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
-      const hurt = s.maxHp && s.hp < s.maxHp * 0.5;
-      if (hurt) ctx.filter = 'brightness(.78) saturate(.8)';
-      ctx.drawImage(him, cx - hw / 2 + sx, fy - hh * 0.97, hw, hh);
-      ctx.filter = 'none';
+      const hurt = s.maxHp && s.hp < s.maxHp * 0.5, dmi = hurt && HA.dmg && homeImg(hk, true);
+      if (dmi) { const dh = hh * HA.dmg.h / HA.h * (HA.w / HA.dmg.w) * (HA.dmg.w / HA.w); const dw = hh * HA.dmg.w / HA.h; ctx.drawImage(dmi, cx - dw / 2 + sx, fy - (hh * HA.dmg.h / HA.h) * 0.97, dw, hh * HA.dmg.h / HA.h); }
+      else { if (hurt) ctx.filter = 'brightness(.78) saturate(.8)'; ctx.drawImage(him, cx - hw / 2 + sx, fy - hh * 0.97, hw, hh); ctx.filter = 'none'; }
       d = { h: hh * 0.97 };
     } else if (art && window.WORLD_ART) {
       const mh = stationMaxHp(s), hp = s.hp == null ? mh : s.hp, stI = hp < mh * 0.5 ? 1 : 0, A = WORLD_ART.sprites[art];
