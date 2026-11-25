@@ -4414,22 +4414,22 @@ function drawAnimal(ctx, art, pose, cx, fy, face, scale, tt, now) {
   const w = P.w * scale, h = P.h * scale, parts = (tt && tt.parts) || [], sleeping = pose === 3;
   const H0 = WORLD_ART.animals[art][0].h * scale;           // standing height, keeps parts the same size in every pose
   ctx.save(); ctx.translate(cx, fy); if (face < 0) ctx.scale(-1, 1);
-  const bx = P.back[0] * scale, by = P.back[1] * scale, hx = P.head[0] * scale, hy = P.head[1] * scale, rx = P.rear[0] * scale, ry = P.rear[1] * scale;
+  const mx = (P.mid || P.back)[0] * scale, my = (P.mid || P.back)[1] * scale, bx = P.back[0] * scale, by = P.back[1] * scale, hx = P.head[0] * scale, hy = P.head[1] * scale, rx = P.rear[0] * scale, ry = P.rear[1] * scale;
   const col = (tt && tt.color) || BODY_COL[art], light = shadeCol(col, 1.25);
   const wingType = art === 'fish' || art === 'rabbit' ? 2 : (art === 'wolf' || art === 'leopard' ? 1 : 0);
   const wingSt = sleeping ? 2 : (Math.sin(now * (pose === 2 ? 12 : 4)) > 0 ? 0 : 1);
   const wingH = H0 * (wingType === 2 ? 0.45 : 0.62);
   if (parts.includes('หาง')) {
     const v = mutVariant(tt, 'tail', 4), sway = Math.sin(now * 3) * 0.12;
-    drawPart(ctx, 'tail' + v, rx + w * 0.16, ry - H0 * 0.04, H0 * 0.6, 0.75 + sway, col, 0.8);
+    drawPart(ctx, 'tail' + v, rx, ry, H0 * 0.55, 0.85 + sway, col, 0.8);
   }
   const skin = parts.includes('เกล็ด') ? { k: art === 'fish' || art === 'rabbit' ? 'skin0' : 'skin1', a: 0.55, s: 0.22 } : parts.includes('หนังหนา') ? { k: 'skin2', a: 0.5, s: 0.3 } : null;
   const spr = (tt && (tt.color || skin)) ? mutatedSprite(art, pose, im, tt.color, skin) : im;
   ctx.drawImage(spr, -w / 2, -h, w, h);
   // parts sit ON the body (overlapping), not floating at the tips
-  if (parts.includes('หนังหนา') && art !== 'fish') drawPart(ctx, 'armor' + mutVariant(tt, 'armor', 3), bx - w * 0.06, by + H0 * 0.34, H0 * 0.36, 0, col, 0.7);
-  if (parts.includes('เขา') && art !== 'fish') drawPart(ctx, 'horn' + mutVariant(tt, 'horn', 4), hx - w * 0.06, hy + H0 * (sleeping ? 0.12 : 0.24), H0 * 0.26, 0, light, 0.55);
-  if (parts.includes('ปีก')) drawPart(ctx, 'wing' + wingType + '_' + wingSt, bx + w * 0.04, by + H0 * 0.32, wingH, 0, wingType === 2 ? null : col, 0.6);
+  if (parts.includes('หนังหนา') && art !== 'fish') drawPart(ctx, 'armor' + mutVariant(tt, 'armor', 3), mx, my + H0 * 0.12, H0 * 0.3, 0, col, 0.7);
+  if (parts.includes('เขา') && art !== 'fish') drawPart(ctx, 'horn' + mutVariant(tt, 'horn', 4), hx, hy, H0 * 0.24, 0, light, 0.55);
+  if (parts.includes('ปีก')) drawPart(ctx, 'wing' + wingType + '_' + wingSt, bx, by + H0 * 0.2, wingH, 0, wingType === 2 ? null : col, 0.6);
   ctx.restore(); return true;
 }
 function drawProp(ctx, kind, state, cx, fy, scale = 1, flip = false) {
