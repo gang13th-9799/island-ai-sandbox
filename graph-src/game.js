@@ -4427,9 +4427,13 @@ function drawAnimal(ctx, art, pose, cx, fy, face, scale, tt, now) {
   const spr = (tt && (tt.color || skin)) ? mutatedSprite(art, pose, im, tt.color, skin) : im;
   ctx.drawImage(spr, -w / 2, -h, w, h);
   // parts sit ON the body (overlapping), not floating at the tips
-  if (parts.includes('หนังหนา') && art !== 'fish') drawPart(ctx, 'armor' + mutVariant(tt, 'armor', 3), mx, my + H0 * 0.12, H0 * 0.3, 0, col, 0.7);
+  if (parts.includes('หนังหนา') && art !== 'fish' && P.arm && mutOK('armor0')) {   // armor sized to this animal's own back, flipped, following the back slope
+    const k = 'armor' + mutVariant(tt, 'armor', 3), M = WORLD_ART.mut[k], aw = P.arm[2] * scale, ah = aw * M.h / M.w;
+    ctx.save(); ctx.translate(P.arm[0] * scale, P.arm[1] * scale); ctx.rotate(P.arm[3]); ctx.scale(-1, 1);
+    ctx.drawImage(tinted(k, col, 0.7), -aw / 2, -ah * 0.62, aw, ah); ctx.restore();
+  }
   if (parts.includes('เขา') && art !== 'fish') drawPart(ctx, 'horn' + mutVariant(tt, 'horn', 4), hx, hy, H0 * 0.24, 0, light, 0.55);
-  if (parts.includes('ปีก')) drawPart(ctx, 'wing' + wingType + '_' + wingSt, bx, by + H0 * 0.2, wingH, 0, wingType === 2 ? null : col, 0.6);
+  if (parts.includes('ปีก')) drawPart(ctx, 'wing' + wingType + '_' + wingSt, bx, by + H0 * 0.12, wingH, 0, wingType === 2 ? null : col, 0.6);
   ctx.restore(); return true;
 }
 function drawProp(ctx, kind, state, cx, fy, scale = 1, flip = false) {

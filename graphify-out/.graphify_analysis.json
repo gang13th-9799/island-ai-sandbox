@@ -171,6 +171,7 @@
       "game_zonedist"
     ],
     "2": [
+      "game_addaiagent",
       "game_addfood",
       "game_addlog",
       "game_addrel",
@@ -186,10 +187,12 @@
       "game_gainexp",
       "game_generatecrisisproposal",
       "game_givesoul",
+      "game_godchild",
       "game_godquestevent",
       "game_hasmaterials",
       "game_hitdamage",
       "game_hitobj",
+      "game_inherittalent",
       "game_knowledgeexchange",
       "game_markdiscovery",
       "game_methodusable",
@@ -199,6 +202,7 @@
       "game_observe",
       "game_outname",
       "game_pick",
+      "game_pickchildname",
       "game_pickfruit",
       "game_produce",
       "game_pushtrial",
@@ -216,67 +220,6 @@
       "game_weartool"
     ],
     "3": [
-      "game_animallog",
-      "game_answerprayer",
-      "game_capturerealm",
-      "game_closelobby",
-      "game_crossrealm",
-      "game_cyclespeed",
-      "game_evolveone",
-      "game_evolvetick",
-      "game_expneed",
-      "game_gateof",
-      "game_godtick",
-      "game_inrealm",
-      "game_knowersof",
-      "game_logtorealm",
-      "game_openlobby",
-      "game_realmlog",
-      "game_realmstatus",
-      "game_realmtraveltick",
-      "game_rellabel",
-      "game_renderallui",
-      "game_renderlobby",
-      "game_restorerealm",
-      "game_savegamestate",
-      "game_startsimloop",
-      "game_switchrealm",
-      "game_talentgrade",
-      "game_testcollapse",
-      "game_tickallrealms",
-      "game_traitscore",
-      "game_traittext",
-      "game_variantlabel"
-    ],
-    "4": [
-      "game_assignjobs",
-      "game_assignquests",
-      "game_byid",
-      "game_canhelp",
-      "game_createquest",
-      "game_electchief",
-      "game_electchief_score",
-      "game_holdfoundingmeeting",
-      "game_holdvillagemeeting",
-      "game_ismember",
-      "game_jobfit",
-      "game_namevillage",
-      "game_negotiate",
-      "game_negotiatetax",
-      "game_proposetax",
-      "game_proposevillagename",
-      "game_rel",
-      "game_resolveprayer",
-      "game_rewardpackage",
-      "game_rewardtext",
-      "game_rewardvalue",
-      "game_savegoddb",
-      "game_souldecides",
-      "game_updatehudchips",
-      "game_villagemembers",
-      "game_villagetick"
-    ],
-    "5": [
       "game_addownlog",
       "game_asktouse",
       "game_canuse",
@@ -302,7 +245,83 @@
       "game_trysneak",
       "game_usetool"
     ],
+    "4": [
+      "game_animallog",
+      "game_armlen",
+      "game_drawagent",
+      "game_drawbow",
+      "game_drawitem",
+      "game_drawpuppet",
+      "game_drawstickfigure",
+      "game_evolveone",
+      "game_evolvetick",
+      "game_expneed",
+      "game_getequip",
+      "game_getmood",
+      "game_isnighttime",
+      "game_knowersof",
+      "game_pupactivity",
+      "game_puparmik",
+      "game_pupoutfit",
+      "game_rellabel",
+      "game_renderallui",
+      "game_talentgrade",
+      "game_traitscore",
+      "game_traittext",
+      "game_updateskyhud",
+      "game_variantlabel"
+    ],
+    "5": [
+      "game_assignjobs",
+      "game_assignquests",
+      "game_byid",
+      "game_canhelp",
+      "game_createquest",
+      "game_electchief",
+      "game_electchief_score",
+      "game_holdfoundingmeeting",
+      "game_holdvillagemeeting",
+      "game_jobfit",
+      "game_namevillage",
+      "game_negotiate",
+      "game_negotiatetax",
+      "game_proposetax",
+      "game_proposevillagename",
+      "game_rel",
+      "game_resolveprayer",
+      "game_rewardpackage",
+      "game_rewardtext",
+      "game_rewardvalue",
+      "game_savegoddb",
+      "game_souldecides",
+      "game_villagemembers",
+      "game_villagetick"
+    ],
     "6": [
+      "game_answerprayer",
+      "game_capturerealm",
+      "game_closelobby",
+      "game_crossrealm",
+      "game_cyclespeed",
+      "game_gateof",
+      "game_godtick",
+      "game_inrealm",
+      "game_ismember",
+      "game_logtorealm",
+      "game_openlobby",
+      "game_realmlog",
+      "game_realmstatus",
+      "game_realmtraveltick",
+      "game_renderlobby",
+      "game_restorerealm",
+      "game_savegamestate",
+      "game_startsimloop",
+      "game_switchrealm",
+      "game_testcollapse",
+      "game_tickallrealms",
+      "game_updatehudchips"
+    ],
+    "7": [
       "game_agentlevel",
       "game_atstore",
       "game_avail",
@@ -325,7 +344,7 @@
       "game_tostore",
       "game_villageof"
     ],
-    "7": [
+    "8": [
       "game_animalart",
       "game_drawcanvas",
       "game_drawprop",
@@ -344,7 +363,7 @@
       "game_togglegrid",
       "game_togglelabels"
     ],
-    "8": [
+    "9": [
       "game_buildequivalents",
       "game_fatechance",
       "game_findnewrecipes",
@@ -362,35 +381,7 @@
       "game_setgodauto",
       "game_world"
     ],
-    "9": [
-      "game_armlen",
-      "game_drawagent",
-      "game_drawbow",
-      "game_drawitem",
-      "game_drawpuppet",
-      "game_drawstickfigure",
-      "game_getequip",
-      "game_getmood",
-      "game_isnighttime",
-      "game_pupactivity",
-      "game_puparmik",
-      "game_pupoutfit",
-      "game_updateskyhud"
-    ],
     "10": [
-      "game_addaiagent",
-      "game_ensureagent",
-      "game_freshstats",
-      "game_godchild",
-      "game_inherittalent",
-      "game_initfauna",
-      "game_loadgamestate",
-      "game_newagent",
-      "game_pickchildname",
-      "game_randomtalent",
-      "game_upgradefauna"
-    ],
-    "11": [
       "game_closeagentcard",
       "game_diff_stars",
       "game_maptap",
@@ -401,7 +392,7 @@
       "game_tileof",
       "game_worldof"
     ],
-    "12": [
+    "11": [
       "game_centeronzone",
       "game_changezoom",
       "game_clampview",
@@ -411,7 +402,7 @@
       "game_switchzone",
       "game_traveldir"
     ],
-    "13": [
+    "12": [
       "game_drawanimal",
       "game_drawpart",
       "game_mutatedsprite",
@@ -421,7 +412,7 @@
       "game_shadecol",
       "game_tinted"
     ],
-    "14": [
+    "13": [
       "game_airtemp",
       "game_basetemp",
       "game_felttemp",
@@ -429,6 +420,15 @@
       "game_weatherlabel",
       "game_weathertick",
       "game_zoneweather"
+    ],
+    "14": [
+      "game_ensureagent",
+      "game_freshstats",
+      "game_initfauna",
+      "game_loadgamestate",
+      "game_newagent",
+      "game_randomtalent",
+      "game_upgradefauna"
     ],
     "15": [
       "game_mkobj",
@@ -458,19 +458,19 @@
   "cohesion": {
     "0": 0.01694915254237288,
     "1": 0.09308510638297872,
-    "2": 0.12846068660022147,
-    "3": 0.11612903225806452,
-    "4": 0.13538461538461538,
-    "5": 0.15942028985507245,
-    "6": 0.18095238095238095,
-    "7": 0.16176470588235295,
-    "8": 0.16666666666666666,
-    "9": 0.1794871794871795,
-    "10": 0.2545454545454545,
-    "11": 0.25,
-    "12": 0.2857142857142857,
-    "13": 0.2857142857142857,
-    "14": 0.5238095238095238,
+    "2": 0.11378353376503238,
+    "3": 0.15942028985507245,
+    "4": 0.11594202898550725,
+    "5": 0.14855072463768115,
+    "6": 0.16017316017316016,
+    "7": 0.18095238095238095,
+    "8": 0.16176470588235295,
+    "9": 0.16666666666666666,
+    "10": 0.25,
+    "11": 0.2857142857142857,
+    "12": 0.35714285714285715,
+    "13": 0.5238095238095238,
+    "14": 0.42857142857142855,
     "15": 0.3333333333333333,
     "16": 0.5,
     "17": 0.6666666666666666,
@@ -538,7 +538,7 @@
       ],
       "confidence": "INFERRED",
       "relation": "indirect_call",
-      "note": "Bridges community 2 → community 6"
+      "note": "Bridges community 2 → community 7"
     },
     {
       "source": "accessibleStations()",
@@ -549,7 +549,7 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
-      "note": "Bridges community 1 → community 5"
+      "note": "Bridges community 1 → community 3"
     },
     {
       "source": "runQuests()",
@@ -571,7 +571,7 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
-      "note": "Bridges community 1 → community 10"
+      "note": "Bridges community 1 → community 14"
     },
     {
       "source": "applyAISolution()",
@@ -582,13 +582,13 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
-      "note": "Bridges community 1 → community 3"
+      "note": "Bridges community 1 → community 4"
     }
   ],
   "questions": [
     {
       "type": "bridge_node",
-      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `addLog`, `renderAllUI`, `rel`, `productDef`, `villageOf`, `drawCanvas`, `propsOf`, `drawPuppet`, `newAgent`, `zoneWeather`, `objsOf`?",
+      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `addLog`, `productDef`, `renderAllUI`, `rel`, `realmTravelTick`, `villageOf`, `drawCanvas`, `propsOf`, `zoneWeather`, `newAgent`, `objsOf`?",
       "why": "High betweenness centrality (0.020) - this node is a cross-community bridge."
     },
     {
@@ -598,7 +598,7 @@
     },
     {
       "type": "bridge_node",
-      "question": "Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `runAutonomousStep`, `addLog`, `rel`, `productDef`, `villageOf`, `propsOf`, `drawPuppet`, `newAgent`, `switchZone`, `drawAgentTag`?",
+      "question": "Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `runAutonomousStep`, `addLog`, `productDef`, `rel`, `realmTravelTick`, `villageOf`, `propsOf`, `switchZone`, `drawAgentTag`?",
       "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
     },
     {
@@ -608,18 +608,18 @@
     },
     {
       "type": "bridge_node",
-      "question": "Why does `addLog()` connect `addLog` to `game.js`, `runAutonomousStep`, `renderAllUI`, `rel`, `productDef`, `villageOf`, `propsOf`, `newAgent`, `zoneWeather`?",
+      "question": "Why does `addLog()` connect `addLog` to `game.js`, `runAutonomousStep`, `productDef`, `renderAllUI`, `rel`, `realmTravelTick`, `villageOf`, `propsOf`, `zoneWeather`?",
       "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
     },
     {
       "type": "low_cohesion",
       "question": "Should `addLog` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.12846068660022147 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.11378353376503238 - nodes in this community are weakly interconnected."
     },
     {
       "type": "low_cohesion",
       "question": "Should `renderAllUI` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.11612903225806452 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.11594202898550725 - nodes in this community are weakly interconnected."
     }
   ]
 }
