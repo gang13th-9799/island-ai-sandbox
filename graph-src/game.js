@@ -4372,13 +4372,58 @@ const ANIM_ART = { f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: '
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
-function drawAnimal(ctx, art, pose, cx, fy, face, scale, tint) {
+// mutated look: recolour (keeps shading), scales clipped to the body; wings / horns / tail drawn on top
+const MUT_CACHE = {};
+function mutatedSprite(art, pose, im, color, scales) {
+  const key = art + pose + '|' + color + '|' + scales;
+  if (MUT_CACHE[key]) return MUT_CACHE[key];
+  const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+  const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+  if (color) { g.globalCompositeOperation = 'color'; g.globalAlpha = 0.8; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height); g.globalAlpha = 1; }
+  if (scales) {
+    g.globalCompositeOperation = 'source-over'; g.strokeStyle = 'rgba(147,197,253,.75)'; g.lineWidth = Math.max(1, c.width / 70);
+    const r = c.width / 28;
+    for (let y = r; y < c.height; y += r * 1.3) for (let x = (Math.round(y / r) % 2) * r; x < c.width; x += r * 2) { g.beginPath(); g.arc(x, y, r, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke(); }
+  }
+  g.globalCompositeOperation = 'destination-in'; g.drawImage(im, 0, 0);
+  return (MUT_CACHE[key] = c);
+}
+function drawWing(ctx, x, y, size, flap, col, far) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-0.35 - flap * 0.5 + (far ? 0.25 : 0)); ctx.scale(far ? 0.85 : 1, 1);
+  ctx.fillStyle = far ? shadeCol(col, 0.78) : col; ctx.strokeStyle = 'rgba(60,50,70,.8)'; ctx.lineWidth = 0.5;
+  for (let k = 0; k < 4; k++) {           // layered feathers
+    const L = size * (1.15 - k * 0.2), a = -0.15 - k * 0.32;
+    ctx.beginPath(); ctx.ellipse(-Math.cos(a) * L * 0.5, Math.sin(a) * L * 0.5 - L * 0.15, L * 0.55, L * 0.16, -a, 0, 7); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+function shadeCol(hex, f) { return typeof shade === 'function' && /^#/.test(hex) ? shade(hex, f) : hex; }
+function drawAnimal(ctx, art, pose, cx, fy, face, scale, tt, now) {
   const P = WORLD_ART.animals[art][pose], im = WA.anim[art] && WA.anim[art][pose];
   if (!im || !im.complete || !im.naturalWidth) return false;
-  const w = P.w * scale, h = P.h * scale;
+  const w = P.w * scale, h = P.h * scale, parts = (tt && tt.parts) || [], sleeping = pose === 3;
+  const flap = sleeping ? 0 : Math.sin(now * (pose === 2 ? 14 : 5));
+  const wingCol = tt && tt.color ? '#f1f5f9' : '#f8fafc', size = Math.max(5, w * 0.42);
   ctx.save(); ctx.translate(cx, fy); if (face < 0) ctx.scale(-1, 1);
-  if (tint) ctx.filter = tint;
-  ctx.drawImage(im, -w / 2, -h, w, h);
+  const bx = P.back[0] * scale, by = P.back[1] * scale, hx = P.head[0] * scale, hy = P.head[1] * scale, rx = P.rear[0] * scale, ry = P.rear[1] * scale;
+  if (parts.includes('ปีก')) drawWing(ctx, bx + 1, by + 2, size, flap, wingCol, true);
+  if (parts.includes('หาง')) {                     // long spiky tail
+    ctx.strokeStyle = (tt.color || '#6b4a2b'); ctx.lineWidth = Math.max(1.4, w * 0.05); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(rx + 2, ry); ctx.quadraticCurveTo(rx - w * 0.25, ry - h * 0.35 + flap * 2, rx - w * 0.38, ry - h * 0.05); ctx.stroke();
+    ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.moveTo(rx - w * 0.38, ry - h * 0.12); ctx.lineTo(rx - w * 0.46, ry - h * 0.02); ctx.lineTo(rx - w * 0.34, ry); ctx.fill();
+  }
+  const spr = (tt && (tt.color || parts.includes('เกล็ด'))) ? mutatedSprite(art, pose, im, tt.color, parts.includes('เกล็ด')) : im;
+  ctx.drawImage(spr, -w / 2, -h, w, h);
+  if (parts.includes('เขา') && art !== 'fish') {   // two curved bone horns on the head
+    const L = Math.max(3.5, h * 0.28);
+    [[-1.2, 0.9], [1.2, 1]].forEach(([ox, k]) => {
+      ctx.fillStyle = k < 1 ? '#d6d3d1' : '#f5f5f4'; ctx.strokeStyle = 'rgba(70,50,40,.9)'; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(hx + ox - 1.2, hy + 1.5); ctx.quadraticCurveTo(hx + ox - L * 0.6 * k, hy - L * 0.6 * k, hx + ox - L * 0.25, hy - L * k);
+      ctx.quadraticCurveTo(hx + ox - L * 0.2 * k, hy - L * 0.45 * k, hx + ox + 1.4, hy + 1.2); ctx.closePath(); ctx.fill(); ctx.stroke();
+    });
+  }
+  if (parts.includes('ปีก')) drawWing(ctx, bx, by + 1, size, flap, wingCol, false);
+  if (parts.includes('หนังหนา') && !sleeping) { ctx.strokeStyle = 'rgba(120,113,108,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bx, by + h * 0.2, w * 0.18, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
   ctx.restore(); return true;
 }
 function drawProp(ctx, kind, state, cx, fy, scale = 1, flip = false) {
@@ -4709,10 +4754,9 @@ function drawCanvas() {
           const pose = sleep ? 3 : close ? 2 : graze ? 1 : (Math.sin(t * 3) > -0.2 ? 4 : 0);
           const sc = (rel / (WORLD_ART.animals[art][0].h / HUMAN_H)) * (art === 'fish' ? 1 : 1), w = WORLD_ART.animals[art][pose].w * sc;
           if (art !== 'fish') { ctx.fillStyle = 'rgba(30,40,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.4, w * 0.1, 0, 0, 7); ctx.fill(); }
-          const tint = tt.color && f.color && tt.color !== f.color ? 'hue-rotate(' + ((hashStr(tt.color) % 60) - 30) + 'deg)' : null;
           const fyy = art === 'fish' ? fy0 - 2 + Math.sin(t * 4) * 1.2 : (pose === 4 ? fy : fy0);
           if (art === 'fish') ctx.globalAlpha = 0.85;
-          drawAnimal(ctx, art, pose, cx, fyy, face, sc, tint);
+          drawAnimal(ctx, art, pose, cx, fyy, face, sc, tt, now);
           ctx.globalAlpha = 1;
           return;
         }
