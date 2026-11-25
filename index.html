@@ -396,8 +396,6 @@
       <button class="side-btn" onclick="document.getElementById('log-bar').classList.toggle('hide')" title="บันทึกเหตุการณ์">💬</button>
       <button class="side-btn" data-title="🙏 คำอธิษฐานถึงพระเจ้า" onclick="switchTab('prayer', this); renderPrayers()" title="คำอธิษฐานจาก AI">🙏<span class="dot on" id="cnt-pray" style="display:none; width:auto; min-width:18px; height:18px; font-size:10px; color:#fff; line-height:14px; text-align:center;">0</span></button>
       <button class="side-btn" onclick="openLobby()" title="คำขอจากพระเจ้า">✉️<span class="dot" id="god-dot"></span></button>
-      <button class="side-btn add-pop" onclick="addAIAgent('ชาย')" title="เพิ่มประชากรผู้ชาย"><span class="plus">+</span>👨<span class="lbl">ชาย</span></button>
-      <button class="side-btn add-pop" onclick="addAIAgent('หญิง')" title="เพิ่มประชากรผู้หญิง"><span class="plus">+</span>👩<span class="lbl">หญิง</span></button>
     </div>
     <div class="log-bar" id="log-bar"></div>
 
@@ -521,6 +519,11 @@
           <button class="gbtn ghost" onclick="toggleLabels()">🏷️ ป้ายชื่อ เปิด/ปิด</button>
           <button class="gbtn ghost" onclick="toggleGrid()"># เส้นตาราง เปิด/ปิด</button>
         </div>
+        <h4 style="color:var(--moss);">👥 ประชากร</h4>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="gbtn moss" onclick="addAIAgent('ชาย')">➕ 👨 เพิ่มประชากรผู้ชาย</button>
+          <button class="gbtn moss" onclick="addAIAgent('หญิง')">➕ 👩 เพิ่มประชากรผู้หญิง</button>
+        </div>
         <h4 style="color:var(--blood);">⚙️ ตั้งค่าโลก</h4>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="gbtn ghost" onclick="resetSaveData()">🗑️ เริ่มโลกใหม่</button>
@@ -599,6 +602,7 @@ function drawPixelSprite(ctx, spriteKey, px, py, scale, recolor) {
 // ==========================================
 const SAVE_KEY = 'island_ai_sandbox_v20_realms';
 const MAX_POPULATION = 50;
+const START_POP = 20;          // castaways at the start of a new world
 const CROWD_LIMIT = 20;   // more residents than this in one zone feels crowded
 
 let isRunning = true, simSpeed = 1, simTimer = null;
@@ -2469,6 +2473,12 @@ function makeRealmState(def, idx) {
     aiAgents[0].rel[aiAgents[1].id] = 50; aiAgents[1].rel[aiAgents[0].id] = 50;
     Object.entries(START_ITEMS).forEach(([n, q]) => { const nn = def.sub[n] || n; aiAgents[0].bag[nn] = Math.ceil(q / 2); aiAgents[1].bag[nn] = Math.floor(q / 2); });
     usedNames = def.founders.map(f => f[0]);
+    // the rest of the castaways: 20 people in total washed ashore together
+    for (let i = aiAgents.length; i < START_POP; i++) {
+      const gender = i % 2 ? 'หญิง' : 'ชาย', name = pickChildName(gender, 1);
+      const a = newAgent({ name, gender, age: 16 + Math.floor(Math.random() * 25), zone: 'C1', home: 'C1', x: 28 + Math.floor(Math.random() * 24), y: 24 + Math.floor(Math.random() * 18) });
+      a.food = 10; aiAgents.push(a);
+    }
   }
   // the gate God placed in this realm
   buildZoneTerrain(def.gate);
