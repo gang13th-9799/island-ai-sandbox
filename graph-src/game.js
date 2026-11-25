@@ -5445,6 +5445,9 @@ function drawCanvas() {
     if (dist > 0.001) { a._rx += dx / dist * step; a._ry += dy / dist * step; }
     if (Math.abs(dx - dy) > 0.05) a._face = dx - dy > 0 ? 1 : -1;
     a._moving = dist > 0.06; a._fast = speed > 5;
+    // talking: turn to face the other person
+    const tk = !a._moving && TALKS.find(t => (t.a === a.id || t.b === a.id) && performance.now() / 1000 - t.t0 < 7);
+    if (tk) { const o = byId(tk.a === a.id ? tk.b : tk.a); if (o && o.zone === a.zone && o._rx !== undefined) { const d = (o._rx - o._ry) - (a._rx - a._ry); if (Math.abs(d) > 0.05) a._face = d > 0 ? 1 : -1; } }
     items.push({ y: a._rx + a._ry + 1.05, draw: () => drawAgent(ctx, a, now, labels) });
   });
   items.sort((p, q) => p.y - q.y).forEach(it => it.draw());

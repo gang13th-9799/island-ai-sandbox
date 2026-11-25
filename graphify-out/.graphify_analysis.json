@@ -221,6 +221,7 @@
     "2": [
       "game_animalart",
       "game_centeronzone",
+      "game_changezoom",
       "game_clampview",
       "game_closeagentcard",
       "game_diff_stars",
@@ -255,6 +256,7 @@
       "game_resicon",
       "game_resizeview",
       "game_screenof",
+      "game_setzoom",
       "game_shade",
       "game_shadecol",
       "game_stationmaxhp",
@@ -508,14 +510,10 @@
       "game_smooth"
     ],
     "14": [
-      "game_changezoom",
-      "game_setzoom"
-    ],
-    "15": [
       "game_closesheet",
       "game_switchtab"
     ],
-    "16": [
+    "15": [
       "game_stelereadable",
       "game_steletarget"
     ]
@@ -523,7 +521,7 @@
   "cohesion": {
     "0": 0.0136986301369863,
     "1": 0.10403863037752414,
-    "2": 0.06666666666666667,
+    "2": 0.06290471785383904,
     "3": 0.10695187165775401,
     "4": 0.12688172043010754,
     "5": 0.1206896551724138,
@@ -536,8 +534,7 @@
     "12": 0.6666666666666666,
     "13": 0.6666666666666666,
     "14": 1.0,
-    "15": 1.0,
-    "16": 1.0
+    "15": 1.0
   },
   "gods": [
     {
@@ -558,7 +555,7 @@
     {
       "id": "game_drawcanvas",
       "label": "drawCanvas()",
-      "degree": 36
+      "degree": 37
     },
     {
       "id": "game_st",
@@ -677,7 +674,7 @@
     {
       "type": "low_cohesion",
       "question": "Should `drawCanvas` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.06666666666666667 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.06290471785383904 - nodes in this community are weakly interconnected."
     },
     {
       "type": "low_cohesion",
