@@ -109,7 +109,10 @@
   /* ---------- Minimap ---------- */
   .minimap-box { position: absolute; top: 108px; left: 10px; z-index: 9; padding: 8px; border-radius: var(--r);
     background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.4); transition: transform .25s; }
-  .minimap-box.collapsed .minimap-grid { display: none; }
+  .minimap-box.collapsed .minimap-grid, .minimap-box.collapsed .mm-canvas { display: none; }
+  .minimap-grid { display: none !important; }
+  .mm-canvas { display: block; width: 220px; height: 182px; margin-top: 6px; border-radius: 14px; cursor: pointer; box-shadow: 0 0 0 3px #e9d6a8, 0 0 0 5px #8a6a3a, 0 6px 14px rgba(40,25,10,.35); }
+  @media (max-width: 520px) { .mm-canvas { width: 190px; height: 158px; } }
   .mm-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-family: var(--head); font-size: 11px; color: var(--muted); cursor: pointer; }
   .minimap-grid { display: grid; grid-template-columns: repeat(5, 34px); gap: 3px; margin-top: 6px; }
   .mm-cell { height: 22px; font-size: 9px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer;
@@ -375,6 +378,7 @@
       <div class="minimap-box panel" id="minimap-box">
         <div class="mm-head" onclick="document.getElementById('minimap-box').classList.toggle('collapsed')"><span id="zone-title">โซน C1</span><span>▾</span></div>
         <div class="minimap-grid" id="minimap-grid"></div>
+        <canvas id="minimap-canvas" class="mm-canvas"></canvas>
       </div>
     </div>
 
@@ -4071,7 +4075,87 @@ function addAIAgent(gender) {
 // ==========================================
 // 9. MINIMAP & UI
 // ==========================================
+
+// ---------- illustrated island minimap (built from each zone's real terrain) ----------
+const MM = { cell: 44, tiles: {}, t: 0 };
+function mmZoneImage(id) {
+  const key = worldSeed + ':' + id; if (MM.tiles[key]) return MM.tiles[key];
+  if (!zoneTerrainGrid[id]) buildZoneTerrain(id);
+  const g = zoneTerrainGrid[id]; if (!g) return null;
+  const N = 40, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d');
+  const img = x.createImageData(N, N);
+  const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const t = g[j * 2][i * 2], col = hex(NATURE[t] || '#9bd472'), e = ELEV[t] || 0;
+    const n = (hashStr(id + i + ',' + j) % 9 - 4) * 2, k = (j * N + i) * 4, lit = 1 + e * 0.05;
+    img.data[k] = Math.min(255, col[0] * lit + n); img.data[k + 1] = Math.min(255, col[1] * lit + n); img.data[k + 2] = Math.min(255, col[2] * lit + n); img.data[k + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  // tiny map icons: trees, peaks, waves
+  const geo = ZONES[id].geo, r = wobjRng(hashStr(id + 'mm'));
+  for (let k = 0; k < 7; k++) {
+    const px = 4 + r() * 32, py = 6 + r() * 30, t = g[Math.floor(py) * 2][Math.floor(px) * 2];
+    if (/forest|grass/.test(t) && /forest|grass/.test(geo)) { x.fillStyle = '#2f6b2a'; x.beginPath(); x.moveTo(px, py - 4); x.lineTo(px + 2.6, py + 1); x.lineTo(px - 2.6, py + 1); x.fill(); x.fillStyle = '#5b3b22'; x.fillRect(px - 0.5, py + 1, 1, 1.5); }
+    else if (/mountain/.test(t)) { x.fillStyle = '#7d756b'; x.beginPath(); x.moveTo(px, py - 5); x.lineTo(px + 4, py + 1); x.lineTo(px - 4, py + 1); x.fill(); x.fillStyle = '#f4f1ea'; x.beginPath(); x.moveTo(px, py - 5); x.lineTo(px + 1.5, py - 3); x.lineTo(px - 1.5, py - 3); x.fill(); }
+    else if (/ocean|river/.test(t)) { x.strokeStyle = 'rgba(255,255,255,.7)'; x.lineWidth = 0.7; x.beginPath(); x.moveTo(px - 2, py); x.quadraticCurveTo(px - 1, py - 1.2, px, py); x.quadraticCurveTo(px + 1, py + 1.2, px + 2, py); x.stroke(); }
+  }
+  return (MM.tiles[key] = c);
+}
+function drawMiniMap() {
+  const cv = document.getElementById('minimap-canvas'); if (!cv || cv.offsetParent === null) return;
+  const W = cv.clientWidth, H = cv.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.imageSmoothingEnabled = true;
+  const cw = W / 5, ch = H / 4, now = performance.now() / 1000;
+  g.fillStyle = '#5fb6e0'; g.fillRect(0, 0, W, H);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) { const id = getZoneAt(r, c); const im = id && mmZoneImage(id); if (im) g.drawImage(im, c * cw, r * ch, cw + 0.6, ch + 0.6); }
+  // soft paper tint + zone borders
+  g.fillStyle = 'rgba(255,240,205,.12)'; g.fillRect(0, 0, W, H);
+  g.setLineDash([3, 3]); g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
+  for (let c = 1; c < 5; c++) { g.beginPath(); g.moveTo(c * cw, 0); g.lineTo(c * cw, H); g.stroke(); }
+  for (let r = 1; r < 4; r++) { g.beginPath(); g.moveTo(0, r * ch); g.lineTo(W, r * ch); g.stroke(); }
+  g.setLineDash([]);
+  // people
+  aiAgents.forEach(a => {
+    const z = ZONES[a.zone]; if (!z) return;
+    const px = z.c * cw + (a.x / 80) * cw, py = z.r * ch + (a.y / 80) * ch;
+    g.fillStyle = VIEW.follow === a.id ? '#facc15' : a.gender === 'หญิง' ? '#fb7bb0' : '#60a5fa'; g.strokeStyle = '#fff'; g.lineWidth = 0.8;
+    g.beginPath(); g.arc(px, py, a.age < 12 ? 1.5 : 2.1, 0, 7); g.fill(); g.stroke();
+  });
+  // labels + residents
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) {
+    const id = getZoneAt(r, c); if (!id) continue;
+    const res = aiAgents.filter(a => a.home === id).length, x0 = c * cw, y0 = r * ch;
+    g.font = '700 8.5px Kanit, sans-serif'; g.lineWidth = 2.4; g.strokeStyle = 'rgba(40,30,20,.75)'; g.fillStyle = '#fff';
+    g.strokeText(id, x0 + 3, y0 + 9); g.fillText(id, x0 + 3, y0 + 9);
+    if (res) {
+      const txt = '👤' + res; g.font = '600 8px Kanit, sans-serif'; const tw = g.measureText(txt).width + 6;
+      g.fillStyle = res > CROWD_LIMIT ? '#ef4444' : 'rgba(30,24,60,.72)'; g.beginPath(); g.roundRect(x0 + cw - tw - 2, y0 + ch - 11, tw, 9.5, 4.5); g.fill();
+      g.fillStyle = '#fff'; g.fillText(txt, x0 + cw - tw + 1, y0 + ch - 3.4);
+    }
+  }
+  // current zone: glowing golden frame + pin
+  const cz = ZONES[currentZoneId];
+  if (cz) {
+    const x0 = cz.c * cw, y0 = cz.r * ch, pulse = 0.5 + 0.5 * Math.sin(now * 3);
+    g.strokeStyle = `rgba(250,204,21,${0.55 + pulse * 0.45})`; g.lineWidth = 2.4; g.beginPath(); g.roundRect(x0 + 1.5, y0 + 1.5, cw - 3, ch - 3, 5); g.stroke();
+    const px = x0 + cw / 2, py = y0 + ch / 2 - 2 - pulse * 1.5;
+    g.fillStyle = '#ef4444'; g.strokeStyle = '#fff'; g.lineWidth = 1.2;
+    g.beginPath(); g.arc(px, py - 4, 4, Math.PI, 0); g.lineTo(px, py + 3); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(px, py - 4, 1.4, 0, 7); g.fill();
+  }
+  // compass
+  g.save(); g.translate(W - 12, 13); g.fillStyle = 'rgba(255,248,230,.9)'; g.beginPath(); g.arc(0, 0, 8, 0, 7); g.fill();
+  g.fillStyle = '#c2410c'; g.beginPath(); g.moveTo(0, -6.5); g.lineTo(2.2, 0); g.lineTo(-2.2, 0); g.fill(); g.fillStyle = '#57534e'; g.beginPath(); g.moveTo(0, 6.5); g.lineTo(2.2, 0); g.lineTo(-2.2, 0); g.fill();
+  g.restore();
+}
+function miniMapTap(e) {
+  const cv = e.currentTarget, rc = cv.getBoundingClientRect();
+  const c = Math.floor((e.clientX - rc.left) / rc.width * 5), r = Math.floor((e.clientY - rc.top) / rc.height * 4);
+  const id = getZoneAt(r, c); if (id) switchZone(id);
+}
 function renderMiniMap() {
+  drawMiniMap();
   const grid = document.getElementById('minimap-grid');
   grid.innerHTML = '';
   const geoColors = {
@@ -6271,6 +6355,7 @@ ${(() => {   // quests this person asked for, or is helping with
 // ---------- render loop (~30 fps) ----------
 function renderLoop(ts) {
   if (!renderLoop.last || ts - renderLoop.last > 32) { renderLoop.last = ts; try { drawCanvas(); } catch (err) { console.error(err); } }
+  if (!renderLoop.mmT || ts - renderLoop.mmT > 120) { renderLoop.mmT = ts; try { drawMiniMap(); } catch (err) { console.error(err); } }
   if (!renderLoop.cardT || ts - renderLoop.cardT > 500) { renderLoop.cardT = ts; if (cardAgentId) renderAgentCard();
     const open = typeof godRequests !== 'undefined' && godRequests.some(q => q.status !== 'done');
     const gd = document.getElementById('god-dot'); if (gd) gd.classList.toggle('on', open);
@@ -6295,6 +6380,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadGodDB();
   initAmbient();
   if (window.innerWidth < 520) document.getElementById('minimap-box').classList.add('collapsed');
+  document.getElementById('minimap-canvas').addEventListener('click', miniMapTap);
   resizeView();
   const hasSaved = loadGameState();
   if (!hasSaved) {
