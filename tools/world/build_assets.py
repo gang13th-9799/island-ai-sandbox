@@ -37,7 +37,19 @@ for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.
   AN[n]=[]
   for im in ims:
     q=im.resize((max(1,round(im.width*sc)),max(1,round(im.height*sc))),Image.LANCZOS)
-    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2)})
+    al=np.array(q)[...,3]>100; H_,W_=al.shape
+    cols=np.where(al.any(0))[0]; x0,x1=cols.min(),cols.max()
+    def top_in(f0,f1):
+      xs=range(int(x0+(x1-x0)*f0),int(x0+(x1-x0)*f1)+1); best=None
+      for x in xs:
+        ys=np.where(al[:,x])[0]
+        if len(ys) and (best is None or ys[0]<best[1]): best=(x,ys[0])
+      return best
+    hx,hy=top_in(0.72,1.0) if n!='fish' else (x0+(x1-x0)*0.85, np.where(al[:,int(x0+(x1-x0)*0.85)])[0].min())
+    bx,by=top_in(0.35,0.6)
+    rx=x0+(x1-x0)*0.04; ry=np.where(al[:,int(rx)+2])[0].mean() if al[:,int(rx)+2].any() else H_*0.5
+    f=lambda x,y:[round((x-W_/2)/RES,2),round((y-H_)/RES,2)]
+    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry)})
 # tool icons
 ic={}
 for n,im in zip(['axe','pick','sickle','knife','hammer','shears'],extract('tools_stone.jpg',dil=4)):
