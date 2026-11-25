@@ -55,8 +55,8 @@
       <button class="side-btn" onclick="document.getElementById('log-bar').classList.toggle('hide')" title="บันทึกเหตุการณ์">💬</button>
       <button class="side-btn" data-title="🙏 คำอธิษฐานถึงพระเจ้า" onclick="switchTab('prayer', this); renderPrayers()" title="คำอธิษฐานจาก AI">🙏<span class="dot on" id="cnt-pray" style="display:none; width:auto; min-width:18px; height:18px; font-size:10px; color:#fff; line-height:14px; text-align:center;">0</span></button>
       <button class="side-btn" onclick="openLobby()" title="คำขอจากพระเจ้า">✉️<span class="dot" id="god-dot"></span></button>
-      <button class="side-btn sm" onclick="addAIAgent('ชาย')" title="เพิ่มผู้ชาย">👨</button>
-      <button class="side-btn sm" onclick="addAIAgent('หญิง')" title="เพิ่มผู้หญิง">👩</button>
+      <button class="side-btn add-pop" onclick="addAIAgent('ชาย')" title="เพิ่มประชากรผู้ชาย"><span class="plus">+</span>👨<span class="lbl">ชาย</span></button>
+      <button class="side-btn add-pop" onclick="addAIAgent('หญิง')" title="เพิ่มประชากรผู้หญิง"><span class="plus">+</span>👩<span class="lbl">หญิง</span></button>
     </div>
     <div class="log-bar" id="log-bar"></div>
 
@@ -73,6 +73,7 @@
         <button class="rbtn" onclick="changeZoom(1)">＋</button>
         <button class="rbtn" onclick="toggleLabels()" id="btn-labels">🏷️</button>
         <button class="rbtn" onclick="toggleGrid()" id="btn-grid">#</button>
+        <button class="rbtn" onclick="toggleFullscreen()" id="btn-full" title="เต็มจอ">⛶</button>
       </div>
       <div class="br-row">
         <button id="btn-toggle-sim" class="gbtn moss" onclick="toggleSim()">⏸️ หยุด</button>

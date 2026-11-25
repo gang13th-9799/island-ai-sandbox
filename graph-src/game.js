@@ -5098,6 +5098,17 @@ function drawAgent(ctx, a, now, labels) {
   window.addEventListener('resize', () => { resizeView(); clampView(); });
 })();
 function setZoom(zm) { VIEW.zoom = Math.max(0.8, Math.min(5, zm)); VIEW.zoomSet = true; clampView(); }
+function toggleFullscreen() {
+  const d = document, el = d.documentElement;
+  const on = d.fullscreenElement || d.webkitFullscreenElement;
+  if (on) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  else { const f = el.requestFullscreen || el.webkitRequestFullscreen; if (f) f.call(el).catch?.(() => {}); }
+}
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => {
+  const b = document.getElementById('btn-full'); const on = document.fullscreenElement || document.webkitFullscreenElement;
+  if (b) { b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'ออกจากเต็มจอ' : 'เต็มจอ'; }
+  setTimeout(() => { resizeView(); clampView(); }, 120);
+}));
 function changeZoom(delta) { setZoom(VIEW.zoom * (delta > 0 ? 1.25 : 0.8)); }
 function mapTap(e) {
   const rect = e.target.getBoundingClientRect(); const [wx, wy] = worldOf(e.clientX - rect.left, e.clientY - rect.top);

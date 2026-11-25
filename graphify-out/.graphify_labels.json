@@ -1,1 +1,1 @@
-{"0": "game.js", "1": "drawCanvas", "2": "runAutonomousStep", "3": "addLog", "4": "experiment", "5": "st", "6": "rel", "7": "ecologyTick", "8": "objsOf", "9": "drawPuppet", "10": "zoneWeather", "11": "makeSoul", "12": "pupKeys", "13": "closeSheet", "14": "toolsOfType"}
+{"0": "game.js", "1": "drawCanvas", "2": "st", "3": "addLog", "4": "runAutonomousStep", "5": "experiment", "6": "runQuests", "7": "ecologyTick", "8": "renderAllUI", "9": "renderAgentCard", "10": "drawPuppet", "11": "zoneWeather", "12": "drawAgentTag", "13": "pupKeys", "14": "setZoom", "15": "closeSheet"}

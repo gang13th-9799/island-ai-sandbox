@@ -285,6 +285,9 @@
   .side-btn { position: relative; width: 42px; height: 42px; border-radius: 12px; font-size: 20px; background: linear-gradient(180deg, #fffaf0, #f3dfb6);
     border: 2px solid #e2c48a; box-shadow: 0 3px 0 #c9a56a; }
   .side-btn.sm { font-size: 16px; opacity: .85; }
+  .side-btn.add-pop { font-size: 17px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; padding-top: 2px; }
+  .side-btn.add-pop .plus { position: absolute; top: -5px; left: -5px; width: 18px; height: 18px; border-radius: 50%; background: #16a34a; color: #fff; font-size: 14px; font-weight: 800; line-height: 17px; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .side-btn.add-pop .lbl { font-size: 10px; font-weight: 700; color: #7c4a03; margin-top: 2px; }
   .side-btn .dot { position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; border-radius: 50%; background: #ef4444; border: 2px solid #fff; display: none; }
   .side-btn .dot.on { display: block; }
   .log-bar { left: 58px !important; bottom: 14px !important; width: min(380px, 58vw) !important; max-height: 96px !important;
