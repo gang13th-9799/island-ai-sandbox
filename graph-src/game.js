@@ -344,6 +344,8 @@ const MAT = {
   'ยางไม้เหนียว': { sticky: 1, fuel: 0.5 }, 'รังผึ้งป่า': { food: 1, sticky: 1 }, 'ไขมันหมู': { fuel: 1, food: 0.5, sticky: 0.5 },
   'สมุนไพร': { herb: 1 }, 'หนังกวางนิ่ม': { hide: 1 }, 'หนังหมูหนา': { hide: 1 }, 'หนังเสือดาวหนา': { hide: 1 },
   'เขากวางแข็ง': { hard: 1, sharpable: 1 },
+  'แร่ทองแดง': { ore: 1, mineral: 1, elem: 'Cu' }, 'ถ่านหิน': { fuel: 2, mineral: 1, elem: 'C' }, 'แร่ดีบุก': { ore: 1, mineral: 1, elem: 'Sn' },
+  'แร่ทอง': { ore: 1, mineral: 1, elem: 'Au' }, 'ผลึกคริสตัล': { hard: 1, mineral: 1, elem: 'Si' }, 'แอปเปิลป่า': { food: 1 }, 'ลูกมะพร้าว': { food: 1, water: 0.5 },
   'หินออบซิเดียน': { hard: 1, mineral: 1, sharpable: 1 }, 'ดินเถ้าภูเขาไฟ': { clay: 1 }, 'ใยปาล์มไหม้': { fiber: 1, dry: 1, fuel: 1 },
   'กิ่งไม้เกรียม': { wood: 1, dry: 1, fuel: 1 }, 'น้ำพุร้อน': { water: 1, wet: 1 }, 'ทรายดำ': { sand: 1, mineral: 1, elem: 'Si' }, 'หินกำมะถันร้อน': { mineral: 1, fuel: 0.5, elem: 'S' },
   'หินเกล็ดน้ำแข็ง': { hard: 1, mineral: 1, sharpable: 1 }, 'ตะไคร่แห้ง': { fiber: 1, dry: 1, fuel: 1 }, 'ต้นสน': { wood: 1, fuel: 1 }, 'กิ่งสนแห้ง': { wood: 1, dry: 1, fuel: 1 },
@@ -355,9 +357,9 @@ const MAT = {
 
 // Possible results of the world. AI never sees this list; they only learn what they actually make.
 const PRODUCTS = {
-  stone_blade:  { name: 'ใบมีดหินคม', kind: 'tool', tool: 'blade', dur: 10, props: { hard: 1, sharp: 1, mineral: 1 } },
+  stone_blade:  { name: 'ใบมีดหินคม', kind: 'tool', tool: 'blade', dur: 25, pow: 1, tier: 1, props: { hard: 1, sharp: 1, mineral: 1 } },
   rope:         { name: 'เชือกเกลียว', kind: 'item', props: { fiber: 2, rope: 1 } },
-  stone_axe:    { name: 'ขวานหิน', kind: 'tool', tool: 'axe', dur: 15, props: { hard: 1 } },
+  stone_axe:    { name: 'ขวานหิน', kind: 'tool', tool: 'axe', dur: 50, pow: 1, tier: 1, props: { hard: 1 } },
   workbench:    { name: 'โต๊ะช่างไม้', kind: 'station', station: 'workbench' },
   bow:          { name: 'ธนูไม้ไผ่', kind: 'tool', tool: 'bow', dur: 20, props: { wood: 1 } },
   campfire:     { name: 'กองไฟ', kind: 'station', station: 'campfire' },
@@ -381,14 +383,22 @@ const PRODUCTS = {
   glass:        { name: 'แก้วใส', kind: 'item', props: { glass: 1 } },
   iron_ingot:   { name: 'แท่งเหล็ก', kind: 'item', props: { metal: 1 } },
   steel_ingot:  { name: 'แท่งเหล็กกล้า', kind: 'item', props: { metal: 1, steel: 1 } },
-  iron_tools:   { name: 'มีดเหล็ก', kind: 'tool', tool: 'blade', dur: 40, props: { hard: 1, sharp: 1, metal: 1 } },
+  iron_tools:   { name: 'มีดเหล็ก', kind: 'tool', tool: 'blade', dur: 250, pow: 3, tier: 3, props: { hard: 1, sharp: 1, metal: 1 } },
   lab:          { name: 'ห้องแล็บแปรธาตุ', kind: 'station', station: 'lab' },
+  stone_pick:   { name: 'อีเต้อหิน', kind: 'tool', tool: 'pick', dur: 50, pow: 1, tier: 1, props: { hard: 1 } },
+  stone_sickle: { name: 'เคียวหิน', kind: 'tool', tool: 'sickle', dur: 50, pow: 1, tier: 1, props: { hard: 1, sharp: 1 } },
+  stone_hammer: { name: 'ค้อนหิน', kind: 'tool', tool: 'hammer', dur: 50, pow: 1, tier: 1, props: { hard: 1 } },
+  copper_ingot: { name: 'แท่งทองแดง', kind: 'item', props: { metal: 1, copper: 1 } },
+  copper_axe:   { name: 'ขวานทองแดง', kind: 'tool', tool: 'axe', dur: 120, pow: 2, tier: 2, props: { hard: 1, metal: 1 } },
+  copper_pick:  { name: 'อีเต้อทองแดง', kind: 'tool', tool: 'pick', dur: 120, pow: 2, tier: 2, props: { hard: 1, metal: 1 } },
+  iron_axe:     { name: 'ขวานเหล็ก', kind: 'tool', tool: 'axe', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
+  iron_pick:    { name: 'อีเต้อเหล็ก', kind: 'tool', tool: 'pick', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
   reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' }
 };
 
 const STATION_SPRITE = { campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
 const STATION_LABEL = { campfire: 'กองไฟ', workbench: 'โต๊ะช่าง', kiln: 'เตาเผา', smelter: 'เตาถลุง', wall: 'กำแพงอิฐ', farm: 'คอกสัตว์', lab: 'ห้องแล็บ', reactor: 'หอปฏิกรณ์' };
-const TOOL_LABEL = { blade: 'ของมีคม', vessel: 'ภาชนะใส่น้ำ', crucible: 'เบ้าหลอม', axe: 'ขวาน', bow: 'ธนู' };
+const TOOL_LABEL = { blade: 'ของมีคม', vessel: 'ภาชนะใส่น้ำ', crucible: 'เบ้าหลอม', axe: 'ขวาน', bow: 'ธนู', pick: 'อีเต้อ', sickle: 'เคียว', hammer: 'ค้อน' };
 
 // Ways of working. These are actions any human could try; what they DO is hidden.
 const METHODS = {
@@ -445,9 +455,16 @@ function natureLaw(a, b, m) {
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
       if (A.fiber && B.fiber && !A.rope && !B.rope) return ok('rope');
+      if (either(N('copper_ingot'), is('wood'))) return ok('copper_pick');
+      if (either(N('copper_ingot'), is('rope'))) return ok('copper_axe');
+      if (either(N('iron_ingot'), is('wood'))) return ok('iron_pick');
+      if (either(N('iron_ingot'), is('rope'))) return ok('iron_axe');
+      if (either(N('stone_blade'), is('rope'))) return ok('stone_sickle');
       if (either(N('fence_posts'), is('rope'))) return ok('ranch_pen');
       if (either(is('rope'), is('bamboo'))) return ok('bow');
       if (either(N('stone_blade'), is('wood'))) return ok('stone_axe');
+      if (either(P => P.hard && P.mineral && !P.sharp && !P.metal, is('wood'))) return ok('stone_pick');
+      if (either(P => P.hard && P.mineral && !P.sharp && !P.metal, is('rope'))) return ok('stone_hammer');
       if (either(is('rope'), is('wood'))) return ok('workbench');
       if (either(is('hard'), is('wood'))) return near('หลุดออกจากกัน ไม่มีอะไรยึดให้แน่น');
       if (A.fiber || B.fiber) return fail('มัดได้ แต่ไม่ได้ของที่มีประโยชน์');
@@ -489,6 +506,7 @@ function natureLaw(a, b, m) {
       if (A.paste || B.paste || A.raw || B.raw) return near('แตกร้าวเพราะไฟไม่ทั่ว');
       return fail('ไหม้เป็นเถ้า');
     case 'kiln':
+      if (either(P => P.elem === 'Cu', P => P.elem === 'C')) return ok('copper_ingot');
       if (either(is('ore'), N('charcoal'))) return ok('bloom_iron');
       if (either(N('clay_paste'), is('sand'))) return ok('crucible');
       if (either(N('fired_brick'), N('charcoal'))) return ok('smelter');
@@ -2335,6 +2353,7 @@ function triggerSeasonalDisaster() {
   villages.forEach(v => { v.food = Math.max(0, v.food - d.foodLoss); });
   const wall = stationsOf('wall').length ? 0.3 : 1.0;
   aiAgents.forEach(a => { a.hp = Math.max(10, Math.round(a.hp - d.hpLoss * wall)); a.bubble = '⚠️ หลบภัยพิบัติ!'; gainExp(a, 'vit', 3); });
+  shelters.filter(s => s.station && s.station !== 'wall' && Math.random() < 0.35).forEach(s => damageStation(s, 3 + Math.floor(Math.random() * 10), `โดน${d.name.replace(/^\S+\s/, '')}`));
   if (season.id === 'spring') { const lucky = pick(aiAgents.filter(a => a.age >= 12)); if (lucky) { put(lucky, 'แร่เหล็กบึง', 2); put(lucky, 'กำมะถันดิบ', 2); } }
 
   const banner = bgTick ? { style: {} } : document.getElementById('disaster-banner');
@@ -3156,6 +3175,10 @@ function runAutonomousStep() {
         if (nb.length) { a.zone = pick(nb); buildZoneTerrain(a.zone); const p = findValidTile(a.zone, false); a.x = p.x; a.y = p.y; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; return; }
       }
     }
+    if (!night && a.age >= 12 && Math.random() < (toolItems.some(t => canUse(a, t) && /axe|pick|sickle|blade/.test(t.type)) ? 0.7 : 0.35)) {
+      const tgt = objTarget(a);
+      if (tgt) { moveToward(a, Math.round(tgt.x - 0.5), Math.round(tgt.y - 0.5)); return; }
+    }
     if (nodes.length && Math.random() < 0.85) {
       if (!a.gatherT || a.gatherT.zone !== a.zone) a.gatherT = Object.assign({ zone: a.zone }, questNode(a) || pick(nodes));
       moveToward(a, a.gatherT.x, a.gatherT.y);
@@ -3172,11 +3195,14 @@ function runAutonomousStep() {
     }
   });
 
+  // Trees, bushes, grass, rocks & ores: pick fruit by hand, everything else needs the right tool
+  objWorldTick();
   // Gathering: anyone (12+) standing near a resource picks some up
   aiAgents.forEach(a => {
     if (a.age < 12 || a.sleeping) return;
     a.gatherCd = (a.gatherCd || 0) - 1;
     if (a.gatherCd > 0) return;
+    if (objAct(a)) { a.gatherCd = 1; depositTick(a); return; }
     const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= 7);
     if (!t) return;
     a.gatherCd = 2;
@@ -4152,7 +4178,7 @@ function groundAt(tx, ty, zId) {
 }
 const ISO_W = 80 * IW, ISO_H = TOPPAD + 80 * IH + EH * 2;
 function shade(hex, f) { const n = parseInt(hex.slice(1), 16); const c = v => Math.max(0, Math.min(255, Math.round(v * f))); return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`; }
-function getTerrainCanvas(zId) {
+function getTerrainCanvasFlat(zId) {
   const key = (typeof activeRealm !== 'undefined' ? activeRealm : 0) + '|' + zId + '|' + currentSeasonIdx;
   if (terrainCache[key]) return terrainCache[key];
   buildZoneTerrain(zId);
@@ -4188,6 +4214,83 @@ function getTerrainCanvas(zId) {
   }
   const season = SEASONS[currentSeasonIdx];
   c.globalCompositeOperation = 'source-atop'; c.fillStyle = season.tint; c.globalAlpha = 0.5; c.fillRect(0, 0, cv.width, cv.height); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  return (terrainCache[key] = cv);
+}
+
+// ----- textured terrain (Gemini seamless textures) -----
+const TERR_TEX = { ocean: 'deep', river: 'shallow', swamp_water: 'shallow', sand_bank: 'sand', mud_flat: 'dirt', grass: 'grass', tall_grass: 'grass', forest: 'grass', hill_slope: 'grass', mountain_cliff: 'rock', mountain_peak: 'snow' };
+const TERR_PRI = { deep: 0, shallow: 1, sand: 2, dirt: 3, grass: 4, rock: 5, snow: 6 };
+const TERR_WALL = { sand: 'sand', dirt: 'dirt', grass: 'dirt', rock: 'rock', snow: 'ice' };
+const TERR_LIP = { grass: 'grass', sand: 'sand', snow: 'snow' };
+const TERR_SCALE = 1.5;
+function getTerrainCanvas(zId) {
+  if (!WA.ready) return getTerrainCanvasFlat(zId);
+  const key = 'T' + (typeof activeRealm !== 'undefined' ? activeRealm : 0) + '|' + zId + '|' + currentSeasonIdx;
+  if (terrainCache[key]) return terrainCache[key];
+  buildZoneTerrain(zId);
+  const grid = zoneTerrainGrid[zId], S = TERR_SCALE;
+  const cv = document.createElement('canvas'); cv.width = Math.ceil(ISO_W * S); cv.height = Math.ceil(ISO_H * S);
+  const c = cv.getContext('2d'); c.scale(S, S);
+  const pat = {}, wpat = {};
+  for (const k in WA.tex) { pat[k] = c.createPattern(WA.tex[k], 'repeat'); pat[k].setTransform(new DOMMatrix().scale(128 / WA.tex[k].width)); }
+  for (const k in WA.wall) { wpat[k] = c.createPattern(WA.wall[k], 'repeat'); wpat[k].setTransform(new DOMMatrix().scale(48 / WA.wall[k].width)); }
+  const cold = typeof baseTemp === 'function' && baseTemp(zId) <= 4;
+  const texOf = t => t === 'mountain_peak' && !cold ? 'rock' : (TERR_TEX[t] || 'grass');
+  const eAt = (x, y) => (x < 0 || y < 0 || x > 79 || y > 79) ? -0.6 : elevOf(grid[y][x]);
+  const tAt = (x, y) => (x < 0 || y < 0 || x > 79 || y > 79) ? 'ocean' : grid[y][x];
+  const path = pts => { c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.closePath(); };
+  const hsh = (x, y, k) => { let h = (x * 374761393 + y * 668265263 + k * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  for (let s = 0; s <= 158; s++) for (let x = Math.max(0, s - 79); x <= Math.min(79, s); x++) {
+    const y = s - x, t = grid[y][x], e = eAt(x, y), h = e * EH, tx = texOf(t);
+    const T = isoXY(x, y), R = isoXY(x + 1, y), B = isoXY(x + 1, y + 1), L = isoXY(x, y + 1);
+    const up = p => [p[0], p[1] - h];
+    // cliff faces toward the viewer
+    const dl = e - eAt(x, y + 1), dr = e - eAt(x + 1, y);
+    const wk = TERR_WALL[tx] || 'dirt';
+    [[dl, L, B, 0.16], [dr, B, R, 0.34]].forEach(([dd, P, Q, dark]) => {
+      if (dd <= 0) return;
+      const face = [up(P), up(Q), [Q[0], Q[1] - h + dd * EH], [P[0], P[1] - h + dd * EH]];
+      path(face); c.fillStyle = WATER.includes(t) ? pat[tx] : wpat[wk]; c.fill();
+      c.fillStyle = `rgba(20,14,8,${dark})`; c.fill();
+      const lip = TERR_LIP[tx];
+      if (lip && !WATER.includes(t)) {        // grass / sand / snow hanging over the edge
+        c.save(); path(face); c.clip(); c.beginPath();
+        const n = 6; c.moveTo(up(P)[0], up(P)[1]);
+        for (let i = 0; i <= n; i++) { const f = i / n, px = P[0] + (Q[0] - P[0]) * f, py = P[1] - h + (Q[1] - P[1]) * f; c.lineTo(px, py + 1.3 + 1.6 * hsh(x * 7 + i, y, 3)); }
+        c.lineTo(up(Q)[0], up(Q)[1]); c.closePath(); c.fillStyle = pat[lip]; c.fill(); c.restore();
+      }
+      c.strokeStyle = 'rgba(60,40,25,.35)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(face[3][0], face[3][1]); c.lineTo(face[2][0], face[2][1]); c.stroke();
+    });
+    // top face
+    const top = [up(T), up(R), up(B), up(L)];
+    path(top); c.fillStyle = pat[tx]; c.fill();
+    if (t === 'forest') { c.fillStyle = 'rgba(20,60,25,.13)'; c.fill(); }
+    if (t === 'tall_grass') { c.fillStyle = 'rgba(40,90,20,.06)'; c.fill(); }
+    if (t === 'swamp_water') { c.fillStyle = 'rgba(70,110,60,.35)'; c.fill(); }
+    // organic transitions: neighbours with higher priority (same height) bite into this tile
+    const pri = TERR_PRI[tx];
+    const nbs = [[1, 0, 1, 0.5], [-1, 0, 0, 0.5], [0, 1, 0.5, 1], [0, -1, 0.5, 0]];
+    let clipped = false;
+    nbs.forEach(([ox, oy, eu, ev], ni) => {
+      const nt = tAt(x + ox, y + oy), ntx = texOf(nt);
+      if (TERR_PRI[ntx] <= pri || Math.abs(eAt(x + ox, y + oy) - e) > 0.01) return;
+      if (!clipped) { c.save(); path(top); c.clip(); clipped = true; }
+      const blobs = [];
+      for (let k = 0; k < 6; k++) {
+        const along = (k + 0.5) / 6 + (hsh(x, y, ni * 10 + k) - 0.5) * 0.15, inset = 0.04 + hsh(x, y, ni * 10 + k + 5) * 0.18;
+        const u = ox ? (ox > 0 ? 1 - inset : inset) : along, v = oy ? (oy > 0 ? 1 - inset : inset) : along;
+        const [bx, by] = isoXY(x + u, y + v); blobs.push([bx, by - h, 0.2 + hsh(x, y, ni * 10 + k + 9) * 0.17]);
+      }
+      const bpath = () => { c.beginPath(); blobs.forEach(([bx, by, r]) => { c.moveTo(bx + r * IW, by); c.ellipse(bx, by, r * IW, r * IH, 0, 0, 7); }); };
+      if ((ntx === 'sand' || ntx === 'dirt' || ntx === 'grass' || ntx === 'rock') && WATER.includes(t)) { bpath(); c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.6; c.stroke(); }
+      bpath(); c.fillStyle = pat[ntx]; c.fill();
+    });
+    if (clipped) c.restore();
+  }
+  const season = SEASONS[currentSeasonIdx];
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.globalCompositeOperation = 'source-atop'; c.fillStyle = season.tint; c.globalAlpha = 0.35; c.fillRect(0, 0, cv.width, cv.height); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  cv._scale = S;
   return (terrainCache[key] = cv);
 }
 
@@ -4250,6 +4353,237 @@ function drawSized(ctx, key, cx, footY, recolor, rel) {
   return { w, h, x0, y0, p };
 }
 
+// ==========================================
+// WORLD OBJECTS: trees, bushes, grass, rocks & ores you can harvest with the right tool (art: assets/world.js)
+// natural ones respawn somewhere else in the same zone; durability for both tools and objects
+// ==========================================
+const WA = { ready: false, img: {}, tex: {}, wall: {} };
+(function loadWorldArt() {
+  const A = window.WORLD_ART; if (!A) return;
+  let pending = 0;
+  const done = () => { if (--pending === 0) { WA.ready = true; for (const k in terrainCache) delete terrainCache[k]; } };
+  const load = src => { const im = new Image(); pending++; im.onload = done; im.onerror = done; im.src = src; return im; };
+  for (const k in A.sprites) WA.img[k] = A.sprites[k].img.map(load);
+  for (const k in A.tex) WA.tex[k] = load(A.tex[k]);
+  for (const k in A.walls) WA.wall[k] = load(A.walls[k]);
+})();
+function drawProp(ctx, kind, state, cx, fy, scale = 1, flip = false) {
+  const A = window.WORLD_ART, s = A && A.sprites[kind], im = WA.img[kind] && WA.img[kind][state];
+  if (!s || !im || !im.complete || !im.naturalWidth) return false;
+  ctx.save(); ctx.translate(cx, fy); if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(im, -s.ax * scale, -s.ay * scale, im.width / A.res * scale, im.height / A.res * scale);
+  ctx.restore(); return true;
+}
+const TREE_Y = { 'ต้นไม้เนื้อแข็ง': 3, 'กิ่งไม้แห้ง': 2 };
+const WOBJ = {
+  oak:   { name: 'ต้นโอ๊ก', tool: ['axe'], hp: 20, tier: 1, yields: TREE_Y, st: ['full', 'damaged', 'stump'], regrow: 96, tall: 1 },
+  pine:  { name: 'ต้นสน', tool: ['axe'], hp: 20, tier: 1, yields: { 'ต้นสน': 3, 'กิ่งสนแห้ง': 2 }, st: ['full', 'damaged', 'stump'], regrow: 96, tall: 1 },
+  fruit: { name: 'ต้นแอปเปิลป่า', tool: ['axe'], hp: 10, tier: 1, yields: { 'ต้นไม้เนื้อแข็ง': 2, 'กิ่งไม้แห้ง': 1 }, fruit: 'แอปเปิลป่า', fruitN: 3, st: ['full', 'picked', 'damaged', 'stump'], regrow: 72, tall: 1 },
+  palm:  { name: 'ต้นมะพร้าว', tool: ['axe'], hp: 10, tier: 1, yields: { 'ต้นมะพร้าว': 2, 'กาบมะพร้าว': 2 }, fruit: 'ลูกมะพร้าว', fruitN: 2, st: ['full', 'picked', 'damaged', 'stump'], regrow: 72, tall: 1 },
+  bush_green:  { name: 'พุ่มไม้', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1, 'เถาวัลย์เล็ก': 1 }, st: ['full', 'damaged', 'stub'], regrow: 36 },
+  bush_pink:   { name: 'พุ่มดอกชมพู', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1, 'สมุนไพร': 1 }, st: ['full', 'damaged', 'stub'], regrow: 36 },
+  bush_purple: { name: 'พุ่มดอกม่วง', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1, 'สมุนไพร': 1 }, st: ['full', 'damaged', 'stub'], regrow: 36 },
+  bush_blue:   { name: 'พุ่มบลูเบอร์รี่', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1 }, fruit: 'เบอร์รี่ป่า', fruitN: 2, st: ['full', 'picked', 'damaged', 'stub'], regrow: 36 },
+  bush_red:    { name: 'พุ่มเบอร์รี่แดง', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1 }, fruit: 'เบอร์รี่ป่า', fruitN: 2, st: ['full', 'picked', 'damaged', 'stub'], regrow: 36 },
+  grass_round:  { name: 'กอหญ้า', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'ต้นกก': 1 }, st: ['0', '1', '2'], regrow: 18 },
+  grass_tall:   { name: 'หญ้าสูง', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'ต้นกก': 1 }, st: ['0', '1', '2'], regrow: 18 },
+  grass_wheat:  { name: 'หญ้ารวงทอง', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'ต้นกก': 1, 'ตะไคร่แห้ง': 1 }, st: ['0', '1', '2'], regrow: 18 },
+  grass_clover: { name: 'ใบโคลเวอร์', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'สมุนไพร': 1 }, st: ['0', '1', '2'], regrow: 18 },
+  grass_fern:   { name: 'เฟิร์น', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'สมุนไพร': 1, 'ต้นกก': 1 }, st: ['0', '1', '2'], regrow: 18 },
+  grass_reed:   { name: 'กกน้ำ', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'ต้นกก': 2 }, st: ['0', '1', '2'], regrow: 18 },
+  rock_gray:    { name: 'ก้อนหิน', tool: ['pick'], hp: 15, tier: 1, yields: { 'หินกรวด': 2 }, st: ['full', 'cracked', 'rubble'], regrow: 120 },
+  rock_moss:    { name: 'หินมีมอส', tool: ['pick'], hp: 20, tier: 1, yields: { 'หินกรวด': 3 }, st: ['full', 'cracked', 'rubble'], regrow: 120 },
+  rock_tall:    { name: 'หินตั้ง', tool: ['pick'], hp: 25, tier: 1, yields: { 'หินกรวด': 3, 'หินเหล็กไฟ': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 120, tall: 1 },
+  rock_copper:  { name: 'หินแร่ทองแดง', tool: ['pick'], hp: 25, tier: 1, yields: { 'แร่ทองแดง': 2, 'หินกรวด': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 144 },
+  rock_coal:    { name: 'หินถ่านหิน', tool: ['pick'], hp: 25, tier: 1, yields: { 'ถ่านหิน': 2 }, st: ['full', 'cracked', 'rubble'], regrow: 144 },
+  rock_tin:     { name: 'หินแร่ดีบุก', tool: ['pick'], hp: 25, tier: 1, yields: { 'แร่ดีบุก': 2 }, st: ['full', 'cracked', 'rubble'], regrow: 144 },
+  rock_iron:    { name: 'หินแร่เหล็ก', tool: ['pick'], hp: 40, tier: 2, yields: { 'แร่เหล็กบึง': 2, 'หินกรวด': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 168 },
+  rock_gold:    { name: 'หินแร่ทอง', tool: ['pick'], hp: 60, tier: 3, yields: { 'แร่ทอง': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 240 },
+  rock_crystal: { name: 'หินคริสตัล', tool: ['pick'], hp: 60, tier: 3, yields: { 'ผลึกคริสตัล': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 240, tall: 1 }
+};
+// what grows where: [chance per tile, [[kind, weight]...]]
+const WOBJ_SPAWN = {
+  forest: [[0.085, [['oak', 55], ['pine', 25], ['fruit', 20]]], [0.035, [['bush_green', 3], ['bush_pink', 1], ['bush_purple', 1], ['bush_blue', 2], ['bush_red', 2]]], [0.06, [['grass_round', 2], ['grass_tall', 2], ['grass_fern', 3], ['grass_clover', 1]]]],
+  grass: [[0.01, [['oak', 2], ['fruit', 1]]], [0.018, [['bush_green', 3], ['bush_pink', 1], ['bush_purple', 1], ['bush_blue', 1], ['bush_red', 1]]], [0.06, [['grass_round', 3], ['grass_tall', 2], ['grass_wheat', 1], ['grass_clover', 2]]], [0.006, [['rock_gray', 2], ['rock_moss', 1]]]],
+  tall_grass: [[0.15, [['grass_tall', 3], ['grass_wheat', 2], ['grass_round', 1]]]],
+  hill_slope: [[0.014, [['pine', 2], ['oak', 1]]], [0.05, [['grass_round', 2], ['grass_tall', 1], ['grass_fern', 1]]], [0.02, [['rock_gray', 3], ['rock_moss', 2], ['rock_tall', 1]]]],
+  sand_bank: [[0.022, [['palm', 1]]], [0.005, [['rock_gray', 1]]]],
+  mud_flat: [[0.09, [['grass_reed', 3], ['grass_tall', 1]]]],
+  mountain_cliff: [[0.035, [['rock_gray', 40], ['rock_tall', 12], ['rock_copper', 15], ['rock_coal', 14], ['rock_tin', 10], ['rock_iron', 9]]]],
+  mountain_peak: [[0.014, [['rock_gray', 55], ['rock_moss', 10], ['rock_iron', 20], ['rock_gold', 7], ['rock_crystal', 8]]]]
+};
+function wobjRng(seed) { let s = (seed % 2147483646) + 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function wobjPick(list, r) { const tot = list.reduce((a, b) => a + b[1], 0); let x = r * tot; for (const [k, w] of list) { if ((x -= w) <= 0) return k; } return list[0][0]; }
+function mkObj(zId, k, x, y, r) {
+  const d = WOBJ[k];
+  return { id: zId + '#' + Math.floor(r() * 1e9), k, x, y, hp: d.hp, max: d.hp, fl: r() < 0.5, fruit: d.fruit ? true : undefined };
+}
+function objsOf(zId) {
+  const key = '@' + zId;
+  if (zoneNodes[key]) return zoneNodes[key];
+  buildZoneTerrain(zId);
+  const g = zoneTerrainGrid[zId], r = wobjRng(hashStr(zId + ':' + (worldSeed || 1) + ':' + (typeof activeRealm !== 'undefined' ? activeRealm : 0)));
+  const busy = new Set();
+  (zoneNodes[zId] || []).forEach(n => busy.add(n.x + ',' + n.y));
+  shelters.filter(s => s.zone === zId).forEach(s => { for (let dx = -1; dx <= 3; dx++) for (let dy = -1; dy <= 3; dy++) busy.add((s.x + dx) + ',' + (s.y + dy)); });
+  const list = [];
+  for (let y = 2; y < 78; y++) for (let x = 2; x < 78; x++) {
+    if (busy.has(x + ',' + y)) { r(); continue; }
+    const t = g[y][x], rules = WOBJ_SPAWN[t];
+    if (!rules) continue;
+    if (t === 'sand_bank' && !/beach/.test(ZONES[zId].geo)) continue;
+    const rr = r(); let acc = 0;
+    for (const [p, kinds] of rules) {
+      acc += p;
+      if (rr < acc) { list.push(mkObj(zId, wobjPick(kinds, r()), x + 0.25 + r() * 0.5, y + 0.25 + r() * 0.5, r)); break; }
+    }
+  }
+  return (zoneNodes[key] = list);
+}
+function objState(o) {
+  const d = WOBJ[o.k], st = d.st;
+  if (o.dead) return st.length - 1;
+  if (o.hp < o.max * 0.5) return st.length - 2;
+  if (d.fruit && !o.fruit) return 1;
+  return 0;
+}
+// ----- tools: power / tier / durability -----
+function toolStat(t) {
+  const d = productDef(keyByName(t.name)) || {}, n = t.name || '';
+  const tier = d.tier || (/วิเศษ|เทพ/.test(n) ? 5 : /เหล็กกล้า/.test(n) ? 4 : /เหล็ก/.test(n) ? 3 : /ทองแดง/.test(n) ? 2 : 1);
+  return { pow: d.pow || tier, tier, dur: d.dur || 10 };
+}
+function harvestTool(a, o) {
+  const d = WOBJ[o.k];
+  return toolItems.filter(t => d.tool.includes(t.type) && canUse(a, t) && toolStat(t).tier >= d.tier)
+    .sort((p, q) => toolStat(q).pow - toolStat(p).pow || d.tool.indexOf(p.type) - d.tool.indexOf(q.type))[0] || null;
+}
+function wearTool(a, t, amt = 1) {
+  if (Math.random() < Math.min(0.4, st(a, 'dex') * 0.004)) return;     // skilled hands spare the tool
+  t.wear = (t.wear || 0) + amt;
+  if (t.wear >= toolStat(t).dur) {
+    toolItems = toolItems.filter(x => x !== t); syncToolStock();
+    addLog(`🔨 [เครื่องมือพัง] "${t.name}" ของ ${t.ownerName || a.name} สึกจนใช้ต่อไม่ได้`, '#fb923c');
+    a.bubble = `💥 ${t.name} หัก!`;
+  }
+}
+function hitDamage(a, t) {
+  const x = toolStat(t).pow * (1 + st(a, 'str') * 0.02 + st(a, 'dex') * 0.01);
+  let n = Math.floor(x) + (Math.random() < x % 1 ? 1 : 0);
+  if (Math.random() < st(a, 'agi') * 0.003) { n *= 2; a._crit = true; }
+  return n;
+}
+function pickFruit(a, o) {
+  const d = WOBJ[o.k]; if (!d.fruit || !o.fruit) return false;
+  o.fruit = false; o.fruitAt = nowH() + 48 + Math.floor(Math.random() * 24);
+  const n = d.fruitN + (Math.random() < st(a, 'vit') * 0.01 ? 1 : 0);
+  addFood(a, n * 3); put(a, d.fruit, 1);
+  gainExp(a, 'agi', 0.3); godQuestEvent(a, 'gather', d.fruit, n);
+  if (!a.goal) a.bubble = `🍎 เก็บ${d.fruit} +${n}`;
+  return true;
+}
+function destroyObj(a, o) {
+  const d = WOBJ[o.k];
+  o.dead = true; o.deadAt = nowH(); o.hp = 0;
+  const got = [];
+  for (const [n, q0] of Object.entries(d.yields)) {
+    const q = q0 + (Math.random() < st(a, 'vit') * 0.01 ? 1 : 0);
+    gainItems(a, n, q); got.push(`${n} ×${q}`); godQuestEvent(a, 'gather', n, q);
+  }
+  if (d.fruit && o.fruit) { put(a, d.fruit, d.fruitN); got.push(`${d.fruit} ×${d.fruitN}`); o.fruit = false; }
+  gainExp(a, 'str', 1.2); gainExp(a, 'dex', 0.4);
+  if (!a.goal) a.bubble = `✅ ${d.name} → ${got[0]}`;
+  if (d.hp >= 20) addLog(`🪓 [เก็บทรัพยากร] ${a.name} ${d.tool[0] === 'pick' ? 'ทุบ' : 'โค่น'}${d.name} ได้ ${got.join(', ')}`, '#a3e635');
+}
+function hitObj(a, o, t) {
+  const dmg = hitDamage(a, t);
+  o.hp = Math.max(0, o.hp - dmg); o.hitT = performance.now() / 1000; o.lastHit = nowH();
+  wearTool(a, t, 1);
+  gainExp(a, 'str', 0.4); gainExp(a, 'dex', 0.15);
+  if (!a.goal) a.bubble = `${WOBJ[o.k].tool[0] === 'pick' ? '⛏️' : WOBJ[o.k].tool[0] === 'axe' ? '🪓' : '✂️'} ${WOBJ[o.k].name} -${dmg}${a._crit ? ' คริ!' : ''} (${o.hp}/${o.max})`;
+  a._crit = false;
+  if (o.hp <= 0) destroyObj(a, o);
+}
+// AI: pick a target object worth walking to
+function objTarget(a) {
+  const objs = objsOf(a.zone), hungry = (a.food || 0) < 10;
+  if (a.objT) { const o = objs.find(x => x.id === a.objT && !x.dead); if (o && (o.fruit || harvestTool(a, o))) return o; a.objT = null; }
+  const myTools = toolItems.filter(t => canUse(a, t));
+  if (!hungry && !myTools.length) return null;
+  let best = null, bd = 1e9;
+  for (const o of objs) {
+    if (o.dead) continue;
+    const d = WOBJ[o.k];
+    const want = (hungry && o.fruit) || myTools.some(t => d.tool.includes(t.type) && toolStat(t).tier >= d.tier);
+    if (!want) continue;
+    const dist = Math.hypot(o.x - a.x, o.y - a.y);
+    if (dist < bd && dist < 30) { bd = dist; best = o; }
+  }
+  if (best) a.objT = best.id;
+  return best;
+}
+// AI: act on an object within reach (pick fruit / hit with a tool)
+function objAct(a) {
+  const objs = objsOf(a.zone); let near = null, nd = 3.2;
+  for (const o of objs) { if (o.dead) continue; const d = Math.hypot(o.x - a.x - 0.5, o.y - a.y - 0.5); if (d < nd) { nd = d; near = o; } }
+  if (!near) return false;
+  if (near.fruit && ((a.food || 0) < 25 || Math.random() < 0.3)) return pickFruit(a, near);
+  const swings = 2 + Math.floor(st(a, 'agi') / 20);       // several swings per game hour
+  for (let i = 0; i < swings && !near.dead; i++) { const t = harvestTool(a, near); if (!t) return i > 0; hitObj(a, near, t); }
+  return true;
+}
+// regrowth: fruit comes back, cleared natural objects respawn somewhere else in the zone
+function objWorldTick() {
+  const h = nowH();
+  for (const key in zoneNodes) {
+    if (key[0] !== '@') continue;
+    const zId = key.slice(1), list = zoneNodes[key];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const o = list[i], d = WOBJ[o.k];
+      if (!d) { list.splice(i, 1); continue; }
+      if (d.fruit && !o.fruit && !o.dead && h >= (o.fruitAt || 0)) o.fruit = true;
+      if (!o.dead && o.hp < o.max && h - (o.lastHit || 0) > 12) o.hp = Math.min(o.max, o.hp + 1);   // untouched objects slowly heal
+      if (o.dead && h - o.deadAt >= d.regrow) {
+        list.splice(i, 1);
+        const g = zoneTerrainGrid[zId]; if (!g) continue;
+        for (let tries = 0; tries < 40; tries++) {
+          const x = 3 + Math.floor(Math.random() * 74), y = 3 + Math.floor(Math.random() * 74), t = g[y][x];
+          const rules = WOBJ_SPAWN[t];
+          if (rules && rules.some(([, kinds]) => kinds.some(([k]) => k === o.k))) { list.push(mkObj(zId, o.k, x + 0.3 + Math.random() * 0.4, y + 0.3 + Math.random() * 0.4, Math.random)); break; }
+        }
+      }
+    }
+  }
+}
+// built objects (campfire, workbench...) have durability too; when it runs out they are gone for good
+const STATION_HP = { campfire: 15, workbench: 30, kiln: 60, smelter: 80, wall: 150, farm: 40, lab: 120, reactor: 300, storehouse: 100, gate: 999 };
+function stationMaxHp(s) { return s.station ? (STATION_HP[s.station] || 50) : 80; }
+function damageStation(s, dmg, why) {
+  if (s.station === 'gate' || s.station === 'storehouse' || !s.station) return;
+  s.hp = (s.hp == null ? stationMaxHp(s) : s.hp) - dmg; s.hitT = performance.now() / 1000;
+  if (s.hp <= 0) {
+    shelters = shelters.filter(x => x !== s);
+    addLog(`💥 [สิ่งก่อสร้างพัง] ${s.name.split(' (')[0]} ${why || ''} พังหายไป ต้องสร้างใหม่`, '#f87171');
+  }
+}
+// draw one world object
+function drawWorldObj(ctx, o, cx, fy, now) {
+  const d = WOBJ[o.k], s = window.WORLD_ART && WORLD_ART.sprites[o.k]; if (!s) return;
+  const stI = objState(o);
+  let sx = 0; if (o.hitT && now - o.hitT < 0.35) sx = Math.sin((now - o.hitT) * 60) * 1.5 * (1 - (now - o.hitT) / 0.35);
+  const w = s.w * (o.dead ? 0.6 : 1);
+  ctx.fillStyle = 'rgba(30,50,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * (d.tall ? 0.28 : 0.4), w * (d.tall ? 0.08 : 0.12), 0, 0, 7); ctx.fill();
+  let hide = false;
+  if (d.tall && !o.dead) hide = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < o.x + o.y - 0.5 && Math.abs(a._feet[0] - cx) < s.w * 0.45 && a._feet[1] < fy && a._feet[1] > fy - s.h);
+  if (hide) ctx.globalAlpha = 0.45;
+  drawProp(ctx, o.k, stI, cx + sx, fy, 1, o.fl);
+  ctx.globalAlpha = 1;
+  if (!o.dead && o.hp < o.max && VIEW.zoom >= 1.6) {
+    const bw = 16, by = fy - Math.min(s.ay, 28) - 6; ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(cx - bw / 2, by, bw, 2.6);
+    ctx.fillStyle = o.hp / o.max > 0.5 ? '#84cc16' : '#f97316'; ctx.fillRect(cx - bw / 2 + 0.3, by + 0.3, (bw - 0.6) * o.hp / o.max, 2);
+  }
+}
+
 function drawCanvas() {
   if (bgTick) return;
   const canvas = document.getElementById('mapCanvas'); if (!VIEW.w) resizeView();
@@ -4262,7 +4596,7 @@ function drawCanvas() {
   const bgG = ctx.createLinearGradient(0, 0, 0, VIEW.h); bgG.addColorStop(0, '#9fd3ee'); bgG.addColorStop(1, '#5aa6d6'); ctx.fillStyle = bgG; ctx.fillRect(0, 0, VIEW.w, VIEW.h);
   ctx.setTransform(d * z, 0, 0, d * z, d * (VIEW.w / 2 - VIEW.cx * z), d * (VIEW.h / 2 - VIEW.cy * z));
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(getTerrainCanvas(currentZoneId), 0, 0);
+  { const tc = getTerrainCanvas(currentZoneId); ctx.drawImage(tc, 0, 0, tc.width / (tc._scale || 1), tc.height / (tc._scale || 1)); }
   if (showGrid && z > 1.8) {
     ctx.strokeStyle = 'rgba(0,0,0,0.05)'; ctx.lineWidth = 1 / z; ctx.beginPath();
     for (let i = 0; i <= 80; i++) { ctx.moveTo(...isoXY(i, 0)); ctx.lineTo(...isoXY(i, 80)); ctx.moveTo(...isoXY(0, i)); ctx.lineTo(...isoXY(80, i)); }
@@ -4274,8 +4608,23 @@ function drawCanvas() {
   shelters.filter(s => s.zone === currentZoneId).forEach(s => items.push({ y: s.x + s.y + 3, draw: () => {
     const [cx, fy] = groundAt(s.x + 1.5, s.y + 1.5), key = s.sprite || 'shelter_hut';
     const w = (SPRITES[key] ? SPRITES[key][0].length / SPRITES[key].length : 1.4) * (SIZE_REL[key] || 1) * HUMAN_H;
-    ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * 0.55, w * 0.13, 0, 0, 7); ctx.fill();
-    const d = drawSized(ctx, key, cx, fy);
+    const art = key === 'st_fire' ? 'camp_fire' : key === 'st_bench' ? 'camp_bench' : null;
+    const sw = art && window.WORLD_ART ? WORLD_ART.sprites[art].w * 0.8 : w;
+    ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, sw * 0.55, sw * 0.16, 0, 0, 7); ctx.fill();
+    let d;
+    if (art && window.WORLD_ART) {
+      const mh = stationMaxHp(s), hp = s.hp == null ? mh : s.hp, stI = hp < mh * 0.5 ? 1 : 0, A = WORLD_ART.sprites[art];
+      let sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
+      drawProp(ctx, art, stI, cx + sx, fy);
+      if (art === 'camp_fire' && stI === 0) {             // animated flames
+        for (let k = 0; k < 3; k++) {
+          const fh = 9 + 4 * Math.sin(now * 9 + k * 2.1), ox = (k - 1) * 3.2;
+          ctx.fillStyle = k === 1 ? 'rgba(255,214,90,.95)' : 'rgba(255,130,30,.9)';
+          ctx.beginPath(); ctx.moveTo(cx + ox - 3, fy - 4); ctx.quadraticCurveTo(cx + ox - 2, fy - 4 - fh * 0.6, cx + ox + Math.sin(now * 7 + k) * 1.2, fy - 4 - fh); ctx.quadraticCurveTo(cx + ox + 2, fy - 4 - fh * 0.6, cx + ox + 3, fy - 4); ctx.fill();
+        }
+      }
+      d = { h: A.ay };
+    } else d = drawSized(ctx, key, cx, fy);
     if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
   (zoneNodes[currentZoneId] || []).forEach(n => items.push({ y: n.x + n.y + 1, draw: () => {
@@ -4284,15 +4633,25 @@ function drawCanvas() {
     if (tall) {
       const hidden = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < n.x + n.y && Math.abs(a._feet[0] - cx) < HUMAN_H * 1.1 && a._feet[1] < fy && a._feet[1] > fy - HUMAN_H * 2.6);
       if (hidden) ctx.globalAlpha = 0.45;
-      drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
+      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว|ต้นจาก/.test(n.name) ? 1 : 0, cx, fy, 1, (n.x + n.y) % 2 === 0))
+        drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
       ctx.globalAlpha = 1;
     }
+    if (n.sprite === 'res_rock' && /หิน|แร่|กำมะถัน/.test(n.name)) drawProp(ctx, /แร่เหล็ก/.test(n.name) ? 'rock_iron' : 'rock_gray', 0, cx, fy, 0.8);
     const isz = HUMAN_H * 0.36;
     ctx.font = `${isz}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(ic, cx + (tall ? WT * 0.9 : 0), fy);
     ctx.textAlign = 'left';
     if (showLabels && z >= 2.6) labels.push({ x: cx, y: fy + 3, text: n.name, color: '#3f3f1f', bg: 'rgba(255,255,240,.8)', small: true, center: true, below: true });
   } }));
+  if (window.WORLD_ART) {
+    const [vx0, vy0] = worldOf(0, 0), [vx1, vy1] = worldOf(VIEW.w, VIEW.h);
+    objsOf(currentZoneId).forEach(o => {
+      const [cx, fy] = groundAt(o.x, o.y);
+      if (cx < vx0 - 70 || cx > vx1 + 70 || fy < vy0 - 10 || fy > vy1 + 130) return;
+      items.push({ y: o.x + o.y, draw: () => drawWorldObj(ctx, o, cx, fy, now) });
+    });
+  }
   faunaSpecies.filter(f => (f.zp[currentZoneId] || 0) > 0).forEach(f => {
     if (!f.zoneCoords) f.zoneCoords = {};
     if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = findValidTile(currentZoneId, f.sprite === 'fish');
