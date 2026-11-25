@@ -304,6 +304,7 @@
   .portal-btn { padding: 6px 9px !important; font-size: 13px !important; background: rgba(255, 250, 238, .9) !important; color: #5b3b12 !important;
     border: 2px solid #e2c48a !important; box-shadow: 0 2px 0 #c9a56a !important; }
   .portal-btn:disabled { display: none; }
+  .portal-btn { display: none !important; }   /* zones are switched from the island map */
   .portal-n { top: 128px !important; } .portal-s { bottom: 96px !important; }
   .portal-w { top: 34% !important; } .portal-e { top: 46% !important; }
   #hover-terrain { display: block !important; left: 50%; right: auto !important; transform: translateX(-50%); bottom: 64px !important; opacity: 0; transition: opacity .3s;
