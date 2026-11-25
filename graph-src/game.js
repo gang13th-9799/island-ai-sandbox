@@ -4401,6 +4401,9 @@ const WOBJ = {
   rock_gold:    { name: 'หินแร่ทอง', tool: ['pick'], hp: 60, tier: 3, yields: { 'แร่ทอง': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 240 },
   rock_crystal: { name: 'หินคริสตัล', tool: ['pick'], hp: 60, tier: 3, yields: { 'ผลึกคริสตัล': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 240, tall: 1 }
 };
+// second art variant for some rocks (more angular shapes)
+['rock_gray', 'rock_moss', 'rock_tall', 'rock_iron', 'rock_gold', 'rock_crystal'].forEach(k => { WOBJ[k + '2'] = Object.assign({}, WOBJ[k], { base: k }); });
+const wobjBase = k => (WOBJ[k] && WOBJ[k].base) || k;
 // what grows where: [chance per tile, [[kind, weight]...]]
 const WOBJ_SPAWN = {
   forest: [[0.085, [['oak', 55], ['pine', 25], ['fruit', 20]]], [0.035, [['bush_green', 3], ['bush_pink', 1], ['bush_purple', 1], ['bush_blue', 2], ['bush_red', 2]]], [0.06, [['grass_round', 2], ['grass_tall', 2], ['grass_fern', 3], ['grass_clover', 1]]]],
@@ -4415,6 +4418,7 @@ const WOBJ_SPAWN = {
 function wobjRng(seed) { let s = (seed % 2147483646) + 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 function wobjPick(list, r) { const tot = list.reduce((a, b) => a + b[1], 0); let x = r * tot; for (const [k, w] of list) { if ((x -= w) <= 0) return k; } return list[0][0]; }
 function mkObj(zId, k, x, y, r) {
+  if (WOBJ[k + '2'] && r() < 0.55) k = k + '2';
   const d = WOBJ[k];
   return { id: zId + '#' + Math.floor(r() * 1e9), k, x, y, hp: d.hp, max: d.hp, fl: r() < 0.5, fruit: d.fruit ? true : undefined };
 }
@@ -4549,7 +4553,7 @@ function objWorldTick() {
         for (let tries = 0; tries < 40; tries++) {
           const x = 3 + Math.floor(Math.random() * 74), y = 3 + Math.floor(Math.random() * 74), t = g[y][x];
           const rules = WOBJ_SPAWN[t];
-          if (rules && rules.some(([, kinds]) => kinds.some(([k]) => k === o.k))) { list.push(mkObj(zId, o.k, x + 0.3 + Math.random() * 0.4, y + 0.3 + Math.random() * 0.4, Math.random)); break; }
+          if (rules && rules.some(([, kinds]) => kinds.some(([k]) => k === wobjBase(o.k)))) { list.push(mkObj(zId, wobjBase(o.k), x + 0.3 + Math.random() * 0.4, y + 0.3 + Math.random() * 0.4, Math.random)); break; }
         }
       }
     }
