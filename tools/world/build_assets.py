@@ -50,6 +50,15 @@ for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.
     rx=x0+(x1-x0)*0.04; ry=np.where(al[:,int(rx)+2])[0].mean() if al[:,int(rx)+2].any() else H_*0.5
     f=lambda x,y:[round((x-W_/2)/RES,2),round((y-H_)/RES,2)]
     AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry)})
+MU={}
+for f in sorted(glob.glob('/home/claude/mut/*.png')):
+  k=f.split('/')[-1][:-4]; im=Image.open(f).convert('RGBA')
+  if not k.startswith('skin'): im.thumbnail((140,140),Image.LANCZOS)
+  al=np.array(im)[...,3]>100; H_,W_=al.shape; ys,xs=np.where(al)
+  if k.startswith('tail'): t=ys.min(); rx=xs[ys<=t+4].mean()/W_; ry=t/H_
+  elif k.startswith('wing'): i=np.argmax(xs+0.5*ys); rx=xs[i]/W_; ry=ys[i]/H_
+  else: rx,ry=0.5,1.0
+  MU[k]={'img':b64(im,82),'w':W_,'h':H_,'rx':round(float(rx),3),'ry':round(float(ry),3)}
 # tool icons
 ic={}
 for n,im in zip(['axe','pick','sickle','knife','hammer','shears'],extract('tools_stone.jpg',dil=4)):
@@ -65,5 +74,5 @@ tex('cobble','cobble.jpg',0.15); tex('shallow','shallow.jpg',0.2,tile=1); tex('d
 W={}
 for n,f,crop in [('dirt','wall_dirt.jpg',0.06),('rock','wall_rock.jpg',0.14),('sand','wall_sand.jpg',0.11),('ice','wall_ice.jpg',0.075)]:
   im=Image.open(f).convert('RGB'); w,h=im.size; im=im.crop((0,int(h*crop),w,h)).resize((128,128),Image.LANCZOS); W[n]=b64(im,80)
-js='window.WORLD_ART='+json.dumps({'res':RES,'sprites':SP,'icons':ic,'tex':TX,'walls':W,'animals':AN},separators=(',',':'))+';\n'
+js='window.WORLD_ART='+json.dumps({'res':RES,'sprites':SP,'icons':ic,'tex':TX,'walls':W,'animals':AN,'mut':MU},separators=(',',':'))+';\n'
 open('/home/claude/repo-island/assets/world.js','w').write(js); print(len(js)//1024,'KB')
