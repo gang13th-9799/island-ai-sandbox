@@ -2839,51 +2839,95 @@ function staminaDrain(a) {
   return d * (1 - Math.min(0.4, st(a, 'vit') * 0.012));
 }
 function staminaTick() {
-  const hr = Math.floor(simMinutes / 60) % 24;
+  if (!RT_ON()) aiAgents.forEach(a => { if (bodyStamina(a, 1)) restMove(a, 4); });
+}
+function bodyHunger(a, season, reactorMult, hrs) {
+  const vitMult = 1 - Math.min(0.35, st(a, 'vit') * 0.01);
+  a.hunger = Math.min(100, a.hunger + 4 * season.foodMult * reactorMult * vitMult * (a.age < 12 ? 0.5 : 1) * hrs);
+  if (a.hunger >= 60) gainExp(a, 'vit', 0.4 * hrs);
+  const foods = a.bag ? Object.keys(a.bag).filter(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel) : [];
+  const snack = foods.find(n => !propsOf(n).bad) || ((a.food || 0) <= 0 ? foods[0] : null);
+  if (a.hunger >= 45 && snack) {
+    take(a, snack);
+    const bad = propsOf(snack).bad;
+    a.hunger = Math.max(0, a.hunger - (bad ? 15 : 30));
+    a.hp = Math.min(maxHp(a), a.hp + (bad ? 1 : 3));
+    if (bad) a.bubble = `😖 ${snack}เหนียว ไม่อร่อย`;
+    else if (Math.random() < 0.2) a.bubble = `😋 กิน${snack}ของตัวเอง`;
+  } else if (a.hunger >= 45 && (a.food || 0) > 0) {
+    const eat = Math.min(a.food, 2);
+    a.food -= eat;
+    a.hunger = Math.max(0, a.hunger - eat * 22);
+    a.hp = Math.min(maxHp(a), a.hp + 4);
+  } else if (a.hunger >= 45 && villageOf(a) && villageOf(a).food > 0 && atStore(a) && payFor(a, villageOf(a), 2, null, 'อาหาร 2 หน่วย')) {
+    const v = villageOf(a);
+    const eat = Math.min(v.food, 2);
+    v.food -= eat;
+    a.hunger = Math.max(0, a.hunger - eat * 22);
+    a.hp = Math.min(maxHp(a), a.hp + 4);
+    a.bubble = `🔄 เอาของแลกอาหารที่โกดัง${v.name}`;
+  } else if (a.hunger >= 85) {
+    a.hp = Math.max(0, a.hp - Math.max(3, 7 - Math.floor(st(a, 'vit') / 5)) * hrs);
+    gainExp(a, 'vit', hrs);
+    a.bubble = '😵 หิวจัด! เลือดลด!';
+  }
+  if (a.hp < maxHp(a) * 0.6 && avail(a, 'ยาต้มสมุนไพร') <= 0 && avail(a, 'สมุนไพร') > 0) {
+    take(a, 'สมุนไพร'); a.hp = Math.min(maxHp(a), a.hp + 8); a.bubble = '🌿 เคี้ยวสมุนไพรสดรักษาแผล';
+  }
+  if (a.hp < maxHp(a) * 0.45 && avail(a, 'ยาต้มสมุนไพร') > 0) {
+    take(a, 'ยาต้มสมุนไพร');
+    a.hp = Math.min(maxHp(a), a.hp + 30);
+    a.bubble = '🍵 ดื่มยาสมุนไพร';
+  }
+}
+// returns true when the person is tired and should go to rest
+function bodyStamina(a, hrs) {
+  const hr = Math.floor((simMinutes + (RT_ON() ? rtMin : 0)) / 60) % 24;
   const lateNight = hr >= 21 || hr < 5, morning = hr >= 6 && hr < 18;
-  aiAgents.forEach(a => {
-    if (a.stamina === undefined) a.stamina = 100;
-    if (a.age < 12) {                                   // small kids sleep with their guardian
-      const g = byId(a.guardian);
-      a.sleeping = !!(g && g.sleeping); a.sleepKind = g && g.sleepKind;
-      if (a.sleeping) { a.zone = g.zone; a.x = Math.min(79, g.x + 1); a.y = Math.min(79, g.y + 1); }
-      a.stamina = a.sleeping ? Math.min(100, a.stamina + 12) : Math.max(0, a.stamina - 2);
-      if (a.sleeping) a.bubble = '😴 หลับอยู่ข้างผู้ปกครอง';
-      return;
-    }
-    if (a.sleeping) {
-      const rate = a.sleepKind === 'bed' ? 15 : a.sleepKind === 'fire' ? 10 : 6;
-      a.stamina = Math.min(100, a.stamina + rate);
-      a.hp = Math.min(maxHp(a), a.hp + (a.sleepKind === 'bed' ? 3 : 1));
-      a.hunger = Math.max(0, a.hunger - 2);              // metabolism slows (hunger tick adds it back)
-      const wake = (a.stamina >= 100 && !lateNight) || (a.stamina >= 70 && morning) || a.hunger >= 85;
-      if (wake) {
-        a.sleeping = false; a.sleepAt = null; if (a.sleepKind === 'bed' && a.stamina >= 95) godQuestEvent(a, 'rest');
-        a.bubble = a.sleepKind === 'bed' ? '🌅 ตื่นนอน สดชื่น!' : a.sleepKind === 'fire' ? '🌅 ตื่นข้างกองไฟ' : '🥱 ตื่นมาปวดหลัง นอนกับพื้น';
-        if (a.sleepKind === 'ground') gainExp(a, 'vit', 0.5);
-      } else a.bubble = a.sleepKind === 'bed' ? '😴 นอนหลับในที่พัก' : a.sleepKind === 'fire' ? '😴 นอนข้างกองไฟ' : '😪 นอนกับพื้น';
-      return;
-    }
-    a.stamina = Math.max(0, a.stamina - staminaDrain(a));
-    if (a.stamina <= 0) {                               // collapse where you stand
-      a.sleeping = true; a.sleepKind = 'ground'; a.goal = null; a.session = null; a.gatherT = null;
-      a.hp = Math.max(1, a.hp - 4);
-      a.bubble = '😵 หมดแรงล้มหลับ!';
-      addLog(`😵 [หมดแรง] "${a.name}" ทำงานหนักจนล้มหลับกลางทาง HP -4`, '#fb923c');
-      return;
-    }
-    const tired = a.stamina < 25 || (lateNight && a.stamina < 85) || ((a.warmth ?? 100) < 40 && !morning);
-    if (!tired) { a.wantRest = false; a.restWait = 0; return; }
-    a.wantRest = true; a.restWait = (a.restWait || 0) + 1;
-    if (a.goal && a.goal.gate) return;                  // finish a realm crossing first
-    const spot = restSpotIn(a.zone, a);
-    if (spot && Math.hypot(a.x - spot.x, a.y - spot.y) > 3 && a.restWait <= 4) { a.goal = null; a.session = null; a.gatherT = null; for (let k = 0; k < 4; k++) moveToward(a, spot.x, spot.y); a.bubble = spot.kind === 'bed' ? `🥱 เหนื่อยแล้ว กลับไปพักที่${spot.s.name.split(' (')[0]}` : '🥱 เหนื่อยแล้ว ไปนอนข้างกองไฟ'; return; }
-    // arrived (or nowhere to go): sleep
-    a.sleeping = true; a.goal = null; a.session = null; a.gatherT = null;
-    const near = spot && Math.hypot(a.x - spot.x, a.y - spot.y) <= 3;
-    a.sleepKind = near ? spot.kind : 'ground'; a.sleepAt = near && spot.kind === 'bed' ? spot.s.name : null; a.restWait = 0;
-    if (near) { a.x = spot.x + Math.floor(Math.random() * 3) - 1; a.y = spot.y + Math.floor(Math.random() * 2); }
-  });
+  if (a.stamina === undefined) a.stamina = 100;
+  if (a.age < 12) {                                   // small kids sleep with their guardian
+    const g = byId(a.guardian);
+    a.sleeping = !!(g && g.sleeping); a.sleepKind = g && g.sleepKind;
+    if (a.sleeping) { a.zone = g.zone; a.x = Math.min(79, g.x + 1); a.y = Math.min(79, g.y + 1); }
+    a.stamina = a.sleeping ? Math.min(100, a.stamina + 12 * hrs) : Math.max(0, a.stamina - 2 * hrs);
+    if (a.sleeping) a.bubble = '😴 หลับอยู่ข้างผู้ปกครอง';
+    return false;
+  }
+  if (a.sleeping) {
+    const rate = a.sleepKind === 'bed' ? 15 : a.sleepKind === 'fire' ? 10 : 6;
+    a.stamina = Math.min(100, a.stamina + rate * hrs);
+    a.hp = Math.min(maxHp(a), a.hp + (a.sleepKind === 'bed' ? 3 : 1) * hrs);
+    a.hunger = Math.max(0, a.hunger - 2 * hrs);              // metabolism slows (hunger tick adds it back)
+    const wake = (a.stamina >= 100 && !lateNight) || (a.stamina >= 70 && morning) || a.hunger >= 85;
+    if (wake) {
+      a.sleeping = false; a.sleepAt = null; if (a.sleepKind === 'bed' && a.stamina >= 95) godQuestEvent(a, 'rest');
+      a.bubble = a.sleepKind === 'bed' ? '🌅 ตื่นนอน สดชื่น!' : a.sleepKind === 'fire' ? '🌅 ตื่นข้างกองไฟ' : '🥱 ตื่นมาปวดหลัง นอนกับพื้น';
+      if (a.sleepKind === 'ground') gainExp(a, 'vit', 0.5);
+    } else a.bubble = a.sleepKind === 'bed' ? '😴 นอนหลับในที่พัก' : a.sleepKind === 'fire' ? '😴 นอนข้างกองไฟ' : '😪 นอนกับพื้น';
+    return false;
+  }
+  a.stamina = Math.max(0, a.stamina - staminaDrain(a) * hrs);
+  if (a.stamina <= 0) {                               // collapse where you stand
+    a.sleeping = true; a.sleepKind = 'ground'; a.goal = null; a.session = null; a.gatherT = null;
+    a.hp = Math.max(1, a.hp - 4);
+    a.bubble = '😵 หมดแรงล้มหลับ!';
+    addLog(`😵 [หมดแรง] "${a.name}" ทำงานหนักจนล้มหลับกลางทาง HP -4`, '#fb923c');
+    return false;
+  }
+  const tired = a.stamina < 25 || (lateNight && a.stamina < 85) || ((a.warmth ?? 100) < 40 && !morning);
+  if (!tired) { a.wantRest = false; a.restWait = 0; return false; }
+  return true;
+}
+function restMove(a, strides) {
+  a.wantRest = true; a.restWait = (a.restWait || 0) + 1;
+  if (a.goal && a.goal.gate) return;                  // finish a realm crossing first
+  const spot = restSpotIn(a.zone, a);
+  if (spot && Math.hypot(a.x - spot.x, a.y - spot.y) > 3 && a.restWait <= 4) { a.goal = null; a.session = null; a.gatherT = null; for (let k = 0; k < strides; k++) moveToward(a, spot.x, spot.y); a.bubble = spot.kind === 'bed' ? `🥱 เหนื่อยแล้ว กลับไปพักที่${spot.s.name.split(' (')[0]}` : '🥱 เหนื่อยแล้ว ไปนอนข้างกองไฟ'; return; }
+  // arrived (or nowhere to go): sleep
+  a.sleeping = true; a.goal = null; a.session = null; a.gatherT = null;
+  const near = spot && Math.hypot(a.x - spot.x, a.y - spot.y) <= 3;
+  a.sleepKind = near ? spot.kind : 'ground'; a.sleepAt = near && spot.kind === 'bed' ? spot.s.name : null; a.restWait = 0;
+  if (near) { a.x = spot.x + Math.floor(Math.random() * 3) - 1; a.y = spot.y + Math.floor(Math.random() * 2); }
 }
 
 // ==========================================
@@ -2956,37 +3000,41 @@ function feltTemp(a) {
 }
 function temperatureTick() {
   weatherTick();
-  aiAgents.forEach(a => {
-    if (a.warmth === undefined) a.warmth = 100;
-    const t = feltTemp(a); a.felt = t;
-    const vit = Math.min(0.4, st(a, 'vit') * 0.015);
-    if (t < 12) {
-      a.warmth = Math.max(0, a.warmth - (12 - t) * 0.45 * (1 - vit));
-      if (Math.random() < 0.3) gainExp(a, 'vit', 0.3);
-    } else if (t > 38) {
-      a.stamina = Math.max(0, (a.stamina ?? 100) - (t - 38) * 0.8);
-      a.warmth = Math.min(100, a.warmth + 10);
-      if (t > 42) { a.hp = Math.max(0, a.hp - 2); if (!a.sleeping) a.bubble = '🥵 ร้อนจนหน้ามืด'; }
-    } else a.warmth = Math.min(100, a.warmth + (t >= 18 ? 12 : 7));
-    if (a.warmth < 50 && !a.sleeping && Math.random() < 0.5) a.bubble = a.warmth < 25 ? '🥶 หนาวสั่นจนแทบขยับไม่ไหว' : '🥶 หนาวจัง ต้องหาที่อุ่นๆ';
-    if (a.warmth < 25) { a.hp = Math.max(0, a.hp - (a.warmth <= 0 ? 5 : 2)); a.coldHurt = true; }
-    else a.coldHurt = false;
-    if (a.warmth <= 0 && a.sleeping) { a.sleeping = false; a.bubble = '🥶 หนาวจนต้องตื่นมา!'; }
-    // seek warmth: go to a fire or a shelter in this zone
-    if (a.warmth < 55 && a.age >= 12 && !a.sleeping) {
-      const spot = restSpotIn(a.zone, a);
-      if (spot && Math.hypot(a.x - spot.x, a.y - spot.y) > 3) { a.goal = null; a.session = null; a.gatherT = null; for (let k = 0; k < 4; k++) moveToward(a, spot.x, spot.y); a.coldSeek = true; }
-      else if (!spot && a.warmth < 45 && !(a.goal && a.goal.gate)) {
-        // nowhere warm here: head for a neighbouring zone that has a fire/shelter, or lower & warmer ground
-        const nb = getAdjacentZones(a.zone).map(z => [z, (shelters.some(s => s.zone === z && (isRestShelter(s) || s.station === 'campfire')) ? 20 : 0) + (GEO_DT[ZONES[z].geo] || 0)])
-          .sort((p, q) => q[1] - p[1])[0];
-        if (nb && nb[1] > (GEO_DT[ZONES[a.zone].geo] || 0)) {
-          a.goal = { zone: nb[0], x: 40, y: 40, ttl: 14, enter: true }; a.gatherT = null;
-          a.bubble = `🥶 หนาวเกินไป ย้ายไปหาที่อุ่นที่ ${nb[0]}`; a.coldSeek = true;
-        } else a.coldSeek = false;
+  if (!RT_ON()) aiAgents.forEach(a => { bodyTemp(a, 1); coldMove(a, 4); });
+}
+function bodyTemp(a, hrs) {
+  if (a.warmth === undefined) a.warmth = 100;
+  const t = feltTemp(a); a.felt = t;
+  const vit = Math.min(0.4, st(a, 'vit') * 0.015);
+  if (t < 12) {
+    a.warmth = Math.max(0, a.warmth - (12 - t) * 0.45 * (1 - vit) * hrs);
+    if (Math.random() < 0.3 * hrs) gainExp(a, 'vit', 0.3);
+  } else if (t > 38) {
+    a.stamina = Math.max(0, (a.stamina ?? 100) - (t - 38) * 0.8 * hrs);
+    a.warmth = Math.min(100, a.warmth + 10 * hrs);
+    if (t > 42) { a.hp = Math.max(0, a.hp - 2 * hrs); if (!a.sleeping) a.bubble = '🥵 ร้อนจนหน้ามืด'; }
+  } else a.warmth = Math.min(100, a.warmth + (t >= 18 ? 12 : 7) * hrs);
+  if (a.warmth < 50 && !a.sleeping && Math.random() < 0.5 * hrs) a.bubble = a.warmth < 25 ? '🥶 หนาวสั่นจนแทบขยับไม่ไหว' : '🥶 หนาวจัง ต้องหาที่อุ่นๆ';
+  if (a.warmth < 25) { a.hp = Math.max(0, a.hp - (a.warmth <= 0 ? 5 : 2) * hrs); a.coldHurt = true; }
+  else a.coldHurt = false;
+  if (a.warmth <= 0 && a.sleeping) { a.sleeping = false; a.bubble = '🥶 หนาวจนต้องตื่นมา!'; }
+}
+// cold people head for a fire or shelter (strides = how far they get this time)
+function coldMove(a, strides) {
+  // seek warmth: go to a fire or a shelter in this zone
+  if (a.warmth < 55 && a.age >= 12 && !a.sleeping) {
+    const spot = restSpotIn(a.zone, a);
+    if (spot && Math.hypot(a.x - spot.x, a.y - spot.y) > 3) { a.goal = null; a.session = null; a.gatherT = null; for (let k = 0; k < strides; k++) moveToward(a, spot.x, spot.y); a.coldSeek = true; }
+    else if (!spot && a.warmth < 45 && !(a.goal && a.goal.gate)) {
+      // nowhere warm here: head for a neighbouring zone that has a fire/shelter, or lower & warmer ground
+      const nb = getAdjacentZones(a.zone).map(z => [z, (shelters.some(s => s.zone === z && (isRestShelter(s) || s.station === 'campfire')) ? 20 : 0) + (GEO_DT[ZONES[z].geo] || 0)])
+        .sort((p, q) => q[1] - p[1])[0];
+      if (nb && nb[1] > (GEO_DT[ZONES[a.zone].geo] || 0)) {
+        a.goal = { zone: nb[0], x: 40, y: 40, ttl: 14, enter: true }; a.gatherT = null;
+        a.bubble = `🥶 หนาวเกินไป ย้ายไปหาที่อุ่นที่ ${nb[0]}`; a.coldSeek = true;
       } else a.coldSeek = false;
     } else a.coldSeek = false;
-  });
+  } else a.coldSeek = false;
 }
 function weatherLabel() { const w = WEATHER[zoneWeather(currentZoneId)]; return `${w.icon} ${w.name} ${airTemp(currentZoneId)}°C`; }
 
@@ -3285,7 +3333,7 @@ function giftNeeds(a) {
   if (a.age >= 15 && !hasTool('blade', a) && (beast || /ล่า/.test(a.role || ''))) out.push(['weapon', beast ? 'สัตว์ร้ายอยู่ใกล้ แต่ไม่มีอาวุธป้องกันตัว' : 'เป็นนักล่าแต่ไม่มีอาวุธ']);
   if (!hasTool('axe', a) && ((a.role || '').includes('เก็บ') || (a.role || '').includes('ช่าง')) && Math.random() < 0.4) out.push(['tool', 'ต้องตัดไม้ทุกวันแต่ไม่มีขวาน']);
   const hurt = aiAgents.filter(o => o.zone === a.zone && o.hp < maxHp(o) * 0.5).length;
-  if (a.hp < maxHp(a) * 0.45 || hurt >= 2) out.push(['medicine', `บาดเจ็บ HP ${a.hp}/${maxHp(a)}${hurt >= 2 ? ` และมีคนเจ็บในโซน ${hurt} คน` : ''} ไม่มียารักษา`]);
+  if (a.hp < maxHp(a) * 0.45 || hurt >= 2) out.push(['medicine', `บาดเจ็บ HP ${Math.round(a.hp)}/${maxHp(a)}${hurt >= 2 ? ` และมีคนเจ็บในโซน ${hurt} คน` : ''} ไม่มียารักษา`]);
   const lastFind = Math.max(-1, ...Object.values(a.know || {}).filter(e => e.out).map(e => e.day || 0));
   if (a.age >= 15 && simDay - lastFind >= 4 && Math.random() < 0.5) out.push(['knowledge', `ทดลองมา ${simDay - Math.max(0, lastFind)} วันแล้วยังไม่ค้นพบอะไรใหม่ อยากได้ความรู้สูตรผลิต`]);
   const wz = zoneWeather(a.zone);
@@ -3666,7 +3714,7 @@ function agentHunt(hunter) {
         hunter.hp = Math.max(0, hunter.hp - dmg);
         gainExp(hunter, 'vit', 3);
         hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
-        addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${hunter.hp})`, '#ef4444');
+        addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${Math.round(hunter.hp)})`, '#ef4444');
       } else hunter.bubble = weapon === 'bow' ? '🏹 ยิงพลาด' : weapon ? '🗡️ แทงพลาด' : '✋ ไล่จับด้วยมือเปล่าไม่ทัน';
     }
 }
@@ -3849,45 +3897,7 @@ function runAutonomousStep() {
 
   // Hunger, eating, medicine
   const reactorMult = stationsOf('reactor').length ? 0.75 : 1;
-  aiAgents.forEach(a => {
-    const vitMult = 1 - Math.min(0.35, st(a, 'vit') * 0.01);
-    a.hunger = Math.min(100, a.hunger + Math.round(4 * season.foodMult * reactorMult * vitMult * (a.age < 12 ? 0.5 : 1)));
-    if (a.hunger >= 60) gainExp(a, 'vit', 0.4);
-    const foods = a.bag ? Object.keys(a.bag).filter(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel) : [];
-    const snack = foods.find(n => !propsOf(n).bad) || ((a.food || 0) <= 0 ? foods[0] : null);
-    if (a.hunger >= 45 && snack) {
-      take(a, snack);
-      const bad = propsOf(snack).bad;
-      a.hunger = Math.max(0, a.hunger - (bad ? 15 : 30));
-      a.hp = Math.min(maxHp(a), a.hp + (bad ? 1 : 3));
-      if (bad) a.bubble = `😖 ${snack}เหนียว ไม่อร่อย`;
-      else if (Math.random() < 0.2) a.bubble = `😋 กิน${snack}ของตัวเอง`;
-    } else if (a.hunger >= 45 && (a.food || 0) > 0) {
-      const eat = Math.min(a.food, 2);
-      a.food -= eat;
-      a.hunger = Math.max(0, a.hunger - eat * 22);
-      a.hp = Math.min(maxHp(a), a.hp + 4);
-    } else if (a.hunger >= 45 && villageOf(a) && villageOf(a).food > 0 && atStore(a) && payFor(a, villageOf(a), 2, null, 'อาหาร 2 หน่วย')) {
-      const v = villageOf(a);
-      const eat = Math.min(v.food, 2);
-      v.food -= eat;
-      a.hunger = Math.max(0, a.hunger - eat * 22);
-      a.hp = Math.min(maxHp(a), a.hp + 4);
-      a.bubble = `🔄 เอาของแลกอาหารที่โกดัง${v.name}`;
-    } else if (a.hunger >= 85) {
-      a.hp = Math.max(0, a.hp - Math.max(3, 7 - Math.floor(st(a, 'vit') / 5)));
-      gainExp(a, 'vit', 1);
-      a.bubble = '😵 หิวจัด! เลือดลด!';
-    }
-    if (a.hp < maxHp(a) * 0.6 && avail(a, 'ยาต้มสมุนไพร') <= 0 && avail(a, 'สมุนไพร') > 0) {
-      take(a, 'สมุนไพร'); a.hp = Math.min(maxHp(a), a.hp + 8); a.bubble = '🌿 เคี้ยวสมุนไพรสดรักษาแผล';
-    }
-    if (a.hp < maxHp(a) * 0.45 && avail(a, 'ยาต้มสมุนไพร') > 0) {
-      take(a, 'ยาต้มสมุนไพร');
-      a.hp = Math.min(maxHp(a), a.hp + 30);
-      a.bubble = '🍵 ดื่มยาสมุนไพร';
-    }
-  });
+  if (!RT_ON()) aiAgents.forEach(a => bodyHunger(a, season, reactorMult, 1));
   // Parents/guardians feed small children from their own food
   aiAgents.filter(k => k.age < 15 && (k.food || 0) < 2 && k.hunger >= 40).forEach(k => {
     const kv = villageOf(k);
@@ -3950,7 +3960,7 @@ function runAutonomousStep() {
         if (beast.id === 'f_cobra') a.poisonH = (a.poisonH || 0) + 8;
         gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
         a.bubble = `${icon} ถูก${beast.name}โจมตี!`; a.sleeping = false; a.wantRest = false;
-        addLog(`${icon} [สัตว์ร้ายโจมตี!] "${a.name}" ถูก${beast.name}ขย้ำในโซน ${a.zone} (HP ${a.hp})`, '#ef4444');
+        addLog(`${icon} [สัตว์ร้ายโจมตี!] "${a.name}" ถูก${beast.name}ขย้ำในโซน ${a.zone} (HP ${Math.round(a.hp)})`, '#ef4444');
         // Fighting back with a blade can kill it
         if (a.hp > 0 && a.age >= 15 && hasTool('blade', a) && Math.random() < 0.12 + st(a, 'str') * 0.01 && beast.pop > 2) {
           beast.zp[a.zone]--; syncFauna(beast);
@@ -4265,9 +4275,9 @@ function renderAllUI() {
           ${STAT_KEYS.map(k => { const g = talentGrade(a.talent[k]); const pct = Math.round(100 * a.sexp[k] / expNeed(a.stats[k])); return `<span class="badge" style="font-size:10px; padding:2px 5px;" title="${STATS[k].name} · พรสวรรค์ ${g} (x${a.talent[k]}) · EXP ${pct}%">${STATS[k].icon}${STATS[k].short} <b>${a.stats[k]}</b> <span style="color:${GRADE_COLOR[g]};">${g}</span></span>`; }).join('')}
         </div>
         <div class="stat-row">
-          <span>❤️ ${a.hp}/${maxHp(a)}</span>
+          <span>❤️ ${Math.round(a.hp)}/${maxHp(a)}</span>
           <div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(100 * a.hp / maxHp(a))}%; background:${a.hp < maxHp(a) * 0.35 ? '#ef4444' : '#22c55e'};"></div></div>
-          <span>🍖 หิว ${a.hunger}%</span>
+          <span>🍖 หิว ${Math.round(a.hunger)}%</span>
           <div class="bar-wrap"><div class="bar-hg" style="width:${a.hunger}%; background:${a.hunger > 75 ? '#ef4444' : '#f59e0b'};"></div></div>
         </div>
         <div class="stat-row">
@@ -5374,7 +5384,7 @@ function hitObj(a, o, t) {
   o.hp = Math.max(0, o.hp - dmg); o.hitT = performance.now() / 1000; o.lastHit = nowH();
   wearTool(a, t, 1);
   gainExp(a, 'str', 0.4); gainExp(a, 'dex', 0.15);
-  if (!a.goal) a.bubble = `${WOBJ[o.k].tool[0] === 'pick' ? '⛏️' : WOBJ[o.k].tool[0] === 'axe' ? '🪓' : '✂️'} ${WOBJ[o.k].name} -${dmg}${a._crit ? ' คริ!' : ''} (${o.hp}/${o.max})`;
+  if (!a.goal) a.bubble = `${WOBJ[o.k].tool[0] === 'pick' ? '⛏️' : WOBJ[o.k].tool[0] === 'axe' ? '🪓' : '✂️'} ${WOBJ[o.k].name} -${dmg}${a._crit ? ' คริ!' : ''} (${Math.round(o.hp)}/${o.max})`;
   a._crit = false;
   if (o.hp <= 0) destroyObj(a, o);
 }
@@ -6411,8 +6421,26 @@ function advanceGame(mins) {
     tickAllRealms();
     if (++ticksSinceLastSave >= 5) { ticksSinceLastSave = 0; saveGameState(); }
   }
-  if (REALTIME) agentsRealtime();
+  if (REALTIME && isRunning) { bodyRealtime(mins); agentsRealtime(); }
   updateClockHud();
+}
+// bodies change continuously: hunger, warmth, stamina and health flow minute by minute
+function bodyRealtime(mins) {
+  const season = SEASONS[currentSeasonIdx], reactorMult = stationsOf('reactor').length ? 0.75 : 1;
+  let anyDead = false;
+  for (const a of aiAgents) {
+    a._bodyAcc = (a._bodyAcc || 0) + mins;
+    if (a._bodyAcc < 2) continue;                    // every ~2 game minutes is smooth enough
+    const hrs = a._bodyAcc / 60; a._bodyAcc = 0;
+    bodyHunger(a, season, reactorMult, hrs);
+    bodyTemp(a, hrs);
+    if (bodyStamina(a, hrs) && !a.wantRest) { a.wantRest = true; a.restWait = 0; a.busyUntil = Math.min(a.busyUntil ?? 0, gameNow()); }
+    if (a.hp <= 0) anyDead = true;
+  }
+  if (anyDead) {
+    removeDead(aiAgents.filter(a => a.hp <= 0 && a.coldHurt), d => `🥶 [หนาวตาย] "${d.name}" ทนความหนาวไม่ไหว เสียชีวิตขณะ${d.sleeping || d.sleepKind === 'ground' ? 'นอนกลางแจ้ง' : 'อยู่ข้างนอก'} (${WEATHER[zoneWeather(d.zone)].name} ${airTemp(d.zone)}°C)`);
+    removeDead(aiAgents.filter(a => a.hp <= 0), d => `💀 [เสียชีวิต] "${d.name}" เสียชีวิตจากความหิวหรือบาดเจ็บหนัก!`);
+  }
 }
 function updateClockHud() {
   const el = document.getElementById('clock-display'); if (!el) return;
@@ -6435,6 +6463,7 @@ function agentsRealtime() {
 function agentStep(a, night, season, now) {
   const z0 = a.zone, x0 = a.x, y0 = a.y;
   buildZoneTerrain(a.zone);
+  if (!a.sleeping && a.age >= 12) { if (a.wantRest) restMove(a, 2); else coldMove(a, 2); }
   agentMove(a, night);
   agentGather(a, season);
   if (wantsHunt(a)) agentHunt(a);
