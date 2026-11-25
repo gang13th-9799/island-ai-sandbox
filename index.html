@@ -4898,6 +4898,20 @@ const WA = { ready: false, img: {}, tex: {}, wall: {} };
   for (const k in A.tex) WA.tex[k] = load(A.tex[k]);
   for (const k in A.walls) WA.wall[k] = load(A.walls[k]);
 })();
+// animals: 0 idle, 1 eat, 2 fight, 3 sleep, 4 walk (art faces right)
+const ANIM_ART = { f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
+WA.anim = {};
+(function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
+function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
+function drawAnimal(ctx, art, pose, cx, fy, face, scale, tint) {
+  const P = WORLD_ART.animals[art][pose], im = WA.anim[art] && WA.anim[art][pose];
+  if (!im || !im.complete || !im.naturalWidth) return false;
+  const w = P.w * scale, h = P.h * scale;
+  ctx.save(); ctx.translate(cx, fy); if (face < 0) ctx.scale(-1, 1);
+  if (tint) ctx.filter = tint;
+  ctx.drawImage(im, -w / 2, -h, w, h);
+  ctx.restore(); return true;
+}
 function drawProp(ctx, kind, state, cx, fy, scale = 1, flip = false) {
   const A = window.WORLD_ART, s = A && A.sprites[kind], im = WA.img[kind] && WA.img[kind][state];
   if (!s || !im || !im.complete || !im.naturalWidth) return false;
@@ -5219,6 +5233,20 @@ function drawCanvas() {
       const tx = h.x + ox, ty = h.y + oy;
       items.push({ y: tx + ty + 1, draw: () => {
         const [cx, fy0] = groundAt(tx + 0.5, ty + 0.5), bob = graze ? 0 : Math.abs(Math.sin(t * 6)) * 1.2, fy = fy0 - bob;
+        const art = window.WORLD_ART && WORLD_ART.animals ? animalArt(f) : null;
+        if (art) {
+          const sleep = isNightTime() && !f.predator && art !== 'fish';
+          const close = aiAgents.some(a => a.zone === currentZoneId && a._rx !== undefined && Math.hypot(a._rx - tx, a._ry - ty) < (f.predator ? 5 : 2.2));
+          const pose = sleep ? 3 : close ? 2 : graze ? 1 : (Math.sin(t * 3) > -0.2 ? 4 : 0);
+          const sc = (rel / (WORLD_ART.animals[art][0].h / HUMAN_H)) * (art === 'fish' ? 1 : 1), w = WORLD_ART.animals[art][pose].w * sc;
+          if (art !== 'fish') { ctx.fillStyle = 'rgba(30,40,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.4, w * 0.1, 0, 0, 7); ctx.fill(); }
+          const tint = tt.color && f.color && tt.color !== f.color ? 'hue-rotate(' + ((hashStr(tt.color) % 60) - 30) + 'deg)' : null;
+          const fyy = art === 'fish' ? fy0 - 2 + Math.sin(t * 4) * 1.2 : (pose === 4 ? fy : fy0);
+          if (art === 'fish') ctx.globalAlpha = 0.85;
+          drawAnimal(ctx, art, pose, cx, fyy, face, sc, tint);
+          ctx.globalAlpha = 1;
+          return;
+        }
         const mat = SPRITES[keyS], hh = rel * HUMAN_H, p = hh / mat.length, w = mat[0].length * p, ax = cx - w / 2, ay = fy - hh, ps = p;
         ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.42, w * 0.09, 0, 0, 7); ctx.fill();
         ctx.save(); if (face < 0) { ctx.translate(cx * 2, 0); ctx.scale(-1, 1); }

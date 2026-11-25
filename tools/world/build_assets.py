@@ -30,6 +30,14 @@ for k,r in [('gray',0.42),('moss',0.62),('tall',0.95),('copper',0.5),('coal',0.5
 for k,r in [('gray2',0.5),('moss2',0.72),('tall2',0.95),('iron2',0.58),('gold2',0.6),('crystal2',0.68)]:
   kind('rock_'+k,[f'rock_{k}_{s}.png' for s in ['full','cracked','rubble']],r)
 for c,r in [('fire',0.38),('bench',0.6),('fence',0.62),('barrel',0.55),('crate',0.48),('hay',0.62)]: kind('camp_'+c,[f'c_{c}_{i}.png' for i in range(3)],r)
+AN={}
+for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.45),('leopard',0.45),('fish',0.12)]:
+  ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(5)]
+  sc=rel*HUMAN*RES/ims[0].height
+  AN[n]=[]
+  for im in ims:
+    q=im.resize((max(1,round(im.width*sc)),max(1,round(im.height*sc))),Image.LANCZOS)
+    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2)})
 # tool icons
 ic={}
 for n,im in zip(['axe','pick','sickle','knife','hammer','shears'],extract('tools_stone.jpg',dil=4)):
@@ -45,5 +53,5 @@ tex('cobble','cobble.jpg',0.15); tex('shallow','shallow.jpg',0.2,tile=1); tex('d
 W={}
 for n,f,crop in [('dirt','wall_dirt.jpg',0.06),('rock','wall_rock.jpg',0.14),('sand','wall_sand.jpg',0.11),('ice','wall_ice.jpg',0.075)]:
   im=Image.open(f).convert('RGB'); w,h=im.size; im=im.crop((0,int(h*crop),w,h)).resize((128,128),Image.LANCZOS); W[n]=b64(im,80)
-js='window.WORLD_ART='+json.dumps({'res':RES,'sprites':SP,'icons':ic,'tex':TX,'walls':W},separators=(',',':'))+';\n'
+js='window.WORLD_ART='+json.dumps({'res':RES,'sprites':SP,'icons':ic,'tex':TX,'walls':W,'animals':AN},separators=(',',':'))+';\n'
 open('/home/claude/repo-island/assets/world.js','w').write(js); print(len(js)//1024,'KB')
