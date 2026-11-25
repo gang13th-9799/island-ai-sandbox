@@ -33,21 +33,22 @@ for c,r in [('fire',0.38),('bench',0.6),('fence',0.62),('barrel',0.55),('crate',
 AN={}
 for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.45),('leopard',0.45),('fish',0.12)]:
   ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(5)]
+  if n=='boar': ims=[im.transpose(Image.FLIP_LEFT_RIGHT) for im in ims]      # Gemini drew the boar facing left
   sc=rel*HUMAN*RES/ims[0].height
   AN[n]=[]
-  for im in ims:
+  for pi,im in enumerate(ims):
     q=im.resize((max(1,round(im.width*sc)),max(1,round(im.height*sc))),Image.LANCZOS)
     al=np.array(q)[...,3]>100; H_,W_=al.shape
-    cols=np.where(al.any(0))[0]; x0,x1=cols.min(),cols.max()
-    def top_in(f0,f1):
-      xs=range(int(x0+(x1-x0)*f0),int(x0+(x1-x0)*f1)+1); best=None
-      for x in xs:
-        ys=np.where(al[:,x])[0]
-        if len(ys) and (best is None or ys[0]<best[1]): best=(x,ys[0])
-      return best
-    hx,hy=top_in(0.72,1.0) if n!='fish' else (x0+(x1-x0)*0.85, np.where(al[:,int(x0+(x1-x0)*0.85)])[0].min())
-    bx,by=top_in(0.35,0.6)
-    rx=x0+(x1-x0)*0.04; ry=np.where(al[:,int(rx)+2])[0].mean() if al[:,int(rx)+2].any() else H_*0.5
+    cols=np.where(al.any(0))[0]; x0,x1=cols.min(),cols.max(); bw=x1-x0
+    tops={x:np.where(al[:,x])[0].min() for x in cols}
+    def band(f0,f1):
+      xs=[x for x in cols if x0+bw*f0<=x<=x0+bw*f1]; return xs
+    # body thickness from the middle columns (top of back to bottom of belly, ignoring legs)
+    mid=band(0.35,0.6); thick=np.median([np.ptp(np.where(al[:,x])[0]) for x in mid])*0.55
+    hx_=band(0.78,1.0); ys=np.concatenate([np.where(al[:,x])[0] for x in hx_]); xs=np.concatenate([[x]*al[:,x].sum() for x in hx_])
+    hx,hy=xs.mean(), np.percentile(ys,30)
+    bx=np.mean(mid); by=np.mean([tops[x] for x in mid])+thick*0.25
+    rr=band(0.06,0.2); rx=np.mean(rr); ry=np.mean([tops[x] for x in rr])+thick*0.3
     f=lambda x,y:[round((x-W_/2)/RES,2),round((y-H_)/RES,2)]
     AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry)})
 MU={}
