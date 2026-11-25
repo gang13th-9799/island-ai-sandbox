@@ -5295,7 +5295,8 @@ function drawCanvas() {
         if (art) {
           const sleep = isNightTime() && !f.predator && art !== 'fish';
           const close = aiAgents.some(a => a.zone === currentZoneId && a._rx !== undefined && Math.hypot(a._rx - tx, a._ry - ty) < (f.predator ? 5 : 2.2));
-          const pose = sleep ? 3 : close ? 2 : graze ? 1 : (Math.sin(t * 3) > -0.2 ? 4 : 0);
+          const walkA = Math.sin(t * 3) > -0.2, two = WORLD_ART.animals[art].length > 5;   // 6-pose art: walk alternates two leg frames
+          const pose = sleep ? 3 : close ? 2 : graze ? 1 : walkA ? (two && Math.sin(now * 7 + h.ph) > 0 ? 5 : 4) : 0;
           const sc = (rel / (WORLD_ART.animals[art][0].h / HUMAN_H)) * (art === 'fish' ? 1 : 1), w = WORLD_ART.animals[art][pose].w * sc;
           if (art !== 'fish') { ctx.fillStyle = 'rgba(30,40,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.4, w * 0.1, 0, 0, 7); ctx.fill(); }
           const fyy = art === 'fish' ? fy0 - 2 + Math.sin(t * 4) * 1.2 : (pose === 4 ? fy : fy0);

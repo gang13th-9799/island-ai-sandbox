@@ -36,7 +36,8 @@ LEGS={k:[] for k in ['deer','boar','rabbit','goat','wolf','leopard','fish']}
 SPAN={'deer':(0.12,0.58,0.48,0.58),'boar':(0.12,0.66,0.52,0.64),'rabbit':(0.08,0.5,0.3,0.45),'goat':(0.1,0.56,0.45,0.56),
       'wolf':(0.14,0.6,0.48,0.6),'leopard':(0.12,0.62,0.5,0.62),'fish':(0.2,0.7,0.45,0.6)}
 for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.45),('leopard',0.45),('fish',0.12)]:
-  ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(5)]
+  import os
+  ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(6) if os.path.exists(f'/home/claude/fauna/{n}_{i}.png')]
   if n=='boar': ims=[im.transpose(Image.FLIP_LEFT_RIGHT) for im in ims]      # Gemini drew the boar facing left
   sc=rel*HUMAN*RES/ims[0].height
   AN[n]=[]
