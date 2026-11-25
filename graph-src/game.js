@@ -537,6 +537,8 @@ function natureLaw(a, b, m) {
 
 // Wraps the law: creates synthetic elements and rare unexpected compounds (also deterministic per world)
 function react(a, b, m) {
+  const isig = sigOf(a, b, m);
+  for (const k in dynamicProducts) if (dynamicProducts[k].recipe === isig) return { ok: true, key: k, invented: true };
   const res = natureLaw(a, b, m);
   if (res.ok && res.synthPair) {
     if (!dynamicProducts[res.key]) {
@@ -919,6 +921,7 @@ function experiment(agent, forcedMethod) {
       if (Math.random() < 0.4) consume(b, '__none__', agent);
       agent.know[sig] = { a, b, m, out: null, reason: res.reason, near: !!res.near, from: 'self', day: simDay, practice: 0 };
       if (res.near) agent.hunch = { items: [a, b], m, ttl: 12 };
+      if ((INVENT_MATS.has(a) || INVENT_MATS.has(b)) && Math.random() < 0.3 + st(agent, 'int') * 0.01) proposeInvention(agent, a, b, m);
       trimFails(agent);
       observe(agent, sig);
       agent.bubble = `❌ ${res.reason}`;
@@ -2890,6 +2893,14 @@ function inRealm(i, fn) {
 }
 function applyWish(p) {
   const w = p.wish; const placed = [];
+  if (p.kind === 'invent') {
+    const I = p.invent, key = 'dyn:inv:' + sigOf(I.a, I.b, I.m);
+    dynamicProducts[key] = Object.assign({ depth: 2, origin: `${I.a} + ${I.b} (${METHODS[I.m].name})`, recipe: sigOf(I.a, I.b, I.m), inventor: p.agentName }, I.def);
+    const ag = byId(p.agentId);
+    if (ag) { ag.know[sigOf(I.a, I.b, I.m)] = { a: I.a, b: I.b, m: I.m, out: key, from: 'self', day: simDay, practice: 1 }; markDiscovery(key, ag); produce(key, ag); gainExp(ag, 'int', 5); }
+    p.effect = `สูตรใหม่ "${I.def.name}" = ${I.a} + ${I.b} (${METHODS[I.m].name}) ใช้ได้จริงแล้ว`;
+    return [p.zone];
+  }
   if (GIFT_EFFECTS[p.need]) { p.effect = GIFT_EFFECTS[p.need](p, byId(p.agentId)); return [p.zone]; }
   if (p.kind === 'animal') {
     let f = faunaSpecies.find(x => x.name === w.name);
@@ -2917,6 +2928,40 @@ function fateChance(p) { return p.offering / (p.offering + 15 * p.tier); }
 function godAutoLevel() { try { return +(localStorage.getItem('island_ai_god_auto') || 0); } catch (e) { return 0; } }
 function setGodAuto(v) { try { localStorage.setItem('island_ai_god_auto', String(+v || 0)); } catch (e) {} renderPrayers(); }
 // Resolve a prayer; assumes the prayer's realm is the one currently loaded.
+// ---------- inventions: new recipes from new materials are imagined by AI (or players) and must be approved by God ----------
+const INVENT_MATS = new Set(['ปีกผีเสื้อ', 'เหล็กในผึ้ง', 'น้ำผึ้งป่า', 'ก้นหิ่งห้อยเรืองแสง', 'เหล็กในแมงป่อง', 'เปลือกแมงป่อง', 'แร่ทองแดง', 'ถ่านหิน', 'แร่ดีบุก', 'แร่ทอง', 'ผลึกคริสตัล', 'แอปเปิลป่า', 'ลูกมะพร้าว']);
+Object.assign(KIND_LABEL, { invent: '💡 สิ่งประดิษฐ์' });
+function designInvention(a, b, m) {
+  const A = propsOf(a), B = propsOf(b), has = k => A[k] || B[k], key = n => (A[n] ? a : b);
+  const pair = (x, y) => (A[x] && B[y]) || (A[y] && B[x]);
+  if (has('poison') && (has('wood') || has('bamboo') || has('rope')))
+    return { stars: 3, def: { name: `หอกพิษ${key('poison').replace('เหล็กใน', '')}`, kind: 'tool', tool: 'blade', dur: 40, pow: 2, tier: 1, props: { sharp: 1, hard: 1, poison: 1 } }, desc: 'หอกปลายพิษ แทงแล้วศัตรูติดพิษ' };
+  if (has('sharp') && (has('wood') || has('bamboo') || has('rope')))
+    return { stars: 3, def: { name: `หอก${key('sharp')}`, kind: 'tool', tool: 'blade', dur: 30, pow: 2, tier: 1, props: { sharp: 1, hard: 1 } }, desc: 'อาวุธปลายแหลมไว้ล่าสัตว์' };
+  if (has('glow') && (has('water') || has('fiber') || has('bamboo') || has('glass') || has('hard')))
+    return { stars: 3, def: { name: 'ตะเกียงหิ่งห้อย', kind: 'item', props: { glow: 1, light: 1 } }, desc: 'ให้แสงสว่างตอนกลางคืน สัตว์ร้ายไม่กล้าเข้าใกล้' };
+  if (has('hard') && has('hide') && (has('rope') || has('fiber') || has('wood')))
+    return { stars: 3, def: { name: `โล่${key('hide')}`, kind: 'item', props: { hard: 1, armor: 1 } }, desc: 'โล่กันการโจมตี ลดความเสียหาย' };
+  if (has('sticky') && (has('herb') || has('water')))
+    return { stars: 3, def: { name: 'ยาน้ำผึ้งสมุนไพร', kind: 'item', props: { herb: 1, medicine: 1, food: 1 } }, desc: 'ยารักษาบาดแผลและแก้พิษ' };
+  if (((A.fiber && B.fiber) || has('rope')) && (a === 'ปีกผีเสื้อ' || b === 'ปีกผีเสื้อ'))
+    return { stars: 2, def: { name: 'ผ้าคลุมปีกผีเสื้อ', kind: 'item', props: { fiber: 2, pretty: 1 } }, desc: 'ผ้าสวยงาม ใช้ทำเสื้อผ้าหรือของขวัญ' };
+  if (has('food') && (has('fuel') || has('water')))
+    return { stars: 2, def: { name: `${a.split(' ')[0]}ปรุง${b.split(' ')[0]}`, kind: 'food', food: 9, props: { food: 1 } }, desc: 'อาหารเมนูใหม่' };
+  return { stars: 1, def: { name: `สิ่งประดิษฐ์จาก${a}และ${b}`, kind: 'item', props: Object.assign({}, A, B) }, desc: 'ยังไม่แน่ใจว่าใช้ทำอะไร แต่น่าจะมีประโยชน์' };
+}
+function proposeInvention(agent, a, b, m) {
+  const sig = sigOf(a, b, m);
+  if (prayers.some(p => p.need === 'invent:' + sig && p.status === 'pending')) return;
+  const memo = (agent.prayMemo || {})['invent:' + sig]; if (memo && memo.tier < 1) return;
+  const d = designInvention(a, b, m);
+  const p = { offering: 5, id: 'pr' + (prayerSeq++) + '_' + Date.now().toString(36), realm: tickingRealm, realmName: realms[tickingRealm].def.name, agentId: agent.id, agentName: agent.name,
+    zone: agent.zone, need: 'invent:' + sig, kind: 'invent', tier: 1, stars: d.stars, wish: { name: d.def.name, desc: d.desc }, invent: { a, b, m, def: d.def },
+    reason: `ลอง ${a} + ${b} ด้วยวิธี "${METHODS[m].name}" แล้วคิดว่าน่าจะประดิษฐ์ "${d.def.name}" ได้ ขอพระเจ้าอนุมัติสูตรนี้`, day: simDay, status: 'pending', attempt: 1 };
+  prayers.unshift(p);
+  agent.bubble = `💡 คิดค้น "${d.def.name}" ได้! ขอพระเจ้าอนุมัติ`;
+  addLog(`💡 [คิดค้นสิ่งใหม่] ${agent.name} เสนอสูตร "${d.def.name}" (${a} + ${b} · ${METHODS[m].name}) รอพระเจ้าอนุมัติ`, '#fde68a');
+}
 function resolvePrayer(p, ok, note, by) {
   p.status = ok ? 'approved' : 'rejected'; p.decidedDay = simDay; p.by = by;
   const a = byId(p.agentId), who = by === 'fate' ? 'ชะตาฟ้าลิขิต' : by === 'auto' ? 'พระเจ้า (อนุมัติอัตโนมัติ)' : 'พระเจ้า';
@@ -4375,6 +4420,26 @@ const ANIM_ART = { f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: '
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
 // animal height (head included) in adult-human heights, real-world proportions
+// wildlife that does not fight back runs away from people
+const FLEE_ART = { deer: 1, rabbit: 1, goat: 1, fish: 1, butterfly: 1, firefly: 1 };
+function fleeStep(o, x, y, dt, range, speed, aquatic) {
+  o.fx = o.fx || 0; o.fy = o.fy || 0;
+  let best = null, bd = range;
+  for (const a of aiAgents) { if (a.zone !== currentZoneId || a._rx === undefined) continue; const d = Math.hypot(a._rx + 0.5 - x - o.fx, a._ry + 0.5 - y - o.fy); if (d < bd) { bd = d; best = a; } }
+  if (best) {
+    const dx = x + o.fx - best._rx - 0.5, dy = y + o.fy - best._ry - 0.5, L = Math.hypot(dx, dy) || 1;
+    const g = zoneTerrainGrid[currentZoneId], okAt = (px, py) => { const cx = Math.max(0, Math.min(79, Math.floor(px))), cy = Math.max(0, Math.min(79, Math.floor(py))); return !g || WATER.includes(g[cy][cx]) === !!aquatic; };
+    const st = speed * dt;
+    const dirs = []; for (let k = 0; k < 12; k++) { const an = k * Math.PI / 6; dirs.push([Math.cos(an), Math.sin(an)]); }
+    dirs.sort((p, q) => (q[0] * dx + q[1] * dy) - (p[0] * dx + p[1] * dy));          // most "away" first
+    for (const [ux, uy] of dirs.filter(d => d[0] * dx + d[1] * dy > -0.75 * L)) {      // never into water (or onto land for fish)
+      if (okAt(x + o.fx + ux * st, y + o.fy + uy * st)) { o.fx += ux * st; o.fy += uy * st; o.ffx = ux - uy; break; }
+    }
+    o.fleeing = 1;
+  } else { o.fx *= 1 - Math.min(1, dt * 0.15); o.fy *= 1 - Math.min(1, dt * 0.15); o.fleeing = Math.max(0, (o.fleeing || 0) - dt); }
+  const m = Math.hypot(o.fx, o.fy); if (m > 9) { o.fx *= 9 / m; o.fy *= 9 / m; }
+  return [x + o.fx, y + o.fy];
+}
 const ANIM_REL = { butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
 // mutated look: recolour (keeps shading) + Gemini part art (horns, wings, tails, scales, thick hide, back armor)
@@ -4740,8 +4805,10 @@ function drawInsect(ctx, b, now, night) {
   const sleep = (D.day && night) || (b.k === 'scorpion' && night);
   if (sleep && D.fly) return;                       // flying insects hide at night
   const t = now * D.sp + b.ph;
-  const x = b.x + (sleep ? 0 : Math.cos(t) * D.r), y = b.y + (sleep ? 0 : Math.sin(t * 1.3) * D.r * 0.6);
-  const vx = -Math.sin(t) * D.r, face = vx >= 0 ? 1 : -1;
+  let x = b.x + (sleep ? 0 : Math.cos(t) * D.r), y = b.y + (sleep ? 0 : Math.sin(t * 1.3) * D.r * 0.6);
+  if (!D.fightBack && !sleep) { const g = zoneTerrainGrid[currentZoneId]; const p0 = fleeStep(b, x, y, Math.min(0.1, now - (b._t || now)), 3, 4, false); x = p0[0]; y = p0[1]; }
+  b._t = now;
+  const vx = -Math.sin(t) * D.r, face = b.fleeing > 0 ? (b.ffx >= 0 ? 1 : -1) : (vx >= 0 ? 1 : -1);
   const [cx, fy] = groundAt(x + 0.5, y + 0.5);
   const hov = D.fly ? D.h + Math.sin(now * 3 + b.ph) * 1.5 : 0;
   let pose = sleep ? 3 : D.fly ? (Math.sin(now * (b.k === 'bee' ? 30 : 14) + b.ph) > 0 ? 4 : 5) : (Math.sin(t * 2) > -0.3 ? (Math.sin(now * 5 + b.ph) > 0 ? 4 : 5) : 0);
@@ -4853,8 +4920,10 @@ function drawCanvas() {
     f._herd[currentZoneId].homes.forEach((h, i) => {
       const t = now * h.sp + h.ph, graze = Math.sin(t * 0.7) > 0.3;   // sometimes stop to graze
       const ox = graze ? Math.cos(h.ph) * h.r : Math.cos(t) * h.r, oy = graze ? Math.sin(h.ph) * h.r * 0.6 : Math.sin(t * 0.8) * h.r * 0.6;
-      const vx = -Math.sin(t) - Math.cos(t * 0.8) * 0.48, face = graze ? (h.ph > 3.14 ? 1 : -1) : (vx > 0 ? 1 : -1);
-      const tx = h.x + ox, ty = h.y + oy;
+      const vx = -Math.sin(t) - Math.cos(t * 0.8) * 0.48; let face = graze ? (h.ph > 3.14 ? 1 : -1) : (vx > 0 ? 1 : -1);
+      let tx = h.x + ox, ty = h.y + oy;
+      const artF = animalArt(f), runs = artF && FLEE_ART[artF] && !(isNightTime() && artF !== 'fish');
+      if (runs) [tx, ty] = fleeStep(h, tx, ty, dt, artF === 'fish' ? 2.5 : 4.5, artF === 'rabbit' ? 5 : 3.5, artF === 'fish');
       items.push({ y: tx + ty + 1, draw: () => {
         const [cx, fy0] = groundAt(tx + 0.5, ty + 0.5), bob = graze ? 0 : Math.abs(Math.sin(t * 6)) * 1.2, fy = fy0 - bob;
         const art = window.WORLD_ART && WORLD_ART.animals ? animalArt(f) : null;
@@ -4862,7 +4931,9 @@ function drawCanvas() {
           const sleep = isNightTime() && !f.predator && art !== 'fish';
           const close = aiAgents.some(a => a.zone === currentZoneId && a._rx !== undefined && Math.hypot(a._rx - tx, a._ry - ty) < (f.predator ? 5 : 2.2));
           const walkA = Math.sin(t * 3) > -0.2, two = WORLD_ART.animals[art].length > 5;   // 6-pose art: walk alternates two leg frames
-          const pose = sleep ? 3 : close ? 2 : graze ? 1 : walkA ? (two && Math.sin(now * 7 + h.ph) > 0 ? 5 : 4) : 0;
+          const fleeing = runs && h.fleeing > 0;
+          const pose = sleep ? 3 : fleeing ? (two && Math.sin(now * 14 + h.ph) > 0 ? 5 : 4) : close ? 2 : graze ? 1 : walkA ? (two && Math.sin(now * 7 + h.ph) > 0 ? 5 : 4) : 0;
+          if (fleeing) face = h.ffx >= 0 ? 1 : -1;
           const sc = (rel / (WORLD_ART.animals[art][0].h / HUMAN_H)) * (art === 'fish' ? 1 : 1), w = WORLD_ART.animals[art][pose].w * sc;
           if (art !== 'fish') { ctx.fillStyle = 'rgba(30,40,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.4, w * 0.1, 0, 0, 7); ctx.fill(); }
           const fyy = art === 'fish' ? fy0 - 2 + Math.sin(t * 4) * 1.2 : (pose === 4 ? fy : fy0);
