@@ -55,6 +55,10 @@ const START_POP = 20;          // castaways at the start of a new world
 const CROWD_LIMIT = 20;   // more residents than this in one zone feels crowded
 
 let isRunning = true, simSpeed = 1, simTimer = null;
+// ===== Real-time mode: the clock flows; each person acts on their own schedule (no shared turns) =====
+let REALTIME = true, rtMin = 0, HOUR_NEEDS = null;
+const RT_ON = () => REALTIME && !bgTick;
+const gameNow = () => (simDay || 0) * 1440 + (simMinutes || 0) + rtMin;
 let simMinutes = 480, simDay = 1;
 let currentZoneId = 'E1';
 let tileSize = 7, showLabels = true, showGrid = false;
@@ -3482,6 +3486,271 @@ function renderPrayers() {
       <div style="font-size:11px; color:var(--muted);">${e.realm} · วันที่ ${e.day} · ขอโดย ${e.agent} · ${'★'.repeat(e.stars)} · ✨${e.offering ?? '-'}${e.by === 'fate' ? ' · 🎲 ชะตาตัดสิน' : e.by === 'auto' ? ' · ⚙️ อัตโนมัติ' : ''}${e.effect ? ' · ผล: ' + e.effect : e.placed && e.placed.length ? ' · เกิดที่ ' + e.placed.join(', ') : ''}${e.note ? ' · เหตุผล: ' + e.note : ''}</div></div>`).join('') || '<div class="sec-note">ยังไม่มีบันทึก</div>';
 }
 
+// ===== Per-person actions (used by the hourly step for background realms, and by the real-time loop) =====
+function agentMove(a, night) {
+    buildZoneTerrain(a.zone);
+    if (a.sleeping || a.wantRest || a.coldSeek) return;
+    if (a.age < 12) {
+      // Small children stay with their guardian (that's where they learn)
+      let g = aiAgents.find(o => o.id === a.guardian && o.age >= 15);
+      if (!g) { g = aiAgents.filter(o => o.age >= 15).sort((p, q) => zoneDist(a.zone, p.zone) - zoneDist(a.zone, q.zone))[0]; if (g) a.guardian = g.id; }
+      if (g) {
+        if (a.zone !== g.zone) { a.zone = g.zone; buildZoneTerrain(a.zone); }
+        a.x = g.x; a.y = g.y; moveToward(a, g.x + 2, g.y + 2);
+        if (!a.bubble || Math.random() < 0.1) a.bubble = `ตามติด ${g.name}`;
+      }
+      return;
+    }
+    if (a.session) return;
+    if (a.goal) {
+      const g = a.goal, gg = zoneTerrainGrid[g.zone];
+      if (gg && gg[Math.round(g.y)] && DEEP.includes(gg[Math.round(g.y)][Math.round(g.x)])) { const p = landNear(g.zone, Math.round(g.x), Math.round(g.y)); g.x = p.x; g.y = p.y; }
+      const arrived = a.zone === g.zone && (g.enter || Math.hypot(a.x - g.x, a.y - g.y) <= 2);
+      if (arrived && !g.sig && !g.method) a.goal = null;          // got there: carry on with normal life
+      else if (!arrived) {
+        g.ttl = (g.ttl || 30) - (a.zone === g.zone ? 1 : 0.5);
+        if (g.ttl <= 0) { a.goal = null; a.bubble = 'เลิกเดินทาง'; }
+        else { travelToGoal(a); return; }
+      }
+    }
+    const myV = villageOf(a);
+    if (myV && a.hunger >= 55 && !(a.food > 0) && myV.food > 0 && a.zone !== myV.zone && bagValue(a) >= 2) {
+      const store = shelters.find(s => s.villageId === myV.id) || { x: 40, y: 40 };
+      a.goal = { zone: myV.zone, x: store.x, y: store.y, ttl: 12, quest: true };
+      a.bubble = `🚶 ไปแลกอาหารที่โกดัง${myV.name}`;
+      travelToGoal(a); return;
+    }
+    const fire = stationInZone(a.zone, 'campfire');
+    if (night && fire && a.hunger < 60) { moveToward(a, fire.x + 1, fire.y + 1); return; }
+    a.wantHunt = false;
+    if (!night && a._hunt && a._hunt.ttl > 0) return;
+    if (!night && a.age >= 12 && a.hunger < 60 && Math.random() < 0.25 && toolFetch(a)) return;           // stalking prey (handled in the hunting step)
+    if (!night && a.hunger < 70 && revelationStep(a)) return;
+    if (needStep(a, night)) return;
+
+    const nodes = zoneNodes[a.zone] || [];
+    // Feeding yourself comes first: hungry AI look for food spots, or move to a zone that has some
+    const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
+    if ((a.food || 0) < 6 && a.age >= 12) {
+      const fnode = nodes.filter(n => FOODRX.test(n.name)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+      if (fnode && (!a.gatherT || !FOODRX.test(a.gatherT.name))) a.gatherT = Object.assign({ zone: a.zone }, fnode);
+      // hungry: go straight to the food and stand at it (picking happens within 2 tiles)
+      if (a.gatherT && FOODRX.test(a.gatherT.name) && a.gatherT.zone === a.zone) {
+        if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) > 1.5) { for (let k = 0; k < 2; k++) moveToward(a, a.gatherT.x, a.gatherT.y); if (!a.bubble || !a.bubble.startsWith('😵')) a.bubble = `🍃 ไปหา${a.gatherT.name}กิน`; }
+        return;
+      }
+      const fruit = !fnode && objsOf(a.zone).filter(o => !o.dead && o.fruit).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+      if (fruit && Math.hypot(fruit.x - a.x, fruit.y - a.y) < 40) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(fruit.x - 0.5), Math.round(fruit.y - 0.5)); a.bubble = '🍎 ไปเก็บผลไม้กิน'; return; }
+      if (!fnode && !night && Math.random() < 0.35) {
+        const nb = getAdjacentZones(a.zone).filter(z => ZONES[z].res.some(r => FOODRX.test(r)) || faunaSpecies.some(f => isPrey(f) && (f.zp[z] || 0) > 0));
+        if (nb.length) { a.goal = { zone: pick(nb), x: 40, y: 40, ttl: 12, enter: true }; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; travelToGoal(a); return; }
+      }
+    }
+    if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
+      const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14, enter: true }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
+    }
+    if (!night && a.age >= 12) {
+      const sg = steleTarget(a), reading = sg && ((a.readS || {})[sg.id] || 0) > 0;
+      if (sg && Math.random() < (reading ? 0.9 : 0.3)) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) <= 2) steleAct(a); return; }
+    }
+    if (false) {
+      const sg = steleTarget(a);
+      if (sg) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); return; }
+    }
+    if (!night && a.age >= 12 && Math.random() < (toolItems.some(t => t.holder === a.id && /axe|pick|sickle|blade/.test(t.type)) ? 0.7 : 0.35)) {
+      const tgt = objTarget(a);
+      if (tgt) { moveToward(a, Math.round(tgt.x - 0.5), Math.round(tgt.y - 0.5)); return; }
+    }
+    if (nodes.length && Math.random() < 0.85) {
+      if (!a.gatherT || a.gatherT.zone !== a.zone) a.gatherT = Object.assign({ zone: a.zone }, questNode(a) || pick(nodes));
+      moveToward(a, a.gatherT.x, a.gatherT.y);
+      if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= 1.5) a.gatherT = null;
+    } else moveToward(a, a.x + Math.floor(Math.random() * 9) - 4, a.y + Math.floor(Math.random() * 9) - 4);
+
+    if (Math.random() < 0.14 && !night) {
+      // Wander, but stay around home (and drift back if far away)
+      let nb = getAdjacentZones(a.zone);
+      const d = zoneDist(a.zone, a.home || a.zone);
+      if (d >= 1 && Math.random() < 0.5 + d * 0.15) nb = nb.filter(z => zoneDist(z, a.home) < d);
+      else nb = nb.filter(z => zoneDist(z, a.home || z) <= 1);
+      if (nb.length && !a.goal) { const z = pick(nb); a.goal = { zone: z, x: 40, y: 40, ttl: 12, enter: true }; }
+    }
+}
+function agentGather(a, season) {
+    if (a.age < 12 || a.sleeping) return;
+    a.gatherCd = (a.gatherCd || 0) - 1;
+    if (a.gatherCd > 0) return;
+    if (steleAct(a)) { a.gatherCd = 1; return; }
+    if (objAct(a)) { a.gatherCd = 1; depositTick(a); return; }
+    const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= nodeReach(n));   // must actually stand at it
+    if (!t) return;
+    a.gatherCd = 1;                                   // standing right at it now, so pick every hour
+    let gain = season.gatherBonus + Math.floor(st(a, 'str') / 6) + (a.role.includes('เก็บ') ? 1 : 0) + 1;   // standing right at it
+    gainExp(a, 'str', 0.6); gainExp(a, 'vit', 0.2);
+    if (hasTool('axe', a) && propsOf(t.name).wood) { gain += 1; useTool('axe', a); }
+    if ((a.bag || {})[BAG_NAME] > 0) gain += 1;
+    const qDeliver = creditGather(a, t.name, gain);
+    if (qDeliver) put(byId(qDeliver.giverId), t.name, gain);
+    else if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) { const keep = Math.round(gain * (1 - shareRatio(a))); if (keep) put(a, t.name, keep); }
+    else gainItems(a, t.name, gain);
+    depositTick(a);
+    if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) addFood(a, gain * 3);
+    else if (Math.random() < 0.5) { addFood(a, 2); if (!a.goal) a.bubble = '🌿 เจอผักผลไม้ป่าระหว่างทาง'; }
+    godQuestEvent(a, 'gather', t.name, gain);
+    if (!a.goal) a.bubble = `เก็บ ${t.name} +${gain}`;
+}
+function wantsHunt(a) {
+    if (a.age < 12 || a.questId || a.session || a.sleeping || a.wantRest) return false;
+    if (a._hunt && a._hunt.ttl > 0) return true;                // already stalking something: keep at it
+    const v = villageOf(a);
+    const isHunter = a.role.includes('ล่าสัตว์');
+    const needFood = (a.food || 0) < 10 || (isHunter && v && v.food < v.members.length * 4) || a.wantHunt;
+    return needFood && Math.random() < (isHunter || a.wantHunt ? 0.6 : 0.3);
+}
+function agentHunt(hunter) {
+    // Only animals in the hunter's zone or next door; never below 2 on the island (law 1)
+    const nearZones = [hunter.zone].concat(getAdjacentZones(hunter.zone));
+    const options = [];
+    faunaSpecies.forEach(f => {
+      if (f.pop <= 2) return;
+      const z = nearZones.find(zz => (f.zp[zz] || 0) > 0);
+      if (!z) return;
+      // Predators are only hunted by bold/strong hunters
+      const w = f.predator ? ((hunter.role.includes('ล่า') || st(hunter, 'str') + st(hunter, 'agi') >= 12) ? 1 : 0) : 4;
+      for (let i = 0; i < w * (z === hunter.zone ? 4 : 1); i++) options.push([f, z]);
+    });
+    // keep chasing the same quarry for a few hours instead of re-rolling every hour
+    let hk = hunter._hunt && options.find(([f, z]) => f.id === hunter._hunt.f && z === hunter._hunt.z && hunter._hunt.ttl-- > 0);
+    if (!hk) hunter._hunt = null;
+    if (!hk && options.length) { hk = pick(options); hunter._hunt = { f: hk[0].id, z: hk[1], ttl: 8 }; }
+    if (hk) {
+      const [target, tz] = hk;
+      // the hunter has to actually get within 2 tiles of an animal
+      if (tz !== hunter.zone) { if (!hunter.goal) hunter.goal = { zone: tz, x: 40, y: 40, ttl: 12, enter: true }; hunter.bubble = `🐾 ตามรอย${target.name}ไปโซน ${tz}`; travelToGoal(hunter); return; }
+      const hs = huntSpot(target, tz, hunter);
+      if (Math.hypot(hs.x - hunter.x, hs.y - hunter.y) > 2) {
+        for (let k = 0; k < 3; k++) moveToward(hunter, hs.x, hs.y);
+        const dNow = Math.hypot(hs.x - hunter.x, hs.y - hunter.y);
+        if (dNow > 2) {
+          if (hunter._hunt && hunter._hunt.d !== undefined && dNow >= hunter._hunt.d - 0.5) hunter._hunt.ttl -= 2;   // can't get any closer (deep water...): give up sooner
+          if (hunter._hunt) hunter._hunt.d = dNow;
+          hunter.gatherT = null; hunter.bubble = `🐾 ย่องเข้าหา${target.name}`; return;
+        }
+      }
+      if (hunter._hunt) { hunter._hunt.ttl = Math.min(hunter._hunt.ttl, 3); hunter._hunt.d = undefined; }   // missed? try again right here for a bit
+      const weapon = hasTool('bow', hunter) ? 'bow' : (hasTool('blade', hunter) ? 'blade' : null);
+      const base = target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25);
+      const chance = Math.max(0.03, Math.min(0.95, base + st(hunter, 'str') * 0.01 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
+      if (weapon) useTool(weapon, hunter);
+      gainExp(hunter, 'str', target.predator ? 2 : 1); gainExp(hunter, 'agi', target.predator ? 2 : 1);
+      if (Math.random() < chance) {
+        hunter._hunt = null;
+        const bonus = extraLoot(target, tz);
+        const vname = variantLabel(target, tz);
+        target.zp[tz]--; syncFauna(target);
+        if (target.lootFood) addFood(hunter, Math.round(target.lootFood * 2.2));   // a hunt now takes real stalking time, so it pays more
+        for (const [m, q] of Object.entries(target.lootMat)) gainItems(hunter, m, q);
+        for (const [m, q] of Object.entries(bonus)) gainItems(hunter, m, q);
+        if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
+        if (target.predator) hunter.rep += 3;
+        hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `${weapon === 'bow' ? '🏹' : weapon === 'blade' ? '🗡️' : '✋'} ล่า${target.name} (+${target.lootFood})`;
+        godQuestEvent(hunter, 'hunt'); if (target.predator) godQuestEvent(hunter, 'predator');
+        huntLogs.unshift({ animal: target.name, remPop: target.pop, food: target.lootFood, hunter: hunter.name });
+        addLog(target.predator
+          ? `🏆 [ล่านักล่า] ${hunter.name} ล่า "${target.name}" ที่ ${tz} สำเร็จ! ได้หนัง เขี้ยว และเนื้อที่ไม่ค่อยอร่อย (เหลือ ${target.pop} ตัว)`
+          : `🏹 [ล่าสัตว์] ${hunter.name} ล่า "${target.name}" ${weapon ? `ด้วย${TOOL_LABEL[weapon]}` : 'ด้วยมือเปล่า'} ได้อาหาร +${target.lootFood} (เหลือ ${target.pop} ตัว)`, target.predator ? '#fbbf24' : '#4ade80');
+      } else if (target.predator) {
+        // The predator hunts back
+        const tt = trOf(target, tz);
+        const dmg = (target.id === 'f_wolf' ? 10 + Math.floor(Math.random() * 15) : 18 + Math.floor(Math.random() * 18)) + tt.str * 3 + tt.fer * 2;
+        hunter.hp = Math.max(0, hunter.hp - dmg);
+        gainExp(hunter, 'vit', 3);
+        hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
+        addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${hunter.hp})`, '#ef4444');
+      } else hunter.bubble = weapon === 'bow' ? '🏹 ยิงพลาด' : weapon ? '🗡️ แทงพลาด' : '✋ ไล่จับด้วยมือเปล่าไม่ทัน';
+    }
+}
+function agentWork(a, needs) {
+  const night = isNightTime();
+    if (a.age < 12 || a.sleeping || a.wantRest) return;
+    if (a.age < 15 && !aiAgents.some(o => o.age >= 15 && o.zone === a.zone)) return;
+    if (a.goal && a.goal.quest) return;
+    if (a.questId && (!a.goal || !a.goal.sig)) return;
+    if (a.session) {
+      if (--a.session.hours <= 0 || !stationNear(a, a.session.station)) a.session = null;
+      else { experiment(a, a.session.method); return; }
+    }
+    if (a.goal && atGoal(a)) {
+      const g = a.goal; a.goal = null;
+      if (g.sig && a.know[g.sig]) {
+        const bq = a.questId && quests.find(q => q.id === a.questId && q.type === 'build');
+        if (bq) a.buildFor = bq.giverId;
+        const done = craftKnown(a, a.know[g.sig]);
+        a.buildFor = null;
+        if (done) return;
+      }
+      if (g.method) {
+        const stType = METHODS[g.method].station;
+        a.session = { station: stType, method: g.method, hours: 3 + Math.floor(st(a, 'int') / 4) };
+        a.bubble = `🔬 ทดลองที่${STATION_LABEL[stType]} ${a.session.hours} ชม.`;
+      }
+      experiment(a, g.method || null);
+      return;
+    }
+    if (a.goal) return;
+    const stockTotal = bagCount(a) + (villageOf(a) ? Object.values(villageOf(a).store).reduce((x, y) => x + y, 0) : 0);
+    const p = Math.min(0.95, (a.role.includes('วิจัย') ? 0.8 : (stockTotal < 25 ? 0.3 : 0.5)) + st(a, 'int') * 0.01) * (night ? 0.6 : 1);
+    if (Math.random() > p) return;
+
+    if (Math.random() < (a.role.includes('ช่าง') ? 0.8 : 0.55)) {
+      const myNeeds = computeNeeds(a);
+      for (const key of myNeeds.slice().sort(() => Math.random() - 0.5)) {
+        const e = planFor(a, key);
+        if (!e) continue;
+        if (methodUsable(a, e.m)) { if (craftKnown(a, e)) return; }
+        const st = METHODS[e.m].station;
+        const s = st && nearestStation(a, st);
+        if (s) { a.goal = { zone: s.zone, x: s.x, y: s.y, sig: sigOf(e.a, e.b, e.m), ttl: 30 }; a.bubble = `🚶 ไป${STATION_LABEL[st]}เพื่อทำ ${outName(e.out)}`; return; }
+      }
+    }
+    // Missing a material? 1) own bag (planFor already checked)  2) trade at own village storehouse  3) post a quest
+    if (a.wantItem && avail(a, a.wantItem) < 1) {
+      const item = a.wantItem, v = villageOf(a);
+      a.wantItem = null;
+      if (v && (v.store[item] || 0) > 0 && bagValue(a, item) >= itemValue(item, v)) {
+        if (!atStore(a)) {
+          const store = shelters.find(x => x.villageId === v.id) || { x: 40, y: 40 };
+          a.goal = { zone: v.zone, x: store.x, y: store.y, ttl: 14, quest: true };
+          a.bubble = `🚶 ไปแลก${item}ที่โกดัง${v.name}`;
+        } else if (take(a, item)) { put(a, item, 1); a.bubble = `🔄 แลก${item}จากโกดัง`; }
+        return;
+      }
+      const z = Object.keys(ZONES).filter(id => ZONES[id].res.includes(item)).sort((p, q) => zoneDist(a.zone, p) - zoneDist(a.zone, q))[0];
+      if (z) {
+        const qty = 2 + Math.floor(Math.random() * 3);
+        createQuest(a, 'gather', { title: `ช่วยหา ${item} ${qty} ชิ้น (แถว ${z})`, item, qty, zone: z, difficulty: 1 + qty * 0.4 + zoneDist(a.zone, z) * 0.6 });
+        return;
+      }
+    }
+    { const rv = revelationOf(a);
+      if (rv && hasMaterials(rv.ra, rv.rb, a)) {
+        if (methodUsable(a, rv.rm)) { experiment(a, rv.rm); return; }
+        const stn = METHODS[rv.rm].station, s = stn && shelters.find(x => x.station === stn);
+        if (s) { a.goal = { zone: s.zone, x: s.x, y: s.y, method: rv.rm, ttl: 16 }; a.bubble = `📜 ไปลองสูตรนิมิตที่${STATION_LABEL[stn]}`; return; }
+      }
+    }
+    const workStations = shelters.filter(s => s.station && STATION_METHODS[s.station]);
+    if (workStations.length && Math.random() < 0.2) {
+      const s = pick(workStations);
+      const m = pick(STATION_METHODS[s.station]);
+      if (stationNear(a, s.station)) { a.session = { station: s.station, method: m, hours: 3 + Math.floor(st(a, 'int') / 4) }; experiment(a, m); return; }
+      a.goal = { zone: s.zone, x: s.x, y: s.y, method: m, ttl: 16 };
+      a.bubble = `🚶 ไปลองของที่${STATION_LABEL[s.station]}`;
+      return;
+    }
+    experiment(a, null);
+}
+
 function runAutonomousStep() {
   if (!isRunning) return;
   simMinutes += 60;
@@ -3654,95 +3923,7 @@ function runAutonomousStep() {
 
   // Movement
   const night = isNightTime();
-  aiAgents.forEach(a => {
-    buildZoneTerrain(a.zone);
-    if (a.sleeping || a.wantRest || a.coldSeek) return;
-    if (a.age < 12) {
-      // Small children stay with their guardian (that's where they learn)
-      let g = aiAgents.find(o => o.id === a.guardian && o.age >= 15);
-      if (!g) { g = aiAgents.filter(o => o.age >= 15).sort((p, q) => zoneDist(a.zone, p.zone) - zoneDist(a.zone, q.zone))[0]; if (g) a.guardian = g.id; }
-      if (g) {
-        if (a.zone !== g.zone) { a.zone = g.zone; buildZoneTerrain(a.zone); }
-        a.x = g.x; a.y = g.y; moveToward(a, g.x + 2, g.y + 2);
-        if (!a.bubble || Math.random() < 0.1) a.bubble = `ตามติด ${g.name}`;
-      }
-      return;
-    }
-    if (a.session) return;
-    if (a.goal) {
-      const g = a.goal, gg = zoneTerrainGrid[g.zone];
-      if (gg && gg[Math.round(g.y)] && DEEP.includes(gg[Math.round(g.y)][Math.round(g.x)])) { const p = landNear(g.zone, Math.round(g.x), Math.round(g.y)); g.x = p.x; g.y = p.y; }
-      const arrived = a.zone === g.zone && (g.enter || Math.hypot(a.x - g.x, a.y - g.y) <= 2);
-      if (arrived && !g.sig && !g.method) a.goal = null;          // got there: carry on with normal life
-      else if (!arrived) {
-        g.ttl = (g.ttl || 30) - (a.zone === g.zone ? 1 : 0.5);
-        if (g.ttl <= 0) { a.goal = null; a.bubble = 'เลิกเดินทาง'; }
-        else { travelToGoal(a); return; }
-      }
-    }
-    const myV = villageOf(a);
-    if (myV && a.hunger >= 55 && !(a.food > 0) && myV.food > 0 && a.zone !== myV.zone && bagValue(a) >= 2) {
-      const store = shelters.find(s => s.villageId === myV.id) || { x: 40, y: 40 };
-      a.goal = { zone: myV.zone, x: store.x, y: store.y, ttl: 12, quest: true };
-      a.bubble = `🚶 ไปแลกอาหารที่โกดัง${myV.name}`;
-      travelToGoal(a); return;
-    }
-    const fire = stationInZone(a.zone, 'campfire');
-    if (night && fire && a.hunger < 60) { moveToward(a, fire.x + 1, fire.y + 1); return; }
-    a.wantHunt = false;
-    if (!night && a._hunt && a._hunt.ttl > 0) return;
-    if (!night && a.age >= 12 && a.hunger < 60 && Math.random() < 0.25 && toolFetch(a)) return;           // stalking prey (handled in the hunting step)
-    if (!night && a.hunger < 70 && revelationStep(a)) return;
-    if (needStep(a, night)) return;
-
-    const nodes = zoneNodes[a.zone] || [];
-    // Feeding yourself comes first: hungry AI look for food spots, or move to a zone that has some
-    const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
-    if ((a.food || 0) < 6 && a.age >= 12) {
-      const fnode = nodes.filter(n => FOODRX.test(n.name)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
-      if (fnode && (!a.gatherT || !FOODRX.test(a.gatherT.name))) a.gatherT = Object.assign({ zone: a.zone }, fnode);
-      // hungry: go straight to the food and stand at it (picking happens within 2 tiles)
-      if (a.gatherT && FOODRX.test(a.gatherT.name) && a.gatherT.zone === a.zone) {
-        if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) > 1.5) { for (let k = 0; k < 2; k++) moveToward(a, a.gatherT.x, a.gatherT.y); if (!a.bubble || !a.bubble.startsWith('😵')) a.bubble = `🍃 ไปหา${a.gatherT.name}กิน`; }
-        return;
-      }
-      const fruit = !fnode && objsOf(a.zone).filter(o => !o.dead && o.fruit).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
-      if (fruit && Math.hypot(fruit.x - a.x, fruit.y - a.y) < 40) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(fruit.x - 0.5), Math.round(fruit.y - 0.5)); a.bubble = '🍎 ไปเก็บผลไม้กิน'; return; }
-      if (!fnode && !night && Math.random() < 0.35) {
-        const nb = getAdjacentZones(a.zone).filter(z => ZONES[z].res.some(r => FOODRX.test(r)) || faunaSpecies.some(f => isPrey(f) && (f.zp[z] || 0) > 0));
-        if (nb.length) { a.goal = { zone: pick(nb), x: 40, y: 40, ttl: 12, enter: true }; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; travelToGoal(a); return; }
-      }
-    }
-    if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
-      const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14, enter: true }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
-    }
-    if (!night && a.age >= 12) {
-      const sg = steleTarget(a), reading = sg && ((a.readS || {})[sg.id] || 0) > 0;
-      if (sg && Math.random() < (reading ? 0.9 : 0.3)) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) <= 2) steleAct(a); return; }
-    }
-    if (false) {
-      const sg = steleTarget(a);
-      if (sg) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); return; }
-    }
-    if (!night && a.age >= 12 && Math.random() < (toolItems.some(t => t.holder === a.id && /axe|pick|sickle|blade/.test(t.type)) ? 0.7 : 0.35)) {
-      const tgt = objTarget(a);
-      if (tgt) { moveToward(a, Math.round(tgt.x - 0.5), Math.round(tgt.y - 0.5)); return; }
-    }
-    if (nodes.length && Math.random() < 0.85) {
-      if (!a.gatherT || a.gatherT.zone !== a.zone) a.gatherT = Object.assign({ zone: a.zone }, questNode(a) || pick(nodes));
-      moveToward(a, a.gatherT.x, a.gatherT.y);
-      if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= 1.5) a.gatherT = null;
-    } else moveToward(a, a.x + Math.floor(Math.random() * 9) - 4, a.y + Math.floor(Math.random() * 9) - 4);
-
-    if (Math.random() < 0.14 && !night) {
-      // Wander, but stay around home (and drift back if far away)
-      let nb = getAdjacentZones(a.zone);
-      const d = zoneDist(a.zone, a.home || a.zone);
-      if (d >= 1 && Math.random() < 0.5 + d * 0.15) nb = nb.filter(z => zoneDist(z, a.home) < d);
-      else nb = nb.filter(z => zoneDist(z, a.home || z) <= 1);
-      if (nb.length && !a.goal) { const z = pick(nb); a.goal = { zone: z, x: 40, y: 40, ttl: 12, enter: true }; }
-    }
-  });
+  if (!RT_ON()) aiAgents.forEach(a => agentMove(a, night));
 
   // Trees, bushes, grass, rocks & ores: pick fruit by hand, everything else needs the right tool
   objWorldTick();
@@ -3751,29 +3932,7 @@ function runAutonomousStep() {
   toolTick();
   effectsTick();
   // Gathering: anyone (12+) standing near a resource picks some up
-  aiAgents.forEach(a => {
-    if (a.age < 12 || a.sleeping) return;
-    a.gatherCd = (a.gatherCd || 0) - 1;
-    if (a.gatherCd > 0) return;
-    if (steleAct(a)) { a.gatherCd = 1; return; }
-    if (objAct(a)) { a.gatherCd = 1; depositTick(a); return; }
-    const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= nodeReach(n));   // must actually stand at it
-    if (!t) return;
-    a.gatherCd = 1;                                   // standing right at it now, so pick every hour
-    let gain = season.gatherBonus + Math.floor(st(a, 'str') / 6) + (a.role.includes('เก็บ') ? 1 : 0) + 1;   // standing right at it
-    gainExp(a, 'str', 0.6); gainExp(a, 'vit', 0.2);
-    if (hasTool('axe', a) && propsOf(t.name).wood) { gain += 1; useTool('axe', a); }
-    if ((a.bag || {})[BAG_NAME] > 0) gain += 1;
-    const qDeliver = creditGather(a, t.name, gain);
-    if (qDeliver) put(byId(qDeliver.giverId), t.name, gain);
-    else if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) { const keep = Math.round(gain * (1 - shareRatio(a))); if (keep) put(a, t.name, keep); }
-    else gainItems(a, t.name, gain);
-    depositTick(a);
-    if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) addFood(a, gain * 3);
-    else if (Math.random() < 0.5) { addFood(a, 2); if (!a.goal) a.bubble = '🌿 เจอผักผลไม้ป่าระหว่างทาง'; }
-    godQuestEvent(a, 'gather', t.name, gain);
-    if (!a.goal) a.bubble = `เก็บ ${t.name} +${gain}`;
-  });
+  if (!RT_ON()) aiAgents.forEach(a => agentGather(a, season));
 
   // Leopards
   aiAgents.forEach(a => {
@@ -3804,159 +3963,11 @@ function runAutonomousStep() {
   });
 
   // Hunting (needs weapons to be reliable)
-  const hunters = aiAgents.filter(a => {
-    if (a.age < 12 || a.questId || a.session || a.sleeping || a.wantRest) return false;
-    if (a._hunt && a._hunt.ttl > 0) return true;                // already stalking something: keep at it
-    const v = villageOf(a);
-    const isHunter = a.role.includes('ล่าสัตว์');
-    const needFood = (a.food || 0) < 10 || (isHunter && v && v.food < v.members.length * 4) || a.wantHunt;
-    return needFood && Math.random() < (isHunter || a.wantHunt ? 0.6 : 0.3);
-  }).slice(0, 6);
-  hunters.forEach(hunter => {
-    // Only animals in the hunter's zone or next door; never below 2 on the island (law 1)
-    const nearZones = [hunter.zone].concat(getAdjacentZones(hunter.zone));
-    const options = [];
-    faunaSpecies.forEach(f => {
-      if (f.pop <= 2) return;
-      const z = nearZones.find(zz => (f.zp[zz] || 0) > 0);
-      if (!z) return;
-      // Predators are only hunted by bold/strong hunters
-      const w = f.predator ? ((hunter.role.includes('ล่า') || st(hunter, 'str') + st(hunter, 'agi') >= 12) ? 1 : 0) : 4;
-      for (let i = 0; i < w * (z === hunter.zone ? 4 : 1); i++) options.push([f, z]);
-    });
-    // keep chasing the same quarry for a few hours instead of re-rolling every hour
-    let hk = hunter._hunt && options.find(([f, z]) => f.id === hunter._hunt.f && z === hunter._hunt.z && hunter._hunt.ttl-- > 0);
-    if (!hk) hunter._hunt = null;
-    if (!hk && options.length) { hk = pick(options); hunter._hunt = { f: hk[0].id, z: hk[1], ttl: 8 }; }
-    if (hk) {
-      const [target, tz] = hk;
-      // the hunter has to actually get within 2 tiles of an animal
-      if (tz !== hunter.zone) { if (!hunter.goal) hunter.goal = { zone: tz, x: 40, y: 40, ttl: 12, enter: true }; hunter.bubble = `🐾 ตามรอย${target.name}ไปโซน ${tz}`; travelToGoal(hunter); return; }
-      const hs = huntSpot(target, tz, hunter);
-      if (Math.hypot(hs.x - hunter.x, hs.y - hunter.y) > 2) {
-        for (let k = 0; k < 3; k++) moveToward(hunter, hs.x, hs.y);
-        const dNow = Math.hypot(hs.x - hunter.x, hs.y - hunter.y);
-        if (dNow > 2) {
-          if (hunter._hunt && hunter._hunt.d !== undefined && dNow >= hunter._hunt.d - 0.5) hunter._hunt.ttl -= 2;   // can't get any closer (deep water...): give up sooner
-          if (hunter._hunt) hunter._hunt.d = dNow;
-          hunter.gatherT = null; hunter.bubble = `🐾 ย่องเข้าหา${target.name}`; return;
-        }
-      }
-      if (hunter._hunt) { hunter._hunt.ttl = Math.min(hunter._hunt.ttl, 3); hunter._hunt.d = undefined; }   // missed? try again right here for a bit
-      const weapon = hasTool('bow', hunter) ? 'bow' : (hasTool('blade', hunter) ? 'blade' : null);
-      const base = target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25);
-      const chance = Math.max(0.03, Math.min(0.95, base + st(hunter, 'str') * 0.01 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
-      if (weapon) useTool(weapon, hunter);
-      gainExp(hunter, 'str', target.predator ? 2 : 1); gainExp(hunter, 'agi', target.predator ? 2 : 1);
-      if (Math.random() < chance) {
-        hunter._hunt = null;
-        const bonus = extraLoot(target, tz);
-        const vname = variantLabel(target, tz);
-        target.zp[tz]--; syncFauna(target);
-        if (target.lootFood) addFood(hunter, Math.round(target.lootFood * 2.2));   // a hunt now takes real stalking time, so it pays more
-        for (const [m, q] of Object.entries(target.lootMat)) gainItems(hunter, m, q);
-        for (const [m, q] of Object.entries(bonus)) gainItems(hunter, m, q);
-        if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
-        if (target.predator) hunter.rep += 3;
-        hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `${weapon === 'bow' ? '🏹' : weapon === 'blade' ? '🗡️' : '✋'} ล่า${target.name} (+${target.lootFood})`;
-        godQuestEvent(hunter, 'hunt'); if (target.predator) godQuestEvent(hunter, 'predator');
-        huntLogs.unshift({ animal: target.name, remPop: target.pop, food: target.lootFood, hunter: hunter.name });
-        addLog(target.predator
-          ? `🏆 [ล่านักล่า] ${hunter.name} ล่า "${target.name}" ที่ ${tz} สำเร็จ! ได้หนัง เขี้ยว และเนื้อที่ไม่ค่อยอร่อย (เหลือ ${target.pop} ตัว)`
-          : `🏹 [ล่าสัตว์] ${hunter.name} ล่า "${target.name}" ${weapon ? `ด้วย${TOOL_LABEL[weapon]}` : 'ด้วยมือเปล่า'} ได้อาหาร +${target.lootFood} (เหลือ ${target.pop} ตัว)`, target.predator ? '#fbbf24' : '#4ade80');
-      } else if (target.predator) {
-        // The predator hunts back
-        const tt = trOf(target, tz);
-        const dmg = (target.id === 'f_wolf' ? 10 + Math.floor(Math.random() * 15) : 18 + Math.floor(Math.random() * 18)) + tt.str * 3 + tt.fer * 2;
-        hunter.hp = Math.max(0, hunter.hp - dmg);
-        gainExp(hunter, 'vit', 3);
-        hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
-        addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${hunter.hp})`, '#ef4444');
-      } else hunter.bubble = weapon === 'bow' ? '🏹 ยิงพลาด' : weapon ? '🗡️ แทงพลาด' : '✋ ไล่จับด้วยมือเปล่าไม่ทัน';
-    }
-  });
+  if (!RT_ON()) aiAgents.filter(wantsHunt).slice(0, 6).forEach(agentHunt);
 
   // Work: craft from own knowledge, or experiment
-  const needs = computeNeeds();
-  aiAgents.forEach(a => {
-    if (a.age < 12 || a.sleeping || a.wantRest) return;
-    if (a.age < 15 && !aiAgents.some(o => o.age >= 15 && o.zone === a.zone)) return;
-    if (a.goal && a.goal.quest) return;
-    if (a.questId && (!a.goal || !a.goal.sig)) return;
-    if (a.session) {
-      if (--a.session.hours <= 0 || !stationNear(a, a.session.station)) a.session = null;
-      else { experiment(a, a.session.method); return; }
-    }
-    if (a.goal && atGoal(a)) {
-      const g = a.goal; a.goal = null;
-      if (g.sig && a.know[g.sig]) {
-        const bq = a.questId && quests.find(q => q.id === a.questId && q.type === 'build');
-        if (bq) a.buildFor = bq.giverId;
-        const done = craftKnown(a, a.know[g.sig]);
-        a.buildFor = null;
-        if (done) return;
-      }
-      if (g.method) {
-        const stType = METHODS[g.method].station;
-        a.session = { station: stType, method: g.method, hours: 3 + Math.floor(st(a, 'int') / 4) };
-        a.bubble = `🔬 ทดลองที่${STATION_LABEL[stType]} ${a.session.hours} ชม.`;
-      }
-      experiment(a, g.method || null);
-      return;
-    }
-    if (a.goal) return;
-    const stockTotal = bagCount(a) + (villageOf(a) ? Object.values(villageOf(a).store).reduce((x, y) => x + y, 0) : 0);
-    const p = Math.min(0.95, (a.role.includes('วิจัย') ? 0.8 : (stockTotal < 25 ? 0.3 : 0.5)) + st(a, 'int') * 0.01) * (night ? 0.6 : 1);
-    if (Math.random() > p) return;
-
-    if (Math.random() < (a.role.includes('ช่าง') ? 0.8 : 0.55)) {
-      const myNeeds = computeNeeds(a);
-      for (const key of myNeeds.slice().sort(() => Math.random() - 0.5)) {
-        const e = planFor(a, key);
-        if (!e) continue;
-        if (methodUsable(a, e.m)) { if (craftKnown(a, e)) return; }
-        const st = METHODS[e.m].station;
-        const s = st && nearestStation(a, st);
-        if (s) { a.goal = { zone: s.zone, x: s.x, y: s.y, sig: sigOf(e.a, e.b, e.m), ttl: 30 }; a.bubble = `🚶 ไป${STATION_LABEL[st]}เพื่อทำ ${outName(e.out)}`; return; }
-      }
-    }
-    // Missing a material? 1) own bag (planFor already checked)  2) trade at own village storehouse  3) post a quest
-    if (a.wantItem && avail(a, a.wantItem) < 1) {
-      const item = a.wantItem, v = villageOf(a);
-      a.wantItem = null;
-      if (v && (v.store[item] || 0) > 0 && bagValue(a, item) >= itemValue(item, v)) {
-        if (!atStore(a)) {
-          const store = shelters.find(x => x.villageId === v.id) || { x: 40, y: 40 };
-          a.goal = { zone: v.zone, x: store.x, y: store.y, ttl: 14, quest: true };
-          a.bubble = `🚶 ไปแลก${item}ที่โกดัง${v.name}`;
-        } else if (take(a, item)) { put(a, item, 1); a.bubble = `🔄 แลก${item}จากโกดัง`; }
-        return;
-      }
-      const z = Object.keys(ZONES).filter(id => ZONES[id].res.includes(item)).sort((p, q) => zoneDist(a.zone, p) - zoneDist(a.zone, q))[0];
-      if (z) {
-        const qty = 2 + Math.floor(Math.random() * 3);
-        createQuest(a, 'gather', { title: `ช่วยหา ${item} ${qty} ชิ้น (แถว ${z})`, item, qty, zone: z, difficulty: 1 + qty * 0.4 + zoneDist(a.zone, z) * 0.6 });
-        return;
-      }
-    }
-    { const rv = revelationOf(a);
-      if (rv && hasMaterials(rv.ra, rv.rb, a)) {
-        if (methodUsable(a, rv.rm)) { experiment(a, rv.rm); return; }
-        const stn = METHODS[rv.rm].station, s = stn && shelters.find(x => x.station === stn);
-        if (s) { a.goal = { zone: s.zone, x: s.x, y: s.y, method: rv.rm, ttl: 16 }; a.bubble = `📜 ไปลองสูตรนิมิตที่${STATION_LABEL[stn]}`; return; }
-      }
-    }
-    const workStations = shelters.filter(s => s.station && STATION_METHODS[s.station]);
-    if (workStations.length && Math.random() < 0.2) {
-      const s = pick(workStations);
-      const m = pick(STATION_METHODS[s.station]);
-      if (stationNear(a, s.station)) { a.session = { station: s.station, method: m, hours: 3 + Math.floor(st(a, 'int') / 4) }; experiment(a, m); return; }
-      a.goal = { zone: s.zone, x: s.x, y: s.y, method: m, ttl: 16 };
-      a.bubble = `🚶 ไปลองของที่${STATION_LABEL[s.station]}`;
-      return;
-    }
-    experiment(a, null);
-  });
+  HOUR_NEEDS = computeNeeds();
+  if (!RT_ON()) aiAgents.forEach(a => agentWork(a, HOUR_NEEDS));
 
   knowledgeExchange();
   stepFauna();
@@ -3968,7 +3979,7 @@ function runAutonomousStep() {
 function updateHudChips() {
   if (bgTick) return;
   const h = String(Math.floor(simMinutes / 60) % 24).padStart(2, '0');
-  document.getElementById('clock-display').innerText = `วันที่ ${simDay} · ${h}:00 ${isNightTime() ? 'กลางคืน' : 'กลางวัน'}`;
+  updateClockHud();
   document.getElementById('season-display').innerText = `${SEASONS[currentSeasonIdx].name} · ${weatherLabel()}`;
   const foodAll = aiAgents.reduce((t, a) => t + (a.food || 0), 0);
   document.getElementById('food-display').innerText = `🍖 อาหารติดตัวรวม ${foodAll}`;
@@ -6066,7 +6077,9 @@ function drawCanvas() {
     // smooth movement between sim ticks
     if (a._rx === undefined || a._zone !== a.zone || Math.hypot(a.x - a._rx, a.y - a._ry) > 30) { a._rx = a.x; a._ry = a.y; a._zone = a.zone; }
     const dx = a.x - a._rx, dy = a.y - a._ry, dist = Math.hypot(dx, dy);
-    const speed = Math.max(2.2, dist / Math.max(0.4, tickDur * 0.6));
+    // real-time: walk so as to arrive exactly when the person's walk ends; other nudges glide over ~0.8 s
+    const remReal = REALTIME && a.walkUntil !== undefined ? (a.walkUntil - gameNow()) / (6 * simSpeed) : tickDur * 0.6;
+    const speed = Math.max(1.2, dist / Math.max(0.12, remReal > 0.05 ? remReal : 0.8));
     const step = Math.min(dist, speed * dt);
     if (dist > 0.001) { a._rx += dx / dist * step; a._ry += dy / dist * step; }
     if (Math.abs(dx - dy) > 0.05) a._face = dx - dy > 0 ? 1 : -1;
@@ -6382,12 +6395,58 @@ function renderLoop(ts) {
 
 function startSimLoop() {
   if (simTimer) clearInterval(simTimer);
+  let last = performance.now();
   simTimer = setInterval(() => {
-    try {
-      tickAllRealms();
-      if (++ticksSinceLastSave >= 5) { ticksSinceLastSave = 0; saveGameState(); }
-    } catch (err) { console.error(err); }
-  }, Math.floor(10000 / simSpeed));   // 1 game hour = 10 real seconds at 1x
+    const t = performance.now(), dt = Math.min(1000, t - last); last = t;
+    if (!isRunning) return;
+    try { advanceGame(dt / 1000 * 6 * simSpeed); }   // 1 game hour = 10 real seconds at 1x
+    catch (err) { console.error(err); }
+  }, 100);
+}
+// move the game clock forward by some game minutes: hourly world systems on the hour, people whenever they're free
+function advanceGame(mins) {
+  rtMin += mins;
+  while (rtMin >= 60) {
+    rtMin -= 60;
+    tickAllRealms();
+    if (++ticksSinceLastSave >= 5) { ticksSinceLastSave = 0; saveGameState(); }
+  }
+  if (REALTIME) agentsRealtime();
+  updateClockHud();
+}
+function updateClockHud() {
+  const el = document.getElementById('clock-display'); if (!el) return;
+  const m = Math.floor(simMinutes + rtMin), h = String(Math.floor(m / 60) % 24).padStart(2, '0'), mm = String(m % 60).padStart(2, '0');
+  const txt = `วันที่ ${simDay} · ${h}:${mm} ${isNightTime() ? 'กลางคืน' : 'กลางวัน'}`;
+  if (el.innerText !== txt) el.innerText = txt;
+}
+function agentsRealtime() {
+  if (!HOUR_NEEDS) HOUR_NEEDS = computeNeeds();
+  const now = gameNow(), night = isNightTime(), season = SEASONS[currentSeasonIdx];
+  let budget = 40;
+  for (const a of aiAgents.slice()) {
+    if (a.busyUntil === undefined || a.busyUntil > now + 240) a.busyUntil = now + Math.random() * 60;   // new or loaded: start at a random moment
+    if (a.busyUntil > now || budget-- <= 0) continue;
+    if (!aiAgents.includes(a)) continue;
+    agentStep(a, night, season, now);
+  }
+}
+// one free moment for one person: decide, walk, act. How long it takes decides when they think again.
+function agentStep(a, night, season, now) {
+  const z0 = a.zone, x0 = a.x, y0 = a.y;
+  buildZoneTerrain(a.zone);
+  agentMove(a, night);
+  agentGather(a, season);
+  if (wantsHunt(a)) agentHunt(a);
+  agentWork(a, HOUR_NEEDS || computeNeeds());
+  // walking time: about 4-8 game minutes per tile depending on agility
+  const pace = Math.max(3.5, 8 - st(a, 'agi') / 6);
+  const walked = a.zone === z0 ? Math.hypot(a.x - x0, a.y - y0) : 40;
+  const walkMin = walked * pace;
+  const act = a.sleeping ? 'sleep' : pupActivity(a, false, false);
+  const actMin = a.session ? 60 : ({ sleep: 45, gather: 22, chop: 28, craft: 40, slash: 14, bow: 14, sit: 30, idle: 12 }[act] || 15) * (0.75 + Math.random() * 0.5);
+  a.walkUntil = now + walkMin;
+  a.busyUntil = now + walkMin + (walked > 0.5 && act === 'idle' ? 2 : actMin);
 }
 
 const BASE_ZONES = JSON.parse(JSON.stringify(ZONES));
