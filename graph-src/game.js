@@ -2652,7 +2652,8 @@ function pickChildName(gender, gen) {
 
 function moveToward(a, gx, gy) {
   const step = Math.min(6, 2 + Math.floor(st(a, 'agi') / 8));
-  const dx = Math.sign(gx - a.x) * step, dy = Math.sign(gy - a.y) * step;
+  const cl = v => Math.max(-step, Math.min(step, Math.round(v)));   // never overshoot the target
+  const dx = cl(gx - a.x), dy = cl(gy - a.y);
   if (a.age >= 12 && Math.random() < 0.3) gainExp(a, 'agi', 0.15);
   const grid = zoneTerrainGrid[a.zone];
   const tries = [[dx, dy], [dx, 0], [0, dy], [Math.floor(Math.random() * 7) - 3, Math.floor(Math.random() * 7) - 3]];
@@ -2665,13 +2666,46 @@ function moveToward(a, gx, gy) {
 function travelToGoal(a) {
   const g = a.goal;
   if (a.zone !== g.zone) {
-    if (Math.random() < 0.6) {
+    {
       const cur = ZONES[a.zone], tgt = ZONES[g.zone];
       const dr = Math.sign(tgt.r - cur.r), dc = Math.sign(tgt.c - cur.c);
       const next = dr !== 0 ? getZoneAt(cur.r + dr, cur.c) : getZoneAt(cur.r, cur.c + dc);
-      if (next) { a.zone = next; buildZoneTerrain(next); const p = findValidTile(next, false); a.x = p.x; a.y = p.y; }
+      if (next) crossZone(a, next);
     }
   } else moveToward(a, g.x, g.y);
+}
+// Walk to the shared border first, then step across and appear on the matching edge of the next zone
+// (the island is one continuous map, so nobody pops in or out in the middle of a zone)
+function crossZone(a, next) {
+  const A = ZONES[a.zone], B = ZONES[next]; if (!A || !B) return false;
+  const dc = Math.sign(B.c - A.c), dr = Math.sign(B.r - A.r);
+  if (a._xz !== next || a._xzFrom !== a.zone) {               // plan a real walking path to a dry crossing point on the shared border
+    a._xz = next; a._xzFrom = a.zone; buildZoneTerrain(next);
+    const ga = zoneTerrainGrid[a.zone], gb = zoneTerrainGrid[next], dry = (g, x, y) => !WATER.includes(g[y][x]);
+    const isExit = (x, y) => (dc ? x === (dc > 0 ? 78 : 1) : y === (dr > 0 ? 78 : 1)) && dry(gb, dc ? (dc > 0 ? 1 : 78) : x, dc ? y : (dr > 0 ? 1 : 78));
+    const sx = Math.max(1, Math.min(78, Math.round(a.x))), sy = Math.max(1, Math.min(78, Math.round(a.y)));
+    const prev = new Int32Array(6400).fill(-1), Q = [sy * 80 + sx]; prev[Q[0]] = Q[0]; let end = -1;
+    for (let h = 0; h < Q.length && end < 0; h++) {
+      const c = Q[h], x = c % 80, y = (c / 80) | 0;
+      if (isExit(x, y)) { end = c; break; }
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+        const nx = x + ox, ny = y + oy; if (nx < 1 || ny < 1 || nx > 78 || ny > 78) continue;
+        const k = ny * 80 + nx; if (prev[k] >= 0 || !dry(ga, nx, ny)) continue; prev[k] = c; Q.push(k);
+      }
+    }
+    a._xpath = null;
+    if (end >= 0) { const path = []; for (let c = end; c !== prev[c]; c = prev[c]) path.push({ x: c % 80, y: (c / 80) | 0 }); a._xpath = path.reverse(); }
+  }
+  const path = a._xpath;
+  if (path && path.length) {                                  // walk the path (a focused walk: about two strides per hour)
+    const n = Math.min(path.length, 2 * Math.min(6, 2 + Math.floor(st(a, 'agi') / 8)));
+    const p = path.splice(0, n).pop(); a.x = p.x; a.y = p.y;
+    if (path.length) return false;
+  }
+  const ex = path ? (dc ? (dc > 0 ? 1 : 78) : a.x) : (dc > 0 ? 1 : dc < 0 ? 78 : a.x), ey = path ? (dc ? a.y : (dr > 0 ? 1 : 78)) : (dr > 0 ? 1 : dr < 0 ? 78 : a.y);
+  const p = path ? { x: ex, y: ey } : landNear(next, ex, ey);
+  a.zone = next; a.x = p.x; a.y = p.y; a._xz = null; a._xpath = null;
+  return true;
 }
 function atGoal(a) { return a.goal && a.zone === a.goal.zone && Math.hypot(a.x - a.goal.x, a.y - a.goal.y) <= 6; }
 
@@ -2855,7 +2889,7 @@ function temperatureTick() {
         const nb = getAdjacentZones(a.zone).map(z => [z, (shelters.some(s => s.zone === z && (isRestShelter(s) || s.station === 'campfire')) ? 20 : 0) + (GEO_DT[ZONES[z].geo] || 0)])
           .sort((p, q) => q[1] - p[1])[0];
         if (nb && nb[1] > (GEO_DT[ZONES[a.zone].geo] || 0)) {
-          a.zone = nb[0]; buildZoneTerrain(a.zone); const p = findValidTile(a.zone, false); a.x = p.x; a.y = p.y; a.goal = null; a.gatherT = null;
+          a.goal = { zone: nb[0], x: 40, y: 40, ttl: 14 }; a.gatherT = null;
           a.bubble = `🥶 หนาวเกินไป ย้ายไปหาที่อุ่นที่ ${nb[0]}`; a.coldSeek = true;
         } else a.coldSeek = false;
       } else a.coldSeek = false;
@@ -3548,7 +3582,7 @@ function runAutonomousStep() {
     }
     if (a.session) return;
     if (a.goal) {
-      a.goal.ttl = (a.goal.ttl || 30) - 1;
+      a.goal.ttl = (a.goal.ttl || 30) - (a.zone === a.goal.zone ? 1 : 0.5);
       if (a.goal.ttl <= 0) { a.goal = null; a.bubble = 'เลิกเดินทาง'; }
       else { travelToGoal(a); return; }
     }
@@ -3573,7 +3607,7 @@ function runAutonomousStep() {
       if (fnode && (!a.gatherT || !FOODRX.test(a.gatherT.name))) a.gatherT = Object.assign({ zone: a.zone }, fnode);
       if (!fnode && !night && Math.random() < 0.35) {
         const nb = getAdjacentZones(a.zone).filter(z => ZONES[z].res.some(r => FOODRX.test(r)) || faunaSpecies.some(f => isPrey(f) && (f.zp[z] || 0) > 0));
-        if (nb.length) { a.zone = pick(nb); buildZoneTerrain(a.zone); const p = findValidTile(a.zone, false); a.x = p.x; a.y = p.y; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; return; }
+        if (nb.length) { a.goal = { zone: pick(nb), x: 40, y: 40, ttl: 12 }; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; travelToGoal(a); return; }
       }
     }
     if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
@@ -3594,7 +3628,7 @@ function runAutonomousStep() {
     if (nodes.length && Math.random() < 0.85) {
       if (!a.gatherT || a.gatherT.zone !== a.zone) a.gatherT = Object.assign({ zone: a.zone }, questNode(a) || pick(nodes));
       moveToward(a, a.gatherT.x, a.gatherT.y);
-      if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= 6) a.gatherT = null;
+      if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= (a.gatherT.sprite === 'fish' ? 4 : 1.5)) a.gatherT = null;
     } else moveToward(a, a.x + Math.floor(Math.random() * 9) - 4, a.y + Math.floor(Math.random() * 9) - 4);
 
     if (Math.random() < 0.14 && !night) {
@@ -3603,7 +3637,7 @@ function runAutonomousStep() {
       const d = zoneDist(a.zone, a.home || a.zone);
       if (d >= 1 && Math.random() < 0.5 + d * 0.15) nb = nb.filter(z => zoneDist(z, a.home) < d);
       else nb = nb.filter(z => zoneDist(z, a.home || z) <= 1);
-      if (nb.length) { a.zone = pick(nb); buildZoneTerrain(a.zone); const p = findValidTile(a.zone, false); a.x = p.x; a.y = p.y; }
+      if (nb.length && !a.goal) { const z = pick(nb); a.goal = { zone: z, x: 40, y: 40, ttl: 12 }; }
     }
   });
 
@@ -3619,9 +3653,9 @@ function runAutonomousStep() {
     if (a.gatherCd > 0) return;
     if (steleAct(a)) { a.gatherCd = 1; return; }
     if (objAct(a)) { a.gatherCd = 1; depositTick(a); return; }
-    const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= 7);
+    const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= nodeReach(n));   // must actually stand at it
     if (!t) return;
-    a.gatherCd = 2;
+    a.gatherCd = 1;                                   // standing right at it now, so pick every hour
     let gain = season.gatherBonus + Math.floor(st(a, 'str') / 6) + (a.role.includes('เก็บ') ? 1 : 0);
     gainExp(a, 'str', 0.6); gainExp(a, 'vit', 0.2);
     if (hasTool('axe', a) && propsOf(t.name).wood) { gain += 1; useTool('axe', a); }
@@ -4497,6 +4531,12 @@ function pupOutfit(a) {
   if (hide) return female ? 'deer' : 'hide';
   return female ? 'flower' : 'leaf';
 }
+const nodeReach = n => n.sprite === 'fish' ? 5 : 2.2;   // fish are caught from the shore
+function nearGatherable(a) {
+  const x = a._rx !== undefined ? a._rx : a.x, y = a._ry !== undefined ? a._ry : a.y;
+  if ((zoneNodes[a.zone] || []).some(n => Math.hypot(n.x - x, n.y - y) <= nodeReach(n) + 0.3)) return true;
+  return objsOf(a.zone).some(o => !o.dead && Math.hypot(o.x - x - 0.5, o.y - y - 0.5) <= 3.2);
+}
 function pupActivity(a, moving, fast) {
   const b = a.bubble || '';
   if (a.sleeping && !moving) return 'sleep';
@@ -4504,7 +4544,7 @@ function pupActivity(a, moving, fast) {
   if (b.startsWith('🏹')) return 'bow';
   if (b.startsWith('🩸') || b.includes('โจมตี') || b.startsWith('💢')) return 'slash';
   if (b.startsWith('🛠️') || b.startsWith('🔬') || b.startsWith('🔁') || b.startsWith('😓') || b.startsWith('😅')) return 'craft';
-  if (b.startsWith('เก็บ') || b.startsWith('🍃') || b.startsWith('🌿') || b.startsWith('🧺') || a.gatherT) {
+  if ((b.startsWith('เก็บ') || b.startsWith('🍃') || b.startsWith('🌿') || b.startsWith('🧺') || a.gatherT) && nearGatherable(a)) {
     if (/ไม้|ไผ่/.test(b) && getEquip(a).hand === 'axe') return 'chop';
     if (/หิน|แร่/.test(b) && (hasTool('pick', a) || hasTool('hammer', a))) return 'chop';
     if (/กก|หญ้า|สมุนไพร|เถาวัลย์|ข้าว|ใย|ฟาง|ใบ/.test(b) && hasTool('sickle', a)) return 'chop';
@@ -5888,7 +5928,7 @@ function drawCanvas() {
   const tickDur = 10 / simSpeed;
   aiAgents.filter(a => a.zone === currentZoneId).forEach(a => {
     // smooth movement between sim ticks
-    if (a._rx === undefined || a._zone !== a.zone || Math.hypot(a.x - a._rx, a.y - a._ry) > 12) { a._rx = a.x; a._ry = a.y; a._zone = a.zone; }
+    if (a._rx === undefined || a._zone !== a.zone || Math.hypot(a.x - a._rx, a.y - a._ry) > 30) { a._rx = a.x; a._ry = a.y; a._zone = a.zone; }
     const dx = a.x - a._rx, dy = a.y - a._ry, dist = Math.hypot(dx, dy);
     const speed = Math.max(2.2, dist / Math.max(0.4, tickDur * 0.6));
     const step = Math.min(dist, speed * dt);
@@ -6004,7 +6044,9 @@ function talkOf(a, b) { return TALKS.find(t => (t.a === a.id && t.b === b.id) ||
 function talkEvent(a, b) {
   if (!a || !b || a === b || a.zone !== b.zone || typeof performance === 'undefined') return null;
   // the listener comes over and stands next to the speaker (2 tiles at most)
-  if (Math.hypot(a.x - b.x, a.y - b.y) > 2) { const side = b.x >= a.x ? 1 : -1, p = landNear(a.zone, Math.round(a.x + side * 2), Math.round(a.y)); if (Math.hypot(p.x - a.x, p.y - a.y) <= 2.9) { b.x = p.x; b.y = p.y; } else { b.x = a.x; b.y = a.y; } b.gatherT = null; }
+  const gap = Math.hypot(a.x - b.x, a.y - b.y);
+  if (gap > 7) return null;                         // too far apart to stand and chat (no teleporting the listener over)
+  if (gap > 2) { const side = b.x >= a.x ? 1 : -1, p = landNear(a.zone, Math.round(a.x + side * 2), Math.round(a.y)); if (Math.hypot(p.x - a.x, p.y - a.y) <= 2.9) { b.x = p.x; b.y = p.y; } else { b.x = a.x; b.y = a.y; } b.gatherT = null; }
   const keys = window.GLYPHS ? Object.keys(GLYPHS).filter(k => k[0] !== '#') : [];
   const t0 = performance.now() / 1000;
   let t = talkOf(a, b);
