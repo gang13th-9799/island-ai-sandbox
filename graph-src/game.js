@@ -4071,7 +4071,7 @@ function pupActivity(a, moving, fast) {
 }
 function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
 // Gemini hairstyles (gray art, tinted per person). Front layer over the head, back layer behind the body.
-const HAIR_STYLES = { 'ชาย': ['m1', 'm2', 'm3', 'm4', 'm5'], 'หญิง': ['f1', 'm4'] };
+const HAIR_STYLES = { 'ชาย': ['m1', 'm2', 'm3', 'm4', 'm5'], 'หญิง': ['f1', 'f2', 'f3', 'f4', 'f5', 'm4'] };
 const HAIR_IMG = {}, HAIR_TINT = {};
 (function () { const H = window.HAIR_ART; if (!H) return; for (const k in H) for (const L in H[k]) { const im = new Image(); im.src = H[k][L].src; HAIR_IMG[k + L] = im; } })();
 function hairStyleOf(a) { if (a.hairStyle && window.HAIR_ART && HAIR_ART[a.hairStyle]) return a.hairStyle; const l = HAIR_STYLES[a.gender] || HAIR_STYLES['ชาย']; return l[hashStr((a.name || '') + 'hair') % l.length]; }
