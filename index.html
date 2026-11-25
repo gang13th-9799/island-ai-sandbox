@@ -551,6 +551,7 @@
 <script src="assets/hair.js"></script>
 <script src="assets/eyes.js"></script>
 <script src="assets/mouth.js"></script>
+<script src="assets/items.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -4309,14 +4310,14 @@ function renderAllUI() {
     const def = productDef(keyByName(t.name));
     const lent = t.lentTo && (t.lendUntil || 0) >= nowH() ? byId(t.lentTo) : null;
     return `<div class="card" style="padding:6px 10px; font-size:11.5px; display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap;">
-      <span>🔧 <b>${t.name}</b> <span style="color:#fb923c;">ทน ${def.dur - t.wear}/${def.dur}</span></span>
+      <span>${itemIconHTML(t.name, 20) || '🔧 '}<b>${t.name}</b> <span style="color:#fb923c;">ทน ${def.dur - t.wear}/${def.dur}</span></span>
       <span>${t.owner ? `👑 ${t.ownerName}` : '🏝️ ส่วนรวม'} ${t.public ? '<span class="tag tag-ok">🔓 ให้ทุกคนใช้</span>' : '<span class="tag tag-warn">🔒 ต้องขอ</span>'}${lent ? ` <span class="tag tag-tier">ให้ ${lent.name} ยืม</span>` : ''}</span></div>`;
   }).join('') : '<div class="sec-note">ยังไม่มีใครมีเครื่องมือ</div>';
   document.getElementById('bag-list').innerHTML = aiAgents.filter(a => a.age >= 4).map(a => {
     const items = Object.entries(a.bag || {}).filter(([, q]) => q > 0);
     return `<div class="card" style="padding:7px 10px; font-size:11.5px;">
       <div style="display:flex; justify-content:space-between;"><b>🎒 ${a.name}</b><span style="color:var(--muted);">${bagCount(a)}/${bagCap(a)} · 🍖 ${a.food || 0} · ${villageOf(a) ? `${villageOf(a).name} ส่ง ${Math.round(shareRatio(a) * 100)}%` : 'อิสระ'}</span></div>
-      <div style="margin-top:3px;">${items.length ? items.map(([n, q]) => `<span class="kchip">${n} ×${q}</span>`).join('') : '<span style="color:var(--muted);">ว่าง</span>'}</div></div>`;
+      <div style="margin-top:3px;">${items.length ? items.map(([n, q]) => `<span class="kchip">${itemIconHTML(n, 16)}${n} ×${q}</span>`).join('') : '<span style="color:var(--muted);">ว่าง</span>'}</div></div>`;
   }).join('');
 
   document.getElementById('rnd-list').innerHTML = rndTrials.map(t => `
@@ -4618,6 +4619,7 @@ function pupActivity(a, moving, fast) {
   if (b.startsWith('🛠️') || b.startsWith('🔬') || b.startsWith('🔁') || b.startsWith('😓') || b.startsWith('😅')) return 'craft';
   if (b.startsWith('เก็บ') || b.startsWith('🍃') || b.startsWith('🌿') || b.startsWith('🧺') || a.gatherT) {
     if (/ไม้|ไผ่/.test(b) && getEquip(a).hand === 'axe') return 'chop';
+    if (/หิน|แร่/.test(b) && hasTool('pick', a)) return 'chop';
     return 'gather';
   }
   if (isNightTime() && !a.goal && stationInZone(a.zone, 'campfire')) return 'sit';
@@ -4653,6 +4655,30 @@ function drawMouthArt(ctx, mood) {
   if (!window.MOUTH_ART) return false;
   const one = k => { const e = MOUTH_ART[k], im = MOUTH_IMG[k]; if (!e || !im || !im.complete || !im.naturalWidth) return false; ctx.drawImage(im, e.x, e.y, e.w, e.h); return true; };
   one('nose'); return one(MOUTH_ART[mood] ? mood : 'happy');
+}
+// Gemini item art: inventory icons + held tools (vertical art, handle down, edge facing right)
+const ITEM_HELD_IMG = {};
+(function () { const E = window.ITEM_ART; if (!E) return; for (const k in E) if (E[k].held) { const im = new Image(); im.src = E[k].held.src; ITEM_HELD_IMG[k] = im; } })();
+function itemArtKey(name) { const k = keyByName(name); return k && window.ITEM_ART && ITEM_ART[k] ? k : null; }
+function itemIconHTML(name, sz = 18) { const k = itemArtKey(name); return k ? `<img src="${ITEM_ART[k].icon}" alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;vertical-align:-4px;margin-right:2px;">` : ''; }
+function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t => { if (!canUse(a, t)) return; const d = productDef(keyByName(t.name)); if (d && (!best || (d.tier || 1) > (best.tier || 1))) best = { tier: d.tier || 1, key: keyByName(t.name) }; }); return best; }
+// what the puppet actually holds for a pose: art for stone-age tools, code drawing for metal ones
+function pupHeldItem(a, kind) {
+  if (!kind || kind === 'bow') return kind;
+  if (kind === 'axe') {
+    const mining = /หิน|แร่|ทองแดง|เหล็ก/.test(a.bubble || '');
+    const t = usableToolTier(a, mining ? 'pick' : 'axe') || usableToolTier(a, 'axe');
+    if (t && t.tier >= 2) return 'axe';
+    const k = mining && t && t.key === 'stone_pick' ? 'stone_pick' : 'stone_axe';
+    return ITEM_HELD_IMG[k] ? 'art:' + k : 'axe';
+  }
+  if (kind === 'sword') {
+    const t = usableToolTier(a, 'blade');
+    if (t && t.tier >= 3) return 'sword';
+    const k = t ? 'stone_blade' : 'digging_stick';
+    return ITEM_HELD_IMG[k] ? 'art:' + k : 'sword';
+  }
+  return kind;
 }
 function drawHairLayer(ctx, a, L, color) {
   if (!window.HAIR_ART || a.age < 2) return false;
@@ -4697,7 +4723,7 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   const M = { body: Mb }; const ang = { upN: p.upN, foN: p.foN, upF: p.upF, foF: p.foF, thN: p.thN, shN: p.knN, thF: p.thF, shF: p.knF };
   const build = () => { for (const [seg, j, par] of PUP_SEGS) M[seg] = rotAt(M[par], rig.joints[j], ang[seg]); };
   build();
-  const item = def.item;
+  const item = pupHeldItem(a, def.item);
   // bow: far arm holds the bow toward the aim, near arm draws the string
   let bowInfo = null;
   if (item === 'bow') {
@@ -4774,6 +4800,14 @@ function drawItem(ctx, mBase, foInBase, rig, kind, p) {
   const th = p.item * Math.PI / 180, dx = Math.cos(th), dy = Math.sin(th), nx = -dy, ny = dx, k = 0.3125;
   const Q = (a, b) => [f.x + (dx * a + nx * b) * k, f.y + (dy * a + ny * b) * k];
   const poly = (pts, fill, stroke) => { ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 0.8; ctx.stroke(); } };
+  if (kind.startsWith('art:')) {
+    const key = kind.slice(4), e = ITEM_ART[key] && ITEM_ART[key].held, im = ITEM_HELD_IMG[key];
+    if (!e || !im || !im.complete || !im.naturalWidth) return;
+    const h = e.len, w = h * e.ar;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(th + Math.PI / 2);
+    ctx.drawImage(im, -e.gx * w, -e.gy * h, w, h); ctx.restore();
+    return;
+  }
   if (kind === 'sword') {
     poly([Q(-30, -6), Q(-30, 6), Q(22, 6), Q(22, -6)], '#6e4628', '#3c2314');
     poly([Q(22, -22), Q(22, 22), Q(30, 22), Q(30, -22)], '#be9f46', '#5a3c14');
