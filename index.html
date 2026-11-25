@@ -690,14 +690,17 @@ function getAdjacentZones(zId) {
 }
 
 const TERRAIN_STYLES = {
-  ocean: { color: '#0369a1', label: '🌊 ทะเลลึก' }, river: { color: '#0ea5e9', label: '💧 แม่น้ำสายหลัก (น้ำจืด)' },
+  ocean: { color: '#0369a1', label: '🌊 ทะเลลึก' }, river: { color: '#0ea5e9', label: '💧 แม่น้ำน้ำตื้น (เดินลุยได้)' },
+  shallow_sea: { color: '#38bdf8', label: '🌊 ทะเลน้ำตื้น (เดินลุยได้)' }, river_deep: { color: '#0284c7', label: '💧 แม่น้ำช่วงน้ำลึก' },
   swamp_water: { color: '#0f766e', label: '🐊 หนองน้ำขัง' }, sand_bank: { color: '#eab308', label: '🏖️ หาดทราย / ตลิ่งทราย' },
   mud_flat: { color: '#78350f', label: '🟫 ที่ราบดินโคลน' }, grass: { color: '#4ade80', label: '🌿 ที่ราบผืนหญ้า' },
   tall_grass: { color: '#22c55e', label: '🌾 ทุ่งหญ้าสูง' }, forest: { color: '#15803d', label: '🌳 ป่าทึบ' },
   hill_slope: { color: '#78716c', label: '⛰️ เนินลาดเชิงเขา' }, mountain_cliff: { color: '#475569', label: '🪨 หน้าผาภูเขาหิน' },
   mountain_peak: { color: '#cbd5e1', label: '🏔️ ยอดภูเขาสูง' }
 };
-const WATER = ['river', 'swamp_water', 'ocean'];
+const WATER = ['river', 'swamp_water', 'ocean', 'shallow_sea', 'river_deep'];   // any water: nothing gets built on it
+const DEEP = ['ocean', 'river_deep'];                                             // too deep to wade: people can't walk here
+const SHALLOW = ['river', 'swamp_water', 'shallow_sea'];
 
 let zoneTerrainGrid = {};
 let zoneNodes = {};
@@ -1357,7 +1360,7 @@ function trySneak(agent, thing, label, o) {
   return true;
 }
 function stationNear(agent, type, ask = true) {
-  const near = shelters.filter(s => s.station === type && s.zone === agent.zone && Math.hypot(s.x - agent.x, s.y - agent.y) <= 8);
+  const near = shelters.filter(s => s.station === type && s.zone === agent.zone && Math.hypot(s.x - agent.x, s.y - agent.y) <= 2);   // must stand at it
   const ok = near.find(s => canUse(agent, s));
   if (ok) return ok;
   if (ask && near.length) { const s = near[0]; if (askToUse(agent, s, s.name.split(' (')[0])) return s; }
@@ -1529,8 +1532,7 @@ function buildStation(type, agent, ownerOverride) {
   const exists = stationsOf(type).length >= cap || stationsOf(type).some(s => s.owner === owner.id) || (type === 'campfire' && stationInZone(agent.zone, 'campfire'));
   if (exists) return false;
   buildZoneTerrain(agent.zone);
-  let x = clampC(agent.x + 3), y = clampC(agent.y - 3);
-  if (WATER.includes(zoneTerrainGrid[agent.zone][y][x])) { x = agent.x; y = agent.y; }
+  const bs = buildSpot(agent.zone, agent.x + 1, agent.y - 1); let x = bs.x, y = bs.y;
   const key = Object.keys(PRODUCTS).find(k => PRODUCTS[k].station === type);
   const isPublic = type === 'wall' || type === 'reactor' || owner.kind >= 0.75;
   shelters.push({ name: `${PRODUCTS[key].name} (${agent.zone})`, sprite: STATION_SPRITE[type], zone: agent.zone, x, y, station: type, builder: agent.name,
@@ -1974,7 +1976,13 @@ function assignQuests() {
 }
 
 function questGoalTo(h, target) { h.goal = { zone: target.zone, x: target.x, y: target.y, ttl: 6, quest: true }; }
-function nearTo(a, b) { return a.zone === b.zone && Math.hypot(a.x - b.x, a.y - b.y) <= 8; }
+function nearTo(a, b) {
+  if (a.zone !== b.zone) return false;
+  const d = Math.hypot(a.x - b.x, a.y - b.y);
+  if (d <= 2) return true;
+  if (d <= 8) { const p = landNear(a.zone, Math.round(b.x + Math.sign(a.x - b.x || 1)), Math.round(b.y)); if (Math.hypot(p.x - b.x, p.y - b.y) <= 2) { a.x = p.x; a.y = p.y; return true; } }   // walk over to them
+  return false;
+}
 function questNode(a) {
   const q = a.questId && quests.find(x => x.id === a.questId);
   if (!q || q.type !== 'gather') return null;
@@ -2261,7 +2269,7 @@ function placeStorehouse(v, zone) {
   buildZoneTerrain(zone);
   const fire = stationInZone(zone, 'campfire');
   let x = clampC((fire ? fire.x : 40) + 6), y = clampC((fire ? fire.y : 40) + 2);
-  if (WATER.includes(zoneTerrainGrid[zone][y][x])) { const p = findValidTile(zone, false); x = p.x; y = p.y; }
+  { const p = buildSpot(zone, x, y); x = p.x; y = p.y; }
   shelters.push({ name: `โกดัง${v.name} (${zone})`, sprite: 'st_store', zone, x, y, station: 'storehouse', villageId: v.id, owner: null, ownerName: v.name, public: false, permits: [] });
 }
 
@@ -2579,7 +2587,9 @@ function restoreRealm(st) {
   if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
   zoneTerrainGrid = zoneTerrainGrid || {}; zoneNodes = zoneNodes || {}; logBuffer = logBuffer || [];
+  if (shelters && !SETTLED.has(shelters)) { SETTLED.add(shelters); try { settleStructures(); } catch (e) {} }
 }
+const SETTLED = new WeakSet();
 
 const REALM_DEFS = [
   { name: 'เกาะต้นกำเนิด', icon: '🏝️', diff: 1, gate: 'E4', sub: {}, founders: [['อคิน', 'ชาย'], ['ลินดา', 'หญิง']] },
@@ -2678,7 +2688,8 @@ function makeRealmState(def, idx) {
   shelters.push({ name: `เกจแห่งพระเจ้า (${def.gate})`, sprite: 'st_gate', zone: def.gate, x: gp.x, y: gp.y, station: 'gate', owner: null, ownerName: 'พระเจ้า', public: true, permits: [] });
   if (def.empty) {
     // ruins of the people who once lived here
-    shelters.push({ name: 'กองไฟเก่าที่มอดดับ (C3)', sprite: 'st_fire', zone: 'C3', x: 40, y: 34, station: 'campfire', owner: null, ownerName: 'ส่วนรวม', public: true, permits: [] });
+    const op = buildSpot(START_ZONE, 40, 34);
+    shelters.push({ name: `กองไฟเก่าที่มอดดับ (${START_ZONE})`, sprite: 'st_fire', zone: START_ZONE, x: op.x, y: op.y, station: 'campfire', owner: null, ownerName: 'ส่วนรวม', public: true, permits: [] });
     faunaSpecies.forEach(f => { if (f.predator) { f.zp = {}; f.zones.forEach(() => {}); } });
     faunaSpecies.find(f => f.id === 'f_wolf').zp = { W3: 4, S3: 3 }; faunaSpecies.forEach(syncFauna);
     addLog(`🌫️ ดินแดนนี้เคยมีผู้คนอาศัย แต่บัดนี้ไม่เหลือใครแล้ว...`, '#94a3b8');
@@ -3034,6 +3045,32 @@ function landNear(zId, x, y) {
   }
   return { x, y };
 }
+function shallowTile(zId) {
+  const g = zoneTerrainGrid[zId], c = [];
+  for (let y = 6; y < 74; y++) for (let x = 6; x < 74; x++) if (SHALLOW.includes(g[y][x])) c.push({ x, y });
+  return c.length ? pick(c) : findValidTile(zId, true);
+}
+// a free dry tile within 2 of (x,y) for building/placing things (never on water, never on another building)
+function buildSpot(zId, x, y) {
+  buildZoneTerrain(zId); const g = zoneTerrainGrid[zId];
+  const taken = (xx, yy) => shelters.some(s => s.zone === zId && Math.abs(s.x - xx) < 1.5 && Math.abs(s.y - yy) < 1.5);
+  const c = [];
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const xx = Math.round(x + dx), yy = Math.round(y + dy);
+    if (xx < 1 || yy < 1 || xx > 78 || yy > 78 || WATER.includes(g[yy][xx]) || taken(xx, yy)) continue;
+    c.push({ x: xx, y: yy, d: Math.hypot(dx, dy) + (dx === 0 && dy === 0 ? 3 : 0) });
+  }
+  if (c.length) return c.sort((p, q) => p.d - q.d)[0];
+  return landNear(zId, Math.round(x), Math.round(y));
+}
+// anything built that ended up in water (old saves, changed maps) is moved onto the nearest dry ground
+function settleStructures() {
+  shelters.forEach(s => {
+    if (!s.zone || !ZONES[s.zone]) return; buildZoneTerrain(s.zone);
+    const g = zoneTerrainGrid[s.zone], x = Math.round(s.x), y = Math.round(s.y);
+    if (x < 0 || y < 0 || x > 79 || y > 79 || WATER.includes(g[y][x])) { const p = landNear(s.zone, x, y); s.x = p.x; s.y = p.y; }
+  });
+}
 function findValidTile(zId, isAquatic) {
   buildZoneTerrain(zId);
   const grid = zoneTerrainGrid[zId];
@@ -3094,13 +3131,13 @@ function buildIsland() {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const edge = Math.min(x, y, W - 1 - x, H - 1 - y) + (n2(x, y, 2, 1 / 14) - 0.5) * 12;
     const sea = field(GEO_SEA, x, y, 3), geo = zoneGeo(x, y);
-    if (edge < sea) { map[y][x] = 'ocean'; continue; }
+    if (edge < sea) { map[y][x] = edge > sea - 3 ? 'shallow_sea' : 'ocean'; continue; }
     const beachW = /beach/.test(geo) ? 6 : 1.5;
     if (edge < sea + beachW && !/mountain/.test(geo)) { map[y][x] = 'sand_bank'; continue; }
     // river with meanders and sandy banks
     const wig = (n3(x, y, 2, 1 / 18) - 0.5) * 14, rd = riverDist(x + wig, y + wig * 0.6);
     const hgt = field(GEO_HEIGHT, x, y, 0.3) + (n1(x, y) - 0.5) * 0.42;
-    if (rd < 3.6 && hgt < 0.86) { map[y][x] = 'river'; continue; }
+    if (rd < 3.6 && hgt < 0.86) { map[y][x] = rd < 1.6 && n1(x * 0.35 + 500, y * 0.35, 1, 1 / 9) > 0.4 ? 'river_deep' : 'river'; continue; }   // deep pools with shallow fords between
     if (rd < 5.6 && hgt < 0.6) { map[y][x] = 'sand_bank'; continue; }
     if (hgt > 0.9) { map[y][x] = 'mountain_peak'; continue; }
     if (hgt > 0.74) { map[y][x] = 'mountain_cliff'; continue; }
@@ -3123,7 +3160,7 @@ function buildZoneTerrain(zId) {
   z.res.forEach(rName => {
     const isWaterRes = /ปลา|กุ้ง|ปะการัง|หอยมือเสือ/.test(rName);
     const sp = isWaterRes ? 'fish' : (rName.includes('ไผ่') ? 'res_bamboo' : (/ไม้|กล้วย|มะพร้าว/.test(rName) ? 'res_tree' : 'res_rock'));
-    for (let i = 0; i < 3; i++) { const pos = findValidTile(zId, isWaterRes); nodes.push({ name: rName, sprite: sp, x: pos.x, y: pos.y }); }
+    for (let i = 0; i < 3; i++) { const pos = isWaterRes ? shallowTile(zId) : findValidTile(zId, false); nodes.push({ name: rName, sprite: sp, x: pos.x, y: pos.y }); }
   });
   zoneNodes[zId] = nodes;
 }
@@ -3219,6 +3256,14 @@ function pickChildName(gender, gen) {
   return name;
 }
 
+// where the herd actually is in that zone (the nearest animal drawn on screen, or the herd centre)
+function huntSpot(f, z, h) {
+  f.zoneCoords = f.zoneCoords || {};
+  if (!f.zoneCoords[z]) f.zoneCoords[z] = f.sprite === 'fish' ? shallowTile(z) : findValidTile(z, false);
+  const hd = f._herd && f._herd[z];
+  if (hd && hd.homes.length) return hd.homes.slice().sort((p, q) => Math.hypot(p.x - h.x, p.y - h.y) - Math.hypot(q.x - h.x, q.y - h.y))[0];
+  return f.zoneCoords[z];
+}
 function moveToward(a, gx, gy) {
   const step = Math.min(6, 2 + Math.floor(st(a, 'agi') / 8));
   const cl = v => Math.max(-step, Math.min(step, Math.round(v)));   // never overshoot the target
@@ -3228,7 +3273,7 @@ function moveToward(a, gx, gy) {
   const tries = [[dx, dy], [dx, 0], [0, dy], [Math.floor(Math.random() * 7) - 3, Math.floor(Math.random() * 7) - 3]];
   for (const [ox, oy] of tries) {
     const nx = clampC(a.x + ox), ny = clampC(a.y + oy);
-    if (!WATER.includes(grid[ny][nx])) { a.x = nx; a.y = ny; return; }
+    if (!DEEP.includes(grid[ny][nx])) { a.x = nx; a.y = ny; return; }
   }
 }
 
@@ -3250,7 +3295,7 @@ function crossZone(a, next) {
   const dc = Math.sign(B.c - A.c), dr = Math.sign(B.r - A.r);
   if (a._xz !== next || a._xzFrom !== a.zone) {               // plan a real walking path to a dry crossing point on the shared border
     a._xz = next; a._xzFrom = a.zone; buildZoneTerrain(next);
-    const ga = zoneTerrainGrid[a.zone], gb = zoneTerrainGrid[next], dry = (g, x, y) => !WATER.includes(g[y][x]);
+    const ga = zoneTerrainGrid[a.zone], gb = zoneTerrainGrid[next], dry = (g, x, y) => !DEEP.includes(g[y][x]);
     const isExit = (x, y) => (dc ? x === (dc > 0 ? 78 : 1) : y === (dr > 0 ? 78 : 1)) && dry(gb, dc ? (dc > 0 ? 1 : 78) : x, dc ? y : (dr > 0 ? 1 : 78));
     const sx = Math.max(1, Math.min(78, Math.round(a.x))), sy = Math.max(1, Math.min(78, Math.round(a.y)));
     const prev = new Int32Array(6400).fill(-1), Q = [sy * 80 + sx]; prev[Q[0]] = Q[0]; let end = -1;
@@ -3276,13 +3321,13 @@ function crossZone(a, next) {
   a.zone = next; a.x = p.x; a.y = p.y; a._xz = null; a._xpath = null;
   return true;
 }
-function atGoal(a) { return a.goal && a.zone === a.goal.zone && Math.hypot(a.x - a.goal.x, a.y - a.goal.y) <= 6; }
+function atGoal(a) { return a.goal && a.zone === a.goal.zone && Math.hypot(a.x - a.goal.x, a.y - a.goal.y) <= 2; }
 
 function stepFauna() {
   faunaSpecies.filter(f => (f.zp[currentZoneId] || 0) > 0).forEach(f => {
     const aquatic = f.sprite === 'fish';
     if (!f.zoneCoords) f.zoneCoords = {};
-    if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = findValidTile(currentZoneId, aquatic);
+    if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = aquatic ? shallowTile(currentZoneId) : findValidTile(currentZoneId, false);
     if (Math.random() < 0.6) {
       const cur = f.zoneCoords[currentZoneId];
       const nx = clampC(cur.x + Math.floor(Math.random() * 5) - 2);
@@ -3458,7 +3503,7 @@ function temperatureTick() {
         const nb = getAdjacentZones(a.zone).map(z => [z, (shelters.some(s => s.zone === z && (isRestShelter(s) || s.station === 'campfire')) ? 20 : 0) + (GEO_DT[ZONES[z].geo] || 0)])
           .sort((p, q) => q[1] - p[1])[0];
         if (nb && nb[1] > (GEO_DT[ZONES[a.zone].geo] || 0)) {
-          a.goal = { zone: nb[0], x: 40, y: 40, ttl: 14 }; a.gatherT = null;
+          a.goal = { zone: nb[0], x: 40, y: 40, ttl: 14, enter: true }; a.gatherT = null;
           a.bubble = `🥶 หนาวเกินไป ย้ายไปหาที่อุ่นที่ ${nb[0]}`; a.coldSeek = true;
         } else a.coldSeek = false;
       } else a.coldSeek = false;
@@ -3521,7 +3566,7 @@ function revelationStep(a) {
   if (!(zoneNodes[a.zone] || []).some(n => n.name === miss)) {
     const z = Object.keys(ZONES).filter(id => ZONES[id].res.includes(miss)).sort((p, q) => zoneDist(a.zone, p) - zoneDist(a.zone, q))[0];
     if (!z || z === a.zone) return false;
-    a.goal = { zone: z, x: 40, y: 40, ttl: 20 }; a.bubble = `📜 ไปหา${miss}ที่โซน ${z} ตามนิมิต`; return true;
+    a.goal = { zone: z, x: 40, y: 40, ttl: 20, enter: true }; a.bubble = `📜 ไปหา${miss}ที่โซน ${z} ตามนิมิต`; return true;
   }
   return seekItem(a, new RegExp('^' + miss.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), `📜 หา${miss} ตามนิมิต`);
 }
@@ -4151,9 +4196,15 @@ function runAutonomousStep() {
     }
     if (a.session) return;
     if (a.goal) {
-      a.goal.ttl = (a.goal.ttl || 30) - (a.zone === a.goal.zone ? 1 : 0.5);
-      if (a.goal.ttl <= 0) { a.goal = null; a.bubble = 'เลิกเดินทาง'; }
-      else { travelToGoal(a); return; }
+      const g = a.goal, gg = zoneTerrainGrid[g.zone];
+      if (gg && gg[Math.round(g.y)] && DEEP.includes(gg[Math.round(g.y)][Math.round(g.x)])) { const p = landNear(g.zone, Math.round(g.x), Math.round(g.y)); g.x = p.x; g.y = p.y; }
+      const arrived = a.zone === g.zone && (g.enter || Math.hypot(a.x - g.x, a.y - g.y) <= 2);
+      if (arrived && !g.sig && !g.method) a.goal = null;          // got there: carry on with normal life
+      else if (!arrived) {
+        g.ttl = (g.ttl || 30) - (a.zone === g.zone ? 1 : 0.5);
+        if (g.ttl <= 0) { a.goal = null; a.bubble = 'เลิกเดินทาง'; }
+        else { travelToGoal(a); return; }
+      }
     }
     const myV = villageOf(a);
     if (myV && a.hunger >= 55 && !(a.food > 0) && myV.food > 0 && a.zone !== myV.zone && bagValue(a) >= 2) {
@@ -4165,6 +4216,7 @@ function runAutonomousStep() {
     const fire = stationInZone(a.zone, 'campfire');
     if (night && fire && a.hunger < 60) { moveToward(a, fire.x + 1, fire.y + 1); return; }
     a.wantHunt = false;
+    if (!night && a._hunt && a._hunt.ttl > 0) return;           // stalking prey (handled in the hunting step)
     if (!night && a.hunger < 70 && revelationStep(a)) return;
     if (needStep(a, night)) return;
 
@@ -4172,19 +4224,26 @@ function runAutonomousStep() {
     // Feeding yourself comes first: hungry AI look for food spots, or move to a zone that has some
     const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
     if ((a.food || 0) < 6 && a.age >= 12) {
-      const fnode = nodes.find(n => FOODRX.test(n.name));
+      const fnode = nodes.filter(n => FOODRX.test(n.name)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
       if (fnode && (!a.gatherT || !FOODRX.test(a.gatherT.name))) a.gatherT = Object.assign({ zone: a.zone }, fnode);
+      // hungry: go straight to the food and stand at it (picking happens within 2 tiles)
+      if (a.gatherT && FOODRX.test(a.gatherT.name) && a.gatherT.zone === a.zone) {
+        if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) > 1.5) { for (let k = 0; k < 2; k++) moveToward(a, a.gatherT.x, a.gatherT.y); if (!a.bubble || !a.bubble.startsWith('😵')) a.bubble = `🍃 ไปหา${a.gatherT.name}กิน`; }
+        return;
+      }
+      const fruit = !fnode && objsOf(a.zone).filter(o => !o.dead && o.fruit).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+      if (fruit && Math.hypot(fruit.x - a.x, fruit.y - a.y) < 40) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(fruit.x - 0.5), Math.round(fruit.y - 0.5)); a.bubble = '🍎 ไปเก็บผลไม้กิน'; return; }
       if (!fnode && !night && Math.random() < 0.35) {
         const nb = getAdjacentZones(a.zone).filter(z => ZONES[z].res.some(r => FOODRX.test(r)) || faunaSpecies.some(f => isPrey(f) && (f.zp[z] || 0) > 0));
-        if (nb.length) { a.goal = { zone: pick(nb), x: 40, y: 40, ttl: 12 }; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; travelToGoal(a); return; }
+        if (nb.length) { a.goal = { zone: pick(nb), x: 40, y: 40, ttl: 12, enter: true }; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; travelToGoal(a); return; }
       }
     }
     if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
-      const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14 }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
+      const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14, enter: true }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
     }
     if (!night && a.age >= 12) {
       const sg = steleTarget(a), reading = sg && ((a.readS || {})[sg.id] || 0) > 0;
-      if (sg && Math.random() < (reading ? 0.9 : 0.3)) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) < 2.6) steleAct(a); return; }
+      if (sg && Math.random() < (reading ? 0.9 : 0.3)) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) <= 2) steleAct(a); return; }
     }
     if (false) {
       const sg = steleTarget(a);
@@ -4197,7 +4256,7 @@ function runAutonomousStep() {
     if (nodes.length && Math.random() < 0.85) {
       if (!a.gatherT || a.gatherT.zone !== a.zone) a.gatherT = Object.assign({ zone: a.zone }, questNode(a) || pick(nodes));
       moveToward(a, a.gatherT.x, a.gatherT.y);
-      if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= (a.gatherT.sprite === 'fish' ? 4 : 1.5)) a.gatherT = null;
+      if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= 1.5) a.gatherT = null;
     } else moveToward(a, a.x + Math.floor(Math.random() * 9) - 4, a.y + Math.floor(Math.random() * 9) - 4);
 
     if (Math.random() < 0.14 && !night) {
@@ -4206,7 +4265,7 @@ function runAutonomousStep() {
       const d = zoneDist(a.zone, a.home || a.zone);
       if (d >= 1 && Math.random() < 0.5 + d * 0.15) nb = nb.filter(z => zoneDist(z, a.home) < d);
       else nb = nb.filter(z => zoneDist(z, a.home || z) <= 1);
-      if (nb.length && !a.goal) { const z = pick(nb); a.goal = { zone: z, x: 40, y: 40, ttl: 12 }; }
+      if (nb.length && !a.goal) { const z = pick(nb); a.goal = { zone: z, x: 40, y: 40, ttl: 12, enter: true }; }
     }
   });
 
@@ -4225,7 +4284,7 @@ function runAutonomousStep() {
     const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= nodeReach(n));   // must actually stand at it
     if (!t) return;
     a.gatherCd = 1;                                   // standing right at it now, so pick every hour
-    let gain = season.gatherBonus + Math.floor(st(a, 'str') / 6) + (a.role.includes('เก็บ') ? 1 : 0);
+    let gain = season.gatherBonus + Math.floor(st(a, 'str') / 6) + (a.role.includes('เก็บ') ? 1 : 0) + 1;   // standing right at it
     gainExp(a, 'str', 0.6); gainExp(a, 'vit', 0.2);
     if (hasTool('axe', a) && propsOf(t.name).wood) { gain += 1; useTool('axe', a); }
     if ((a.bag || {})[BAG_NAME] > 0) gain += 1;
@@ -4271,11 +4330,12 @@ function runAutonomousStep() {
   // Hunting (needs weapons to be reliable)
   const hunters = aiAgents.filter(a => {
     if (a.age < 12 || a.questId || a.session || a.sleeping || a.wantRest) return false;
+    if (a._hunt && a._hunt.ttl > 0) return true;                // already stalking something: keep at it
     const v = villageOf(a);
     const isHunter = a.role.includes('ล่าสัตว์');
     const needFood = (a.food || 0) < 10 || (isHunter && v && v.food < v.members.length * 4) || a.wantHunt;
     return needFood && Math.random() < (isHunter || a.wantHunt ? 0.6 : 0.3);
-  }).slice(0, 4);
+  }).slice(0, 6);
   hunters.forEach(hunter => {
     // Only animals in the hunter's zone or next door; never below 2 on the island (law 1)
     const nearZones = [hunter.zone].concat(getAdjacentZones(hunter.zone));
@@ -4286,20 +4346,38 @@ function runAutonomousStep() {
       if (!z) return;
       // Predators are only hunted by bold/strong hunters
       const w = f.predator ? ((hunter.role.includes('ล่า') || st(hunter, 'str') + st(hunter, 'agi') >= 12) ? 1 : 0) : 4;
-      for (let i = 0; i < w; i++) options.push([f, z]);
+      for (let i = 0; i < w * (z === hunter.zone ? 4 : 1); i++) options.push([f, z]);
     });
-    if (options.length) {
-      const [target, tz] = pick(options);
+    // keep chasing the same quarry for a few hours instead of re-rolling every hour
+    let hk = hunter._hunt && options.find(([f, z]) => f.id === hunter._hunt.f && z === hunter._hunt.z && hunter._hunt.ttl-- > 0);
+    if (!hk) hunter._hunt = null;
+    if (!hk && options.length) { hk = pick(options); hunter._hunt = { f: hk[0].id, z: hk[1], ttl: 8 }; }
+    if (hk) {
+      const [target, tz] = hk;
+      // the hunter has to actually get within 2 tiles of an animal
+      if (tz !== hunter.zone) { if (!hunter.goal) hunter.goal = { zone: tz, x: 40, y: 40, ttl: 12, enter: true }; hunter.bubble = `🏹 ตามรอย${target.name}ไปโซน ${tz}`; travelToGoal(hunter); return; }
+      const hs = huntSpot(target, tz, hunter);
+      if (Math.hypot(hs.x - hunter.x, hs.y - hunter.y) > 2) {
+        for (let k = 0; k < 3; k++) moveToward(hunter, hs.x, hs.y);
+        const dNow = Math.hypot(hs.x - hunter.x, hs.y - hunter.y);
+        if (dNow > 2) {
+          if (hunter._hunt && hunter._hunt.d !== undefined && dNow >= hunter._hunt.d - 0.5) hunter._hunt.ttl -= 2;   // can't get any closer (deep water...): give up sooner
+          if (hunter._hunt) hunter._hunt.d = dNow;
+          hunter.gatherT = null; hunter.bubble = `🐾 ย่องเข้าหา${target.name}`; return;
+        }
+      }
+      if (hunter._hunt) { hunter._hunt.ttl = Math.min(hunter._hunt.ttl, 3); hunter._hunt.d = undefined; }   // missed? try again right here for a bit
       const weapon = hasTool('bow', hunter) ? 'bow' : (hasTool('blade', hunter) ? 'blade' : null);
       const base = target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25);
       const chance = Math.max(0.03, Math.min(0.95, base + st(hunter, 'str') * 0.01 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
       if (weapon) useTool(weapon, hunter);
       gainExp(hunter, 'str', target.predator ? 2 : 1); gainExp(hunter, 'agi', target.predator ? 2 : 1);
       if (Math.random() < chance) {
+        hunter._hunt = null;
         const bonus = extraLoot(target, tz);
         const vname = variantLabel(target, tz);
         target.zp[tz]--; syncFauna(target);
-        if (target.lootFood) addFood(hunter, Math.round(target.lootFood * 1.5));
+        if (target.lootFood) addFood(hunter, Math.round(target.lootFood * 2.2));   // a hunt now takes real stalking time, so it pays more
         for (const [m, q] of Object.entries(target.lootMat)) gainItems(hunter, m, q);
         for (const [m, q] of Object.entries(bonus)) gainItems(hunter, m, q);
         if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
@@ -5100,11 +5178,11 @@ function pupOutfit(a) {
   if (hide) return female ? 'deer' : 'hide';
   return female ? 'flower' : 'leaf';
 }
-const nodeReach = n => n.sprite === 'fish' ? 5 : 2.2;   // fish are caught from the shore
+const nodeReach = n => 2.2;   // everything is done within ~2 tiles (fish: wade into the shallows)
 function nearGatherable(a) {
   const x = a._rx !== undefined ? a._rx : a.x, y = a._ry !== undefined ? a._ry : a.y;
   if ((zoneNodes[a.zone] || []).some(n => Math.hypot(n.x - x, n.y - y) <= nodeReach(n) + 0.3)) return true;
-  return objsOf(a.zone).some(o => !o.dead && Math.hypot(o.x - x - 0.5, o.y - y - 0.5) <= 3.2);
+  return objsOf(a.zone).some(o => !o.dead && Math.hypot(o.x - x - 0.5, o.y - y - 0.5) <= 2.1);
 }
 function pupActivity(a, moving, fast) {
   const b = a.bubble || '';
@@ -5365,7 +5443,7 @@ function drawBow(ctx, m, b, s, part) {
 // ==========================================
 const WT = 16;                                   // world pixels per tile
 const VIEW = { zoom: 2.4, cx: 40 * WT, cy: 40 * WT, follow: null, w: 0, h: 0, dpr: 1, last: 0 };
-const NATURE = { ocean: '#4a9fd1', river: '#6cc0e8', swamp_water: '#5aa596', sand_bank: '#efdca6', mud_flat: '#b08a5e', grass: '#9bd472',
+const NATURE = { ocean: '#4a9fd1', shallow_sea: '#74c6e6', river_deep: '#4fa8d8', river: '#6cc0e8', swamp_water: '#5aa596', sand_bank: '#efdca6', mud_flat: '#b08a5e', grass: '#9bd472',
   tall_grass: '#84c75f', forest: '#6aad55', hill_slope: '#bdb291', mountain_cliff: '#a59e94', mountain_peak: '#d6cfc4' };
 const RES_ICON = [[/ใบไม้สด/, '🍃'], [/ไผ่/, '🎋'], [/มะพร้าว|ต้นจาก/, '🌴'], [/กล้วย/, '🍌'], [/ไม้เนื้อแข็ง/, '🌳'], [/ขอนไม้|กิ่ง/, '🪵'], [/ปลา/, '🐟'], [/กุ้ง/, '🦐'],
   [/ปู/, '🦀'], [/ปะการัง/, '🪸'], [/หอย/, '🐚'], [/น้ำจืด/, '💧'], [/กก/, '🌾'], [/มะละกอ/, '🥭'], [/เบอร์รี่/, '🫐'], [/เห็ด/, '🍄'], [/สมุนไพร/, '🌿'],
@@ -5379,7 +5457,7 @@ function jitterColor(hex, j) {
 }
 // ---------- isometric projection ----------
 const IW = 32, IH = 16, EH = 9, TOPPAD = 4 * EH, ISO_OX = 80 * IW / 2;
-const ELEV = { mountain_peak: 3, mountain_cliff: 2, hill_slope: 1, ocean: -0.45, river: -0.35, swamp_water: -0.3 };
+const ELEV = { mountain_peak: 3, mountain_cliff: 2, hill_slope: 1, ocean: -0.45, shallow_sea: -0.4, river_deep: -0.4, river: -0.35, swamp_water: -0.3 };
 const elevOf = t => ELEV[t] || 0;
 const isoXY = (tx, ty) => [ISO_OX + (tx - ty) * IW / 2, TOPPAD + (tx + ty) * IH / 2];
 function groundAt(tx, ty, zId) {
@@ -5428,7 +5506,7 @@ function getTerrainCanvasFlat(zId) {
 }
 
 // ----- textured terrain (Gemini seamless textures) -----
-const TERR_TEX = { ocean: 'deep', river: 'shallow', swamp_water: 'shallow', sand_bank: 'sand', mud_flat: 'dirt', grass: 'grass', tall_grass: 'grass', forest: 'grass', hill_slope: 'grass', mountain_cliff: 'rock', mountain_peak: 'snow' };
+const TERR_TEX = { ocean: 'deep', shallow_sea: 'shallow', river_deep: 'deep', river: 'shallow', swamp_water: 'shallow', sand_bank: 'sand', mud_flat: 'dirt', grass: 'grass', tall_grass: 'grass', forest: 'grass', hill_slope: 'grass', mountain_cliff: 'rock', mountain_peak: 'snow' };
 const TERR_PRI = { deep: 0, shallow: 1, sand: 2, dirt: 3, grass: 4, rock: 5, snow: 6 };
 const TERR_WALL = { sand: 'sand', dirt: 'dirt', grass: 'dirt', rock: 'rock', snow: 'ice' };
 const TERR_LIP = { grass: 'grass', sand: 'sand', snow: 'snow' };
@@ -5832,7 +5910,7 @@ function objTarget(a) {
 }
 // AI: act on an object within reach (pick fruit / hit with a tool)
 function objAct(a) {
-  const objs = objsOf(a.zone); let near = null, nd = 3.2;
+  const objs = objsOf(a.zone); let near = null, nd = 2.1;
   for (const o of objs) { if (o.dead) continue; const d = Math.hypot(o.x - a.x - 0.5, o.y - a.y - 0.5); if (d < nd) { nd = d; near = o; } }
   if (!near) return false;
   if (near.fruit && ((a.food || 0) < 25 || Math.random() < 0.3)) return pickFruit(a, near);
@@ -5893,7 +5971,8 @@ function needsOf(a) {
 const NEED_LABEL = { food: '🍖 อาหาร', shelter: '🛖 ที่อยู่อาศัย', cloth: '🧥 เครื่องนุ่งห่ม', medicine: '🌿 ยารักษาโรค', fire: '🔥 กองไฟ' };
 function buildHut(a) {
   a.bag['กิ่งไม้แห้ง'] -= 3;
-  const hut = { id: 'hut_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `เพิงพักของ${a.name}`, sprite: 'shelter_hut', zone: a.zone, x: Math.max(1, a.x - 1), y: Math.max(1, a.y - 2), station: null, rest: true, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
+  const hs = buildSpot(a.zone, a.x - 1, a.y - 1);
+  const hut = { id: 'hut_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `เพิงพักของ${a.name}`, sprite: 'shelter_hut', zone: a.zone, x: hs.x, y: hs.y, station: null, rest: true, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
   shelters.push(hut); gainExp(a, 'dex', 1);
   addLog(`🛖 [ปัจจัย 4 · ที่อยู่อาศัย] "${a.name}" เอากิ่งไม้มาทำเพิงพักที่ ${ZONES[a.zone].name}`, '#a3e635');
   return hut;
@@ -5925,8 +6004,9 @@ function buildHome(key, a) {
   if (old.some(h => (h.tier || 1) >= d.tier)) { put(a, 'กิ่งไม้แห้ง', 0); return `มีที่พักที่ดีกว่าหรือเท่ากับ "${d.name}" อยู่แล้ว`; }
   buildZoneTerrain(a.zone);
   const prev = old[0];
-  const x = prev && prev.zone === a.zone ? prev.x : clampC(a.x - 1), y = prev && prev.zone === a.zone ? prev.y : clampC(a.y - 2);
   shelters = shelters.filter(h => !old.includes(h));
+  const near = prev && prev.zone === a.zone && Math.hypot(prev.x - a.x, prev.y - a.y) <= 2;
+  const sp = near ? { x: prev.x, y: prev.y } : buildSpot(a.zone, a.x - 1, a.y - 1), x = sp.x, y = sp.y;
   const hut = { id: 'home_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `${d.name}ของ${a.name}`, kind: key, sprite: 'home_' + key, zone: a.zone, x, y, station: null, rest: true,
     tier: d.tier, warm: d.warm, hp: d.hp, maxHp: d.hp, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
   shelters.push(hut); gainExp(a, 'dex', 1 + d.tier);
@@ -5964,7 +6044,7 @@ function needStep(a, night) {
     }
     // no idea yet: an unread tablet nearby may hold the answer
     const sg = steleTarget(a);
-    if (sg && sg.n === 1) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) < 2.6) steleAct(a); else a.bubble = '📜 ปัจจัย 4: ไปอ่านศิลาโบราณ เผื่อมีวิธีทำที่พัก'; return true; }
+    if (sg && sg.n === 1) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) <= 2) steleAct(a); else a.bubble = '📜 ปัจจัย 4: ไปอ่านศิลาโบราณ เผื่อมีวิธีทำที่พัก'; return true; }
     // no idea yet: collect sticks and leaves, then try things with them (the hunch drives experiments)
     const leaf = Object.keys(MAT).find(n => MAT[n].leaf && avail(a, n) > 0) || 'ใบตองสด';
     if (avail(a, 'กิ่งไม้แห้ง') < 2) return seekItem(a, /กิ่ง/, '🏠 ปัจจัย 4: ยังไม่มีที่พัก ลองหากิ่งไม้มาก่อน');
@@ -6089,12 +6169,13 @@ function steleAct(a) {
   const H = homeOf(a);
   if (mine.length && a.zone === H.zone) {
     const store = (H.v && shelters.find(x => x.villageId === H.v.id)) || stationInZone(a.zone, 'campfire') || { x: a.x, y: a.y };
-    mine.forEach((s, i) => { s.holder = null; s.vill = H.vill; s.zone = a.zone; s.x = store.x + 2 + i * 0.9 + Math.random() * 0.5; s.y = store.y + 2.5 + Math.random() * 0.5; });
+    if (Math.hypot(store.x + 1 - a.x, store.y + 1 - a.y) > 2) { moveToward(a, Math.round(store.x + 1), Math.round(store.y + 1)); a.bubble = '🧩 แบกเศษศิลากลับแคมป์'; return true; }
+    mine.forEach((s, i) => { const p = buildSpot(a.zone, a.x + 1, a.y + 1); s.holder = null; s.vill = H.vill; s.zone = a.zone; s.x = p.x + 0.5 + i * 0.3; s.y = p.y + 0.5; });
     a.bubble = '🧩 เอาเศษศิลามาเก็บที่แคมป์';
     tryAssemble(mine[0].set);
     return true;
   }
-  let near = null, nd = 2.6;
+  let near = null, nd = 2.1;
   for (const s of steles) { if (s.zone !== a.zone || s.dead || s.holder) continue; const d = Math.hypot(s.x - a.x - 0.5, s.y - a.y - 0.5); if (d < nd) { nd = d; near = s; } }
   if (!near) return false;
   if (near.n > 1 && !near.vill) {
@@ -6275,7 +6356,7 @@ function insectTick() {
     const here = insectsOf(a.zone);
     // insects are wildlife too: AI swat / hunt them for their parts (bare hands work, a blade is better)
     if (a.age >= 10 && !a.sleeping && Math.random() < 0.25) {
-      const tgt = here.find(b => !b.dead && !(INSECTS[b.k].night && !night) && !(INSECTS[b.k].day && night && INSECTS[b.k].fly) && Math.abs(b.x - a.x) < 3 && Math.abs(b.y - a.y) < 3);
+      const tgt = here.find(b => !b.dead && !(INSECTS[b.k].night && !night) && !(INSECTS[b.k].day && night && INSECTS[b.k].fly) && Math.hypot(b.x - a.x, b.y - a.y) <= 2);
       if (tgt) {
         const D = INSECTS[tgt.k], blade = toolItems.find(t => (t.type === 'blade' || t.type === 'sickle') && canUse(a, t));
         const hitP = Math.min(0.9, 0.3 + st(a, 'agi') * 0.02 + st(a, 'dex') * 0.01 + (blade ? 0.15 : 0));
@@ -6434,7 +6515,7 @@ function drawCanvas() {
   }
   faunaSpecies.filter(f => (f.zp[currentZoneId] || 0) > 0).forEach(f => {
     if (!f.zoneCoords) f.zoneCoords = {};
-    if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = findValidTile(currentZoneId, f.sprite === 'fish');
+    if (!f.zoneCoords[currentZoneId]) f.zoneCoords[currentZoneId] = f.sprite === 'fish' ? shallowTile(currentZoneId) : findValidTile(currentZoneId, false);
     const pos = f.zoneCoords[currentZoneId], grid = zoneTerrainGrid[currentZoneId];
     const n = Math.min(f.zp[currentZoneId], f.sprite === 'fish' ? 8 : 12), aquatic = f.sprite === 'fish';
     f._herd = f._herd || {};
