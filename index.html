@@ -549,6 +549,7 @@
 <script src="assets/chars.js"></script>
 <script src="assets/world.js"></script>
 <script src="assets/hair.js"></script>
+<script src="assets/eyes.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -4636,6 +4637,15 @@ function tintedHair(key, color) {
   g.globalCompositeOperation = 'destination-in'; g.drawImage(im, 0, 0);
   return (HAIR_TINT[id] = c);
 }
+const EYE_IMG = {};
+(function () { const E = window.EYE_ART; if (!E) return; for (const k in E) { const im = new Image(); im.src = E[k].src; EYE_IMG[k] = im; } })();
+// drawn eyes + brows per mood (rig space, same coords as hair)
+function drawEyeArt(ctx, a, mood) {
+  if (!window.EYE_ART) return false;
+  const e = EYE_ART[mood] || EYE_ART.happy, im = EYE_IMG[EYE_ART[mood] ? mood : 'happy'];
+  if (!e || !im || !im.complete || !im.naturalWidth) return false;
+  ctx.drawImage(im, e.x, e.y, e.w, e.h); return true;
+}
 function drawHairLayer(ctx, a, L, color) {
   if (!window.HAIR_ART || a.age < 2) return false;
   const k = hairStyleOf(a), e = HAIR_ART[k] && HAIR_ART[k][L]; if (!e) return L === 'B' && !!HAIR_ART[k];
@@ -4727,6 +4737,8 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   if (rig.cape) drawP('cape_front', Mb);
   // hair cap + face
   ctx.setTransform(withBase(Mb));
+  const mood = getMood(a);
+  const artEyes = drawEyeArt(ctx, a, mood);
   const artHair = a.age >= 2 && drawHairLayer(ctx, a, 'F', hc);
   if (a.age >= 2 && !artHair) {
     ctx.fillStyle = hc; ctx.beginPath();
@@ -4734,10 +4746,9 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
     ctx.beginPath(); ctx.ellipse(hcx + hr * 0.35, hcy - hr * 0.45, hr * 0.55, hr * 0.32, 0.4, 0, Math.PI * 2); ctx.fill();
     if (a.gender === 'หญิง') { ctx.fillStyle = '#f472b6'; ctx.beginPath(); ctx.arc(hcx - hr * 0.55, hcy - hr * 0.55, hr * 0.16, 0, Math.PI * 2); ctx.fill(); }
   }
-  const mood = getMood(a);
   ctx.lineWidth = Math.max(0.6, hr * 0.09); ctx.lineCap = 'round';
   const fxh = hcx + hr * 0.28, fyh = hcy + hr * 0.12, fr = hr * 0.62;
-  FACE.eyes(ctx, fxh, fyh, fr, mood); FACE.mouth(ctx, fxh, fyh, fr, mood);
+  if (!artEyes) FACE.eyes(ctx, fxh, fyh, fr, mood); FACE.mouth(ctx, fxh, fyh, fr, mood);
   if (item === 'bow') drawBow(ctx, withBase(Mb), bowInfo, s, 'string');
   if (item && item !== 'bow') drawItem(ctx, withBase(base), base.inverse().multiply(M.foN), rig, item, p);
   drawP('upN', M.upN);
