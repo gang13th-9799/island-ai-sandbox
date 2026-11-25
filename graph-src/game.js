@@ -1055,7 +1055,7 @@ const TEMPLE_IMG = {};
 function templeArtIdx(t) { const p = templePct(t); return p >= 100 ? 4 : p >= 75 ? 3 : p >= 50 ? 2 : 1; }
 function drawTemple(ctx, t, cx, fy) {
   const i = templeArtIdx(t), A = window.TEMPLE_ART && TEMPLE_ART['s' + i];
-  const hh = HUMAN_H * 3.1;
+  const hh = HUMAN_H * 4.6;
   if (A) {
     let im = TEMPLE_IMG[i]; if (!im) { im = TEMPLE_IMG[i] = new Image(); im.src = A.src; }
     if (im.complete && im.naturalWidth) { const hw = hh * A.w / A.h; ctx.drawImage(im, cx - hw / 2, fy - hh * 0.96, hw, hh); return { h: hh * 0.96 }; }
