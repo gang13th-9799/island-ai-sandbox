@@ -1661,6 +1661,13 @@ function templeDone(a, t, q) {
 // art for the 4 restoration looks (assets/temple.js sets window.TEMPLE_ART = {s1..s4:{src,w,h}}); until then a stand-in
 const TEMPLE_IMG = {};
 function templeArtIdx(t) { const p = templePct(t); return p >= 100 ? 4 : p >= 75 ? 3 : p >= 50 ? 2 : 1; }
+// soft contact shadow tucked under an object's base (no hard disc sticking out in front, which reads as floating)
+function groundShadow(ctx, cx, fy, rx, ry, a = 0.2) {
+  if (rx <= 0) return;
+  const y = fy - ry * 0.35, g = ctx.createRadialGradient(cx, y, 0, cx, y, rx);
+  g.addColorStop(0, `rgba(30,26,18,${a})`); g.addColorStop(0.55, `rgba(30,26,18,${a * 0.55})`); g.addColorStop(1, 'rgba(30,26,18,0)');
+  ctx.save(); ctx.translate(cx, y); ctx.scale(1, ry / rx); ctx.translate(-cx, -y); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, y, rx, 0, 7); ctx.fill(); ctx.restore();
+}
 function drawTemple(ctx, t, cx, fy) {
   const i = templeArtIdx(t), A = window.TEMPLE_ART && TEMPLE_ART['s' + i];
   const hh = HUMAN_H * 4.6;
@@ -6562,7 +6569,7 @@ function drawStele(ctx, s, cx, fy) {
   const k = tall ? HUMAN_H * 0.95 / C.H : HUMAN_H * 1.15 / C.W;
   const w = C.c.width * k, h = C.c.height * k;
   const x = cx - C.W * k / 2 + C.ox * k, y = fy - C.H * k + C.oy * k + (tall ? C.H * k * 0.06 : 0);
-  ctx.fillStyle = 'rgba(30,50,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, C.W * k * 0.42, C.W * k * 0.1, 0, 0, 7); ctx.fill();
+  groundShadow(ctx, cx, fy, C.W * k * 0.32, C.W * k * 0.08, 0.2);
   ctx.drawImage(C.c, x, y, w, h);
 }
 // built objects (campfire, workbench...) have durability too; when it runs out they are gone for good
@@ -6590,7 +6597,7 @@ function drawWorldObj(ctx, o, cx, fy, now) {
   const stI = objState(o);
   let sx = 0; if (o.hitT && now - o.hitT < 0.35) sx = Math.sin((now - o.hitT) * 60) * 1.5 * (1 - (now - o.hitT) / 0.35);
   const w = s.w * (o.dead ? 0.6 : 1);
-  ctx.fillStyle = 'rgba(30,50,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, w * (d.tall ? 0.28 : 0.4), w * (d.tall ? 0.08 : 0.12), 0, 0, 7); ctx.fill();
+  groundShadow(ctx, cx, fy, w * (d.tall ? 0.22 : 0.3), w * (d.tall ? 0.065 : 0.09), 0.22);
   let hide = false;
   if (d.tall && !o.dead) hide = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < o.x + o.y - 0.5 && Math.abs(a._feet[0] - cx) < s.w * 0.45 && a._feet[1] < fy && a._feet[1] > fy - s.h);
   if (hide) ctx.globalAlpha = 0.45;
@@ -6730,7 +6737,7 @@ function drawInsect(ctx, b, now, night) {
   let pose = sleep ? 3 : D.fly ? (Math.sin(now * (b.k === 'bee' ? 30 : 14) + b.ph) > 0 ? 4 : 5) : (Math.sin(t * 2) > -0.3 ? (Math.sin(now * 5 + b.ph) > 0 ? 4 : 5) : 0);
   if (b.k === 'butterfly' && Math.sin(t * 0.37) > 0.75) pose = 1;
   const P = A[pose], sc = (ANIM_REL[b.k] || 0.5) / (A[0].h / HUMAN_H);
-  ctx.fillStyle = 'rgba(30,40,20,.16)'; ctx.beginPath(); ctx.ellipse(cx, fy, P.w * sc * 0.3, P.w * sc * 0.08, 0, 0, 7); ctx.fill();
+  groundShadow(ctx, cx, fy, P.w * sc * 0.22, P.w * sc * 0.06, 0.12);
   drawAnimal(ctx, b.k, pose, cx, fy - hov, face, sc, null, now);
   if (b.k === 'firefly') {                          // glowing lantern on the abdomen (measured per pose)
     const L = FF_LAMP[pose] || FF_LAMP[0], w = P.w * sc, h = P.h * sc;
@@ -6771,7 +6778,7 @@ function drawCanvas() {
     const w = (SPRITES[key] ? SPRITES[key][0].length / SPRITES[key].length : 1.4) * (SIZE_REL[key] || 1) * HUMAN_H;
     const art = key === 'st_fire' ? 'camp_fire' : key === 'st_bench' ? 'camp_bench' : null;
     const sw = art && window.WORLD_ART ? WORLD_ART.sprites[art].w * 0.8 : w;
-    ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, sw * 0.55, sw * 0.16, 0, 0, 7); ctx.fill();
+    if (s.station !== 'temple' && !homeArtKey(s) && !art) groundShadow(ctx, cx, fy, sw * 0.4, sw * 0.11, 0.18);
     let d;
     const hk = s.station === 'temple' ? null : homeArtKey(s), HA = hk && window.HOME_ART && HOME_ART[hk], him = HA && homeImg(hk);
     if (s.station === 'temple') { d = drawTemple(ctx, s, cx, fy); }
@@ -6808,7 +6815,7 @@ function drawCanvas() {
   toolItems.forEach(t => { if (t.holder || t.zone !== currentZoneId) return;        // tools lying on the ground
     items.push({ y: t.x + t.y + 0.9, draw: () => {
       const [cx, fy] = groundAt(t.x + 0.5, t.y + 0.5), k = itemArtKey(t.name), sz = HUMAN_H * 0.42;
-      ctx.fillStyle = 'rgba(40,30,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, sz * 0.45, sz * 0.15, 0, 0, 7); ctx.fill();
+      groundShadow(ctx, cx, fy, sz * 0.36, sz * 0.11, 0.2);
       if (k) { const im = TOOL_ICON_IMG[k] || (TOOL_ICON_IMG[k] = Object.assign(new Image(), { src: ITEM_ART[k].icon })); if (im.complete) ctx.drawImage(im, cx - sz / 2, fy - sz * 0.85, sz, sz); }
       else { ctx.font = `${sz * 0.7}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText('🔧', cx, fy); ctx.textAlign = 'left'; }
       if (showLabels) labels.push({ x: cx, y: fy - sz - 2, text: t.name, color: '#7c4a03', bg: 'rgba(255,248,230,.9)' });
@@ -6816,7 +6823,7 @@ function drawCanvas() {
   });
   (zoneNodes[currentZoneId] || []).forEach(n => items.push({ y: n.x + n.y + 1, draw: () => {
     const [cx, fy] = groundAt(n.x + 0.5, n.y + 0.5), ic = resIcon(n.name), tall = n.sprite === 'res_tree' || n.sprite === 'res_bamboo';
-    ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(cx, fy, WT * (tall ? 1.6 : 0.7), WT * 0.32, 0, 0, 7); ctx.fill();
+    groundShadow(ctx, cx, fy, WT * (tall ? 1.0 : 0.5), WT * 0.24, 0.18);
     if (tall) {
       const hidden = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < n.x + n.y && Math.abs(a._feet[0] - cx) < HUMAN_H * 1.1 && a._feet[1] < fy && a._feet[1] > fy - HUMAN_H * 2.6);
       if (hidden) ctx.globalAlpha = 0.45;
@@ -6894,7 +6901,7 @@ function drawCanvas() {
           const pose = sleep ? 3 : fleeing ? (two && Math.sin(now * 14 + h.ph) > 0 ? 5 : 4) : close ? 2 : graze ? 1 : walkA ? (two && Math.sin(now * 7 + h.ph) > 0 ? 5 : 4) : 0;
           if (fleeing) face = h.ffx >= 0 ? 1 : -1;
           const sc = (rel / (WORLD_ART.animals[art][0].h / HUMAN_H)) * (art === 'fish' ? 1 : 1), w = WORLD_ART.animals[art][pose].w * sc;
-          if (art !== 'fish') { ctx.fillStyle = 'rgba(30,40,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.4, w * 0.1, 0, 0, 7); ctx.fill(); }
+          if (art !== 'fish') groundShadow(ctx, cx, fy0, w * 0.32, w * 0.08, 0.22);
           const fyy = art === 'fish' ? fy0 - 2 + Math.sin(t * 4) * 1.2 : (pose === 4 ? fy : fy0);
           if (art === 'fish') ctx.globalAlpha = 0.85;
           drawAnimal(ctx, art, pose, cx, fyy, face, sc, tt, now);
@@ -6902,7 +6909,7 @@ function drawCanvas() {
           return;
         }
         const mat = SPRITES[keyS], hh = rel * HUMAN_H, p = hh / mat.length, w = mat[0].length * p, ax = cx - w / 2, ay = fy - hh, ps = p;
-        ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(cx, fy0, w * 0.42, w * 0.09, 0, 0, 7); ctx.fill();
+        groundShadow(ctx, cx, fy0, w * 0.32, w * 0.07, 0.2);
         ctx.save(); if (face < 0) { ctx.translate(cx * 2, 0); ctx.scale(-1, 1); }
         if (tt.parts.includes('ปีก')) { ctx.fillStyle = 'rgba(226,232,240,.9)'; ctx.beginPath(); ctx.moveTo(ax + ps * 5, ay + ps * 3); ctx.lineTo(ax + ps * 2, ay - ps * 3); ctx.lineTo(ax + ps * 9, ay + ps * 2); ctx.closePath(); ctx.fill(); }
         drawSized(ctx, keyS, cx, fy, rc, rel);
@@ -7123,7 +7130,7 @@ function drawThought(ctx, a, hasQuest) {
 function drawAgent(ctx, a, now, labels) {
   const H = HUMAN_H;
   const [fx, feetY] = groundAt(a._rx + 0.5, a._ry + 0.5); a._feet = [fx, feetY];
-  ctx.fillStyle = 'rgba(40,30,20,0.25)'; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.2, H * 0.06, 0, 0, 7); ctx.fill();
+  groundShadow(ctx, fx, feetY, H * 0.17, H * 0.05, 0.26);
   if (VIEW.follow === a.id) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.28, H * 0.09, 0, 0, 7); ctx.stroke(); }
   const anim = pupActivity(a, a._moving, a._fast);
   const ok = PUP.ready && drawPuppet(ctx, a, fx, feetY, H, anim, now);
