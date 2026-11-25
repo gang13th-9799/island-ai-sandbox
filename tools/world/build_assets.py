@@ -44,13 +44,23 @@ for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.
     def band(f0,f1):
       xs=[x for x in cols if x0+bw*f0<=x<=x0+bw*f1]; return xs
     # body thickness from the middle columns (top of back to bottom of belly, ignoring legs)
-    mid=band(0.35,0.6); thick=np.median([np.ptp(np.where(al[:,x])[0]) for x in mid])*0.55
-    hx_=band(0.78,1.0); ys=np.concatenate([np.where(al[:,x])[0] for x in hx_]); xs=np.concatenate([[x]*al[:,x].sum() for x in hx_])
-    hx,hy=xs.mean(), np.percentile(ys,30)
-    bx=np.mean(mid); by=np.mean([tops[x] for x in mid])+thick*0.25
-    rr=band(0.06,0.2); rx=np.mean(rr); ry=np.mean([tops[x] for x in rr])+thick*0.3
+    def topat(f0,f1):
+      xs=band(f0,f1); return float(np.mean(xs)), float(np.mean([tops[x] for x in xs]))
+    # body rows = upper part of the animal without legs: rows where the body is wide
+    rows=np.where(al.sum(1)>bw*0.35)[0]; by0,by1=(rows.min(),rows.max()) if len(rows) else (0,H_)
+    # head: front 25%; ear = highest point there; horns go just behind/beside the ear, a little below its tip
+    hx_=band(0.75,1.0); ex=min(hx_,key=lambda x:tops[x]); ey=tops[ex]
+    hb=[x for x in hx_ if tops[x]<=ey+(by1-by0)*0.6]
+    hx,hy=ex-bw*0.03, ey+(np.median([tops[x] for x in hb])-ey)*0.6+ (by1-by0)*0.12
+    # wings: on the back above the front legs; armor: middle of the back
+    wx,wy=topat(0.58,0.7); ax_,ay_=topat(0.4,0.55)
+    # tail: the butt = back-most body point in the upper half of the body
+    up=[y for y in range(int(by0),int(by0+(by1-by0)*0.6)+1) if al[y].any()]
+    bx_l=[(np.where(al[y])[0].min(),y) for y in up]; tx,ty=min(bx_l) if bx_l else (x0,by0)
+    hx,hy,bx,by,rx,ry=hx,hy,wx,wy,tx+bw*0.04,ty
+    extra={'armor':None}
     f=lambda x,y:[round((x-W_/2)/RES,2),round((y-H_)/RES,2)]
-    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry)})
+    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry),'mid':f(ax_,ay_)})
 MU={}
 for f in sorted(glob.glob('/home/claude/mut/*.png')):
   k=f.split('/')[-1][:-4]; im=Image.open(f).convert('RGBA')
