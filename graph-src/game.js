@@ -5143,11 +5143,12 @@ function needsOf(a) {
     food: { ok: personalFood(a) >= 8 && a.hunger < 50, score: (a.hunger || 0) * 0.8 + Math.max(0, 8 - personalFood(a)) * 6 },
     shelter: { ok: hasShelter(a), score: hasShelter(a) ? 0 : 38 + (Math.floor(simMinutes / 60) % 24 >= 14 ? 15 : 0) + (WEATHER[zoneWeather(a.zone)].wet ? 10 : 0) },
     cloth: { ok: clothWarmth(a) >= 4, score: clothWarmth(a) >= 4 ? 0 : cold ? 34 + Math.max(0, 60 - (a.warmth ?? 100)) * 0.5 : 8 },
+    fire: { ok: !!stationInZone(H.zone, 'campfire'), score: stationInZone(H.zone, 'campfire') || a.zone !== H.zone ? 0 : 30 + (cold ? 12 : 0) + (Math.floor(simMinutes / 60) % 24 >= 15 ? 8 : 0) },
     medicine: { ok: hpP >= 0.6 || herbs > 0, score: hpP < 0.6 ? (herbs > 0 ? 10 : 30 + (1 - hpP) * 60) : herbs < 1 ? 6 : 0 }
   };
   return n;
 }
-const NEED_LABEL = { food: '🍖 อาหาร', shelter: '🛖 ที่อยู่อาศัย', cloth: '🧥 เครื่องนุ่งห่ม', medicine: '🌿 ยารักษาโรค' };
+const NEED_LABEL = { food: '🍖 อาหาร', shelter: '🛖 ที่อยู่อาศัย', cloth: '🧥 เครื่องนุ่งห่ม', medicine: '🌿 ยารักษาโรค', fire: '🔥 กองไฟ' };
 function buildHut(a) {
   a.bag['กิ่งไม้แห้ง'] -= 3;
   const hut = { id: 'hut_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `เพิงพักของ${a.name}`, sprite: 'shelter_hut', zone: a.zone, x: Math.max(1, a.x - 1), y: Math.max(1, a.y - 2), station: null, rest: true, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
@@ -5227,6 +5228,25 @@ function needStep(a, night) {
     if (avail(a, 'กิ่งไม้แห้ง') < 2) return seekItem(a, /กิ่ง/, '🏠 ปัจจัย 4: ยังไม่มีที่พัก ลองหากิ่งไม้มาก่อน');
     if (!a.hunch) a.hunch = { items: ['กิ่งไม้แห้ง', leaf], m: pick(['bind', 'cut', 'knap', 'friction']), ttl: 6 };
     a.bubble = '🤔 ปัจจัย 4: คิดหาวิธีทำที่พักจากกิ่งไม้ใบไม้';
+    return false;
+  }
+  if (k === 'fire') {
+    // a camp needs a fire: warmth at night and cooked food
+    const kn = Object.values(a.know).some(e => e.out === 'campfire');
+    if (kn) {
+      const step = planFor(a, 'campfire');
+      if (step && methodUsable(a, step.m) && hasMaterials(step.a, step.b, a)) { craftKnown(a, step); a.bubble = '🔥 ก่อกองไฟให้แคมป์'; return true; }
+      const e = Object.values(a.know).find(x => x.out === 'campfire'), miss = [e.a, e.b].find(n => avail(a, n) < (e.a === e.b ? 2 : 1));
+      if (miss && seekItem(a, new RegExp(miss), `🔥 หา${miss}มาก่อไฟ`)) return true;
+      return false;
+    }
+    // never made fire: gather dry wood and something dry and fluffy, then try rubbing them
+    const dry = Object.keys(a.bag || {}).find(n => a.bag[n] > 0 && propsOf(n).wood && propsOf(n).dry);
+    const fluff = Object.keys(a.bag || {}).find(n => a.bag[n] > 0 && propsOf(n).fiber && propsOf(n).dry);
+    if (!dry) return seekItem(a, /กิ่ง/, '🔥 อยากได้ไฟ หากิ่งไม้แห้งมาลองดู');
+    if (!fluff && Math.random() < 0.6) { if (seekItem(a, /กาบมะพร้าว|ตะไคร่|ใย|หญ้าแห้ง/, '🔥 หาของแห้งฟูๆ ไว้รับไฟ')) return true; }
+    if (!a.hunch) a.hunch = { items: [dry, fluff || dry], m: 'friction', ttl: 8 };
+    a.bubble = '🤔 คิดหาวิธีทำไฟ ลองถูไม้แห้งดู';
     return false;
   }
   if (k === 'cloth') {
