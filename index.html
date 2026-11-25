@@ -3093,12 +3093,8 @@ function staminaTick() {
     if (near) { a.x = spot.x + Math.floor(Math.random() * 3) - 1; a.y = spot.y + Math.floor(Math.random() * 2); }
     // nowhere to sleep? build a simple lean-to if you carry enough sticks
     if (!near && (a.bag || {})['กิ่งไม้แห้ง'] >= 3 && !shelters.some(s => s.zone === a.zone && isRestShelter(s))) {
-      a.bag['กิ่งไม้แห้ง'] -= 3;
-      const hut = { id: 'hut_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `เพิงพักของ${a.name}`, sprite: 'shelter_hut', zone: a.zone, x: Math.max(1, a.x - 1), y: Math.max(1, a.y - 2), station: null, rest: true, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
-      shelters.push(hut);
+      const hut = buildHut(a);
       a.sleepKind = 'bed'; a.sleepAt = hut.name;
-      gainExp(a, 'dex', 1);
-      addLog(`🛖 [สร้างที่พัก] "${a.name}" เอากิ่งไม้มาทำเพิงพักที่ ${ZONES[a.zone].name} ใครเหนื่อยก็มานอนได้`, '#a3e635');
     }
   });
 }
@@ -3714,6 +3710,9 @@ function runAutonomousStep() {
       gainExp(a, 'vit', 1);
       a.bubble = '😵 หิวจัด! เลือดลด!';
     }
+    if (a.hp < maxHp(a) * 0.6 && avail(a, 'ยาต้มสมุนไพร') <= 0 && avail(a, 'สมุนไพร') > 0) {
+      take(a, 'สมุนไพร'); a.hp = Math.min(maxHp(a), a.hp + 8); a.bubble = '🌿 เคี้ยวสมุนไพรสดรักษาแผล';
+    }
     if (a.hp < maxHp(a) * 0.45 && avail(a, 'ยาต้มสมุนไพร') > 0) {
       take(a, 'ยาต้มสมุนไพร');
       a.hp = Math.min(maxHp(a), a.hp + 30);
@@ -3784,6 +3783,8 @@ function runAutonomousStep() {
     }
     const fire = stationInZone(a.zone, 'campfire');
     if (night && fire && a.hunger < 60) { moveToward(a, fire.x + 1, fire.y + 1); return; }
+    a.wantHunt = false;
+    if (needStep(a, night)) return;
 
     const nodes = zoneNodes[a.zone] || [];
     // Feeding yourself comes first: hungry AI look for food spots, or move to a zone that has some
@@ -3884,8 +3885,8 @@ function runAutonomousStep() {
     if (a.age < 12 || a.questId || a.session || a.sleeping || a.wantRest) return false;
     const v = villageOf(a);
     const isHunter = a.role.includes('ล่าสัตว์');
-    const needFood = (a.food || 0) < 10 || (isHunter && v && v.food < v.members.length * 4);
-    return needFood && Math.random() < (isHunter ? 0.6 : 0.3);
+    const needFood = (a.food || 0) < 10 || (isHunter && v && v.food < v.members.length * 4) || a.wantHunt;
+    return needFood && Math.random() < (isHunter || a.wantHunt ? 0.6 : 0.3);
   }).slice(0, 4);
   hunters.forEach(hunter => {
     // Only animals in the hunter's zone or next door; never below 2 on the island (law 1)
@@ -5380,6 +5381,82 @@ function objWorldTick() {
   }
 }
 // ==========================================
+// THE FOUR REQUISITES (ปัจจัย 4): food, shelter, clothing, medicine come before wandering
+// ==========================================
+const FOOD_ITEM = n => propsOf(n).food && !propsOf(n).fuel;
+function personalFood(a) { return (a.food || 0) + Object.entries(a.bag || {}).reduce((t, [n, q]) => t + (q > 0 && FOOD_ITEM(n) ? q * 2 : 0), 0); }
+function hasShelter(a) { const H = homeOf(a); return shelters.some(s => s.zone === H.zone && isRestShelter(s) && (!s.owner || s.public || s.owner === a.id || (villageOf(a) && s.villageId === villageOf(a).id) || rel(a, byId(s.owner) || a) >= 40)); }
+function clothWarmth(a) { return OUTFIT_WARMTH[pupOutfit(a)] || 0; }
+function needsOf(a) {
+  const H = homeOf(a), cold = airTemp(H.zone) < 22 || (a.warmth ?? 100) < 60;
+  const hpP = a.hp / maxHp(a), herbs = avail(a, 'สมุนไพร') + avail(a, 'ยาต้มสมุนไพร') * 2;
+  const n = {
+    food: { ok: personalFood(a) >= 8 && a.hunger < 50, score: (a.hunger || 0) * 0.8 + Math.max(0, 8 - personalFood(a)) * 6 },
+    shelter: { ok: hasShelter(a), score: hasShelter(a) ? 0 : 38 + (Math.floor(simMinutes / 60) % 24 >= 14 ? 15 : 0) + (WEATHER[zoneWeather(a.zone)].wet ? 10 : 0) },
+    cloth: { ok: clothWarmth(a) >= 4, score: clothWarmth(a) >= 4 ? 0 : cold ? 34 + Math.max(0, 60 - (a.warmth ?? 100)) * 0.5 : 8 },
+    medicine: { ok: hpP >= 0.6 || herbs > 0, score: hpP < 0.6 ? (herbs > 0 ? 10 : 30 + (1 - hpP) * 60) : herbs < 1 ? 6 : 0 }
+  };
+  return n;
+}
+const NEED_LABEL = { food: '🍖 อาหาร', shelter: '🛖 ที่อยู่อาศัย', cloth: '🧥 เครื่องนุ่งห่ม', medicine: '🌿 ยารักษาโรค' };
+function buildHut(a) {
+  a.bag['กิ่งไม้แห้ง'] -= 3;
+  const hut = { id: 'hut_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `เพิงพักของ${a.name}`, sprite: 'shelter_hut', zone: a.zone, x: Math.max(1, a.x - 1), y: Math.max(1, a.y - 2), station: null, rest: true, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
+  shelters.push(hut); gainExp(a, 'dex', 1);
+  addLog(`🛖 [ปัจจัย 4 · ที่อยู่อาศัย] "${a.name}" เอากิ่งไม้มาทำเพิงพักที่ ${ZONES[a.zone].name}`, '#a3e635');
+  return hut;
+}
+// walk to something that gives `item`: a resource spot here, an object we can harvest, or the nearest zone that has it
+function seekItem(a, re, label) {
+  const nodes = zoneNodes[a.zone] || [];
+  const node = nodes.find(n => re.test(n.name));
+  if (node) { a.gatherT = Object.assign({ zone: a.zone }, node); moveToward(a, node.x, node.y); a.bubble = label; return true; }
+  const myTools = toolItems.filter(t => canUse(a, t));
+  let best = null, bd = 40;
+  for (const o of objsOf(a.zone)) {
+    if (o.dead) continue; const d = WOBJ[o.k];
+    const gives = Object.keys(d.yields).some(n => re.test(n)) || (d.fruit && o.fruit && re.test(d.fruit));
+    if (!gives) continue;
+    if (!(d.fruit && o.fruit && re.test(d.fruit)) && !myTools.some(t => d.tool.includes(t.type) && toolStat(t).tier >= d.tier)) continue;
+    const dist = Math.hypot(o.x - a.x, o.y - a.y); if (dist < bd) { bd = dist; best = o; }
+  }
+  if (best) { a.objT = best.id; moveToward(a, Math.round(best.x - 0.5), Math.round(best.y - 0.5)); a.bubble = label; return true; }
+  const zs = Object.keys(ZONES).filter(z => z !== a.zone && ZONES[z].res.some(r => re.test(r))).sort((p, q) => zoneDist(a.zone, p) - zoneDist(a.zone, q));
+  if (zs.length) { const p = findValidTile(zs[0], false); a.goal = { zone: zs[0], x: p.x, y: p.y, ttl: 12 }; a.bubble = `${label} (ไปโซน ${zs[0]})`; travelToGoal(a); return true; }
+  return false;
+}
+// returns true if the person spent this hour on a basic need
+function needStep(a, night) {
+  if (a.age < 12 || night) return false;
+  const N = needsOf(a); a.needs = N;
+  const top = Object.entries(N).filter(([, v]) => !v.ok && v.score >= 25).sort((p, q) => q[1].score - p[1].score)[0];
+  if (!top) { a.need = null; return false; }
+  const k = top[0]; a.need = k;
+  if (k === 'food') {
+    if (seekItem(a, /ผล|แอปเปิล|เบอร์รี่|มะพร้าว|กล้วย|มะละกอ|ปลา|กุ้ง|หอย|ปู|เห็ด|รังนก|รังผึ้ง/, '🍖 ปัจจัย 4: หาอาหารเก็บไว้ก่อน')) return true;
+    a.wantHunt = true; return false;
+  }
+  if (k === 'shelter') {
+    const H = homeOf(a), sticks = (a.bag || {})['กิ่งไม้แห้ง'] || 0;
+    if (sticks >= 3) {
+      if (a.zone !== H.zone) { const p = findValidTile(H.zone, false); a.goal = { zone: H.zone, x: p.x, y: p.y, ttl: 12 }; a.bubble = '🛖 ปัจจัย 4: เอากิ่งไม้กลับไปสร้างที่พัก'; travelToGoal(a); return true; }
+      buildHut(a); a.bubble = '🛖 สร้างเพิงพักเสร็จแล้ว'; return true;
+    }
+    return seekItem(a, /กิ่ง/, `🛖 ปัจจัย 4: ยังไม่มีที่พัก หากิ่งไม้ ${sticks}/3`);
+  }
+  if (k === 'cloth') {
+    const v = villageOf(a), hide = v && Object.keys(v.store).find(n => /หนัง/.test(n) && v.store[n] > 0);
+    if (hide && atStore(a) && payFor(a, v, 2, null, hide)) { v.store[hide]--; put(a, hide, 1); a.bubble = `🧥 แลก${hide}มาทำเครื่องนุ่งห่ม`; return true; }
+    a.wantHunt = true; a.bubble = '🧥 ปัจจัย 4: หนาว ต้องล่าสัตว์เอาหนังมาทำเครื่องนุ่งห่ม';
+    return false;
+  }
+  if (k === 'medicine') {
+    if (avail(a, 'สมุนไพร') > 0) return false;
+    return seekItem(a, /สมุนไพร/, '🌿 ปัจจัย 4: บาดเจ็บ หาสมุนไพรมารักษา');
+  }
+  return false;
+}
+// ==========================================
 // KNOWLEDGE STELES: ancient tablets on the island (some broken into pieces to collect),
 // written in the pictograph script. AI that learn to read can also carve their own.
 // ==========================================
@@ -6018,6 +6095,7 @@ function renderAgentCard() {
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
+    <div class="ac-sub">ปัจจัย 4: ${Object.entries(needsOf(a)).map(([k, v]) => `<span style="margin-right:6px;${v.ok ? '' : 'color:#dc2626;font-weight:600'}">${NEED_LABEL[k]} ${v.ok ? '✓' : '✗'}</span>`).join('')}</div>
 ${(a.godQuests || []).length ? `<div class="ac-gq">📯 เควสพระเจ้าวันนี้ · ✨ ศรัทธา <b>${a.faith || 0}</b>${(a.faith || 0) >= 10 ? ' (อธิษฐานได้)' : ''}${a.godQuests.map(q => `<div class="gq ${q.done ? 'done' : ''}">${q.done ? '✅' : q.accepted ? '⏳' : '💤'} ${q.title} <span class="d">${DIFF_STARS(q.diff)} +${q.faith}✨</span> ${q.done ? '' : q.accepted ? `<span class="p">${q.prog}/${q.qty}</span>` : '<span class="p">ไม่รับ</span>'}</div>`).join('')}</div>` : `<div class="ac-sub">✨ ศรัทธา ${a.faith || 0}</div>`}
 ${(() => {   // quests this person asked for, or is helping with
       const mine = quests.filter(q => (q.giverId === a.id || q.helperId === a.id) && (q.status === 'open' || q.status === 'accepted'));
