@@ -136,7 +136,6 @@
       "game_accessiblestations",
       "game_addfood",
       "game_addteachlog",
-      "game_agentlevel",
       "game_atgoal",
       "game_atstore",
       "game_bagcap",
@@ -144,7 +143,6 @@
       "game_bagvalue",
       "game_beststat",
       "game_cantradefor",
-      "game_choosekept",
       "game_completequest",
       "game_computeneeds",
       "game_creditgather",
@@ -163,9 +161,7 @@
       "game_isnighttime",
       "game_isrestshelter",
       "game_itemvalue",
-      "game_keepcount",
       "game_knowledgeexchange",
-      "game_makesoul",
       "game_maxhp",
       "game_movetoward",
       "game_neareststation",
@@ -206,54 +202,6 @@
       "game_zonedist"
     ],
     "2": [
-      "game_addlog",
-      "game_addownlog",
-      "game_addrel",
-      "game_asktouse",
-      "game_assigngodquests",
-      "game_assignjobs",
-      "game_assignquests",
-      "game_byid",
-      "game_canhelp",
-      "game_createquest",
-      "game_crossrealm",
-      "game_electchief",
-      "game_electchief_score",
-      "game_failquest",
-      "game_fatechance",
-      "game_gateof",
-      "game_givesoul",
-      "game_godautolevel",
-      "game_godtick",
-      "game_holdfoundingmeeting",
-      "game_holdvillagemeeting",
-      "game_ismember",
-      "game_jobfit",
-      "game_logtorealm",
-      "game_materialwish",
-      "game_namevillage",
-      "game_negotiate",
-      "game_negotiatetax",
-      "game_ownerof",
-      "game_prayertick",
-      "game_proposetax",
-      "game_realmlog",
-      "game_realmtraveltick",
-      "game_rel",
-      "game_renderprayers",
-      "game_resolveprayer",
-      "game_rewardpackage",
-      "game_rewardtext",
-      "game_rewardvalue",
-      "game_savegoddb",
-      "game_secrettick",
-      "game_setgodauto",
-      "game_souldecides",
-      "game_trysneak",
-      "game_villagemembers",
-      "game_villagetick"
-    ],
-    "3": [
       "game_applywish",
       "game_avail",
       "game_buildequivalents",
@@ -297,29 +245,71 @@
       "game_usetool",
       "game_world"
     ],
+    "3": [
+      "game_addlog",
+      "game_addownlog",
+      "game_addrel",
+      "game_asktouse",
+      "game_assigngodquests",
+      "game_assignjobs",
+      "game_assignquests",
+      "game_byid",
+      "game_canhelp",
+      "game_createquest",
+      "game_crossrealm",
+      "game_electchief",
+      "game_electchief_score",
+      "game_failquest",
+      "game_gateof",
+      "game_givesoul",
+      "game_godtick",
+      "game_holdfoundingmeeting",
+      "game_holdvillagemeeting",
+      "game_ismember",
+      "game_jobfit",
+      "game_logtorealm",
+      "game_namevillage",
+      "game_negotiate",
+      "game_negotiatetax",
+      "game_ownerof",
+      "game_proposetax",
+      "game_realmlog",
+      "game_realmtraveltick",
+      "game_rel",
+      "game_resolveprayer",
+      "game_rewardpackage",
+      "game_rewardtext",
+      "game_rewardvalue",
+      "game_savegoddb",
+      "game_secrettick",
+      "game_souldecides",
+      "game_trysneak",
+      "game_villagemembers",
+      "game_villagetick"
+    ],
     "4": [
       "game_answerprayer",
       "game_capturerealm",
       "game_closelobby",
       "game_cyclespeed",
-      "game_drawagent",
-      "game_drawstickfigure",
       "game_expneed",
-      "game_getequip",
-      "game_getmood",
-      "game_hastool",
+      "game_fatechance",
+      "game_godautolevel",
       "game_inrealm",
       "game_itemartkey",
       "game_itemiconhtml",
       "game_knowersof",
+      "game_materialwish",
       "game_openlobby",
-      "game_pupactivity",
+      "game_prayertick",
       "game_realmstatus",
       "game_rellabel",
       "game_renderallui",
       "game_renderlobby",
+      "game_renderprayers",
       "game_restorerealm",
       "game_savegamestate",
+      "game_setgodauto",
       "game_startsimloop",
       "game_switchrealm",
       "game_testcollapse",
@@ -407,25 +397,19 @@
     ],
     "8": [
       "game_armlen",
+      "game_drawagent",
       "game_drawbow",
       "game_draweyeart",
-      "game_drawhairlayer",
       "game_drawitem",
       "game_drawmouthart",
       "game_drawpuppet",
-      "game_hairstyleof",
-      "game_hashstr",
-      "game_insectsof",
-      "game_mkobj",
-      "game_mutvariant",
-      "game_objsof",
-      "game_objworldtick",
+      "game_drawstickfigure",
+      "game_getequip",
+      "game_getmood",
+      "game_hastool",
+      "game_pupactivity",
       "game_puparmik",
-      "game_puphelditem",
-      "game_tintedhair",
-      "game_wobjbase",
-      "game_wobjpick",
-      "game_wobjrng"
+      "game_puphelditem"
     ],
     "9": [
       "game_closeagentcard",
@@ -444,6 +428,20 @@
       "game_worldof"
     ],
     "10": [
+      "game_drawhairlayer",
+      "game_hairstyleof",
+      "game_hashstr",
+      "game_insectsof",
+      "game_mkobj",
+      "game_mutvariant",
+      "game_objsof",
+      "game_objworldtick",
+      "game_tintedhair",
+      "game_wobjbase",
+      "game_wobjpick",
+      "game_wobjrng"
+    ],
+    "11": [
       "game_airtemp",
       "game_basetemp",
       "game_felttemp",
@@ -453,7 +451,7 @@
       "game_weathertick",
       "game_zoneweather"
     ],
-    "11": [
+    "12": [
       "game_drawanimal",
       "game_drawpart",
       "game_mutatedsprite",
@@ -462,31 +460,39 @@
       "game_shadecol",
       "game_tinted"
     ],
-    "12": [
+    "13": [
+      "game_agentlevel",
+      "game_choosekept",
+      "game_keepcount",
+      "game_makesoul"
+    ],
+    "14": [
       "game_pr",
       "game_pupkeys",
       "game_smooth"
     ],
-    "13": [
+    "15": [
       "game_closesheet",
       "game_switchtab"
     ]
   },
   "cohesion": {
     "0": 0.015384615384615385,
-    "1": 0.08289738430583501,
-    "2": 0.08405797101449275,
-    "3": 0.10336817653890824,
-    "4": 0.10846560846560846,
+    "1": 0.09000452284034374,
+    "2": 0.10336817653890824,
+    "3": 0.10128205128205128,
+    "4": 0.10582010582010581,
     "5": 0.13768115942028986,
     "6": 0.13405797101449277,
     "7": 0.11594202898550725,
-    "8": 0.11052631578947368,
+    "8": 0.18681318681318682,
     "9": 0.16483516483516483,
-    "10": 0.42857142857142855,
+    "10": 0.18181818181818182,
     "11": 0.42857142857142855,
-    "12": 0.6666666666666666,
-    "13": 1.0
+    "12": 0.42857142857142855,
+    "13": 0.5,
+    "14": 0.6666666666666666,
+    "15": 1.0
   },
   "gods": [
     {
@@ -561,7 +567,7 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
-      "note": "Bridges community 1 → community 3"
+      "note": "Bridges community 1 → community 2"
     },
     {
       "source": "addOwnLog()",
@@ -572,11 +578,11 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
-      "note": "Bridges community 1 → community 2"
+      "note": "Bridges community 1 → community 3"
     },
     {
       "source": "renderAllUI()",
-      "target": "agentLevel()",
+      "target": "bagCap()",
       "source_files": [
         "game.js",
         "game.js"
@@ -586,21 +592,21 @@
       "note": "Bridges community 1 → community 4"
     },
     {
-      "source": "gainExp()",
-      "target": "ensureAgent()",
+      "source": "computeNeeds()",
+      "target": "hasTool()",
       "source_files": [
         "game.js",
         "game.js"
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
-      "note": "Bridges community 1 → community 5"
+      "note": "Bridges community 1 → community 8"
     }
   ],
   "questions": [
     {
       "type": "bridge_node",
-      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `addLog`, `experiment`, `renderAllUI`, `buildZoneTerrain`, `ecologyTick`, `drawCanvas`, `drawPuppet`, `zoneWeather`?",
+      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `experiment`, `addLog`, `renderAllUI`, `buildZoneTerrain`, `ecologyTick`, `drawCanvas`, `drawPuppet`, `objsOf`, `zoneWeather`?",
       "why": "High betweenness centrality (0.018) - this node is a cross-community bridge."
     },
     {
@@ -610,28 +616,28 @@
     },
     {
       "type": "bridge_node",
-      "question": "Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `runAutonomousStep`, `addLog`, `experiment`, `buildZoneTerrain`, `ecologyTick`, `drawPuppet`, `renderAgentCard`?",
+      "question": "Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `runAutonomousStep`, `experiment`, `addLog`, `buildZoneTerrain`, `ecologyTick`, `drawPuppet`, `renderAgentCard`, `makeSoul`?",
       "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
     },
     {
       "type": "low_cohesion",
       "question": "Should `runAutonomousStep` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08289738430583501 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.09000452284034374 - nodes in this community are weakly interconnected."
     },
     {
       "type": "bridge_node",
-      "question": "Why does `addLog()` connect `addLog` to `game.js`, `runAutonomousStep`, `experiment`, `buildZoneTerrain`, `ecologyTick`, `drawCanvas`, `zoneWeather`?",
+      "question": "Why does `addLog()` connect `addLog` to `game.js`, `runAutonomousStep`, `experiment`, `renderAllUI`, `buildZoneTerrain`, `ecologyTick`, `drawCanvas`, `zoneWeather`?",
       "why": "High betweenness centrality (0.003) - this node is a cross-community bridge."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `addLog` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08405797101449275 - nodes in this community are weakly interconnected."
     },
     {
       "type": "low_cohesion",
       "question": "Should `experiment` be split into smaller, more focused modules?",
       "why": "Cohesion score 0.10336817653890824 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `addLog` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.10128205128205128 - nodes in this community are weakly interconnected."
     }
   ]
 }
