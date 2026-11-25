@@ -4371,6 +4371,8 @@ const WA = { ready: false, img: {}, tex: {}, wall: {} };
 const ANIM_ART = { f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
+// animal height (head included) in adult-human heights, real-world proportions
+const ANIM_REL = { deer: 0.9, boar: 0.6, rabbit: 0.34, goat: 0.76, wolf: 0.64, leopard: 0.6, fish: 0.22 };
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
 // mutated look: recolour (keeps shading) + Gemini part art (horns, wings, tails, scales, thick hide, back armor)
 WA.mut = {};
@@ -4750,7 +4752,7 @@ function drawCanvas() {
     }
     const tt = trOf(f, currentZoneId), color = tt.color || f.color;
     const rc = color ? { [MAIN_COLOR_CH[f.sprite] || 'O']: color } : null;
-    const keyS = f.sprite || 'deer', rel = (f.sizeRel || SIZE_REL[keyS] || 0.6) * (1 + (tt.str || 0) * 0.08);
+    const artK = animalArt(f), keyS = f.sprite || 'deer', rel = ((artK && ANIM_REL[artK]) || f.sizeRel || SIZE_REL[keyS] || 0.6) * (1 + (tt.str || 0) * 0.08);
     f._herd[currentZoneId].homes.forEach((h, i) => {
       const t = now * h.sp + h.ph, graze = Math.sin(t * 0.7) > 0.3;   // sometimes stop to graze
       const ox = graze ? Math.cos(h.ph) * h.r : Math.cos(t) * h.r, oy = graze ? Math.sin(h.ph) * h.r * 0.6 : Math.sin(t * 0.8) * h.r * 0.6;
