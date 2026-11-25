@@ -1384,24 +1384,67 @@ function syncToolStock() {
 function newTool(name, owner) {
   const def = productDef(keyByName(name));
   const t = { uid: ++toolSeq, name, type: def.tool, owner: owner ? owner.id : null, ownerName: owner ? owner.name : 'ส่วนรวม', wear: 0, public: owner ? owner.kind >= 0.8 : true };
+  // a tool is a real object: the maker carries it (or it lies at the camp)
+  if (owner && carriedTools(owner).length < TOOL_CARRY) { t.holder = owner.id; t.zone = owner.zone; t.x = owner.x; t.y = owner.y; }
+  else { const c = owner || campOf(); t.holder = null; t.zone = c.zone; const p = buildSpot(c.zone, c.x, c.y); t.x = p.x; t.y = p.y; }
   toolItems.push(t); syncToolStock();
   return t;
 }
 function toolsOfType(type) { return toolItems.filter(t => t.type === type); }
 function toolNames(type) { return [...new Set(toolsOfType(type).map(t => t.name))]; }
 // With a user: only tools they may use (own > public/friend > borrowed). Without: any on the island.
-function hasTool(type, user) { return user ? toolsOfType(type).some(t => canUse(user, t)) : toolsOfType(type).length > 0; }
+// Tools are physical: you can only use one you are carrying. Pick one up off the ground within 2 tiles,
+// or borrow it from someone standing next to you (they may say no).
+const TOOL_CARRY = 3;
+function carriedTools(a) { return toolItems.filter(t => t.holder === a.id); }
+function hasTool(type, user) { return user ? toolItems.some(t => t.type === type && t.holder === user.id) : toolsOfType(type).length > 0; }
+function campOf() { const b = shelters.find(x => /ฐานบัญชาการ/.test(x.name)) || shelters.find(x => x.station === 'campfire') || { zone: START_ZONE, x: 40, y: 40 }; return { zone: b.zone, x: b.x, y: b.y }; }
 function getTool(type, user, ask = true) {
   const list = toolsOfType(type).sort((p, q) => (productDef(keyByName(q.name)).dur - q.wear) - (productDef(keyByName(p.name)).dur - p.wear));
   if (!user) return list[0] || null;
-  const own = list.find(t => t.owner === user.id) || list.find(t => canUse(user, t));
-  if (own) return own;
-  if (!ask) return null;
-  const other = list.find(t => !(t.denied && t.denied[user.id] && nowH() - t.denied[user.id] < 24)) || list[0];
-  return other && askToUse(user, other, other.name) ? other : null;
+  const mine = list.find(t => t.holder === user.id);
+  if (mine || !ask || carriedTools(user).length >= TOOL_CARRY) return mine || null;
+  for (const t of list) {
+    const h = t.holder && aiAgents.find(o => o.id === t.holder);
+    const lying = !t.holder && t.zone === user.zone && Math.hypot(t.x - user.x, t.y - user.y) <= 2;
+    const nextTo = h && h !== user && h.zone === user.zone && Math.hypot(h.x - user.x, h.y - user.y) <= 2 && !h.session;
+    if (!lying && !nextTo) continue;
+    if (t.denied && t.denied[user.id] && nowH() - t.denied[user.id] < 24) continue;
+    if (nextTo && h.id !== t.owner) continue;                                   // can't hand on what you borrowed
+    if (nextTo && !t.public && !askToUse(user, t, t.name)) continue;
+    if (lying && !canUse(user, t) && !askToUse(user, t, t.name)) continue;
+    t.holder = user.id; user.bubble = nextTo ? `🤲 ยืม${t.name}จาก${h.name}` : `🫳 หยิบ${t.name}`;
+    return t;
+  }
+  return null;
+}
+// keep each tool's position on its carrier; dead carriers drop it; owners take back what they lent when next to the borrower
+function toolTick() {
+  const byId = new Map(aiAgents.map(o => [o.id, o]));
+  toolItems.forEach(t => {
+    if (t.holder === undefined) {                      // old saves: owner carries it, communal tools lie at the camp
+      const o = t.owner && byId.get(t.owner);
+      if (o && carriedTools(o).length < TOOL_CARRY) { t.holder = o.id; }
+      else { const c = campOf(), p = buildSpot(c.zone, c.x + 2, c.y + 1); t.holder = null; t.zone = c.zone; t.x = p.x; t.y = p.y; }
+    }
+    if (!t.holder) return;
+    const h = byId.get(t.holder);
+    if (!h) { t.holder = null; return; }                // stays where its carrier was
+    t.zone = h.zone; t.x = h.x; t.y = h.y;
+    if (t.owner && t.owner !== h.id) { const o = byId.get(t.owner); if (o && o.zone === h.zone && Math.hypot(o.x - h.x, o.y - h.y) <= 2 && carriedTools(o).length < TOOL_CARRY) t.holder = o.id; }
+  });
+}
+// go and pick up a usable tool lying nearby when you don't carry one of that kind
+function toolFetch(a) {
+  if (carriedTools(a).length >= TOOL_CARRY) return false;
+  const want = toolItems.filter(t => !t.holder && t.zone === a.zone && !hasTool(t.type, a) && canUse(a, t) && Math.hypot(t.x - a.x, t.y - a.y) < 30)
+    .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+  if (!want) return false;
+  if (Math.hypot(want.x - a.x, want.y - a.y) > 2) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(want.x), Math.round(want.y)); a.bubble = `🚶 ไปหยิบ${want.name}`; return true; }
+  want.holder = a.id; a.bubble = `🫳 หยิบ${want.name}`; return true;
 }
 function useTool(type, user, tool) {
-  const t = tool || getTool(type, user, false) || getTool(type, null);
+  const t = tool || (user ? getTool(type, user, false) : getTool(type, null));
   if (!t) return;
   if (user && Math.random() < Math.min(0.5, st(user, 'dex') * 0.012)) return;
   t.wear++;
@@ -4216,7 +4259,8 @@ function runAutonomousStep() {
     const fire = stationInZone(a.zone, 'campfire');
     if (night && fire && a.hunger < 60) { moveToward(a, fire.x + 1, fire.y + 1); return; }
     a.wantHunt = false;
-    if (!night && a._hunt && a._hunt.ttl > 0) return;           // stalking prey (handled in the hunting step)
+    if (!night && a._hunt && a._hunt.ttl > 0) return;
+    if (!night && a.age >= 12 && a.hunger < 60 && Math.random() < 0.25 && toolFetch(a)) return;           // stalking prey (handled in the hunting step)
     if (!night && a.hunger < 70 && revelationStep(a)) return;
     if (needStep(a, night)) return;
 
@@ -4249,7 +4293,7 @@ function runAutonomousStep() {
       const sg = steleTarget(a);
       if (sg) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); return; }
     }
-    if (!night && a.age >= 12 && Math.random() < (toolItems.some(t => canUse(a, t) && /axe|pick|sickle|blade/.test(t.type)) ? 0.7 : 0.35)) {
+    if (!night && a.age >= 12 && Math.random() < (toolItems.some(t => t.holder === a.id && /axe|pick|sickle|blade/.test(t.type)) ? 0.7 : 0.35)) {
       const tgt = objTarget(a);
       if (tgt) { moveToward(a, Math.round(tgt.x - 0.5), Math.round(tgt.y - 0.5)); return; }
     }
@@ -4273,6 +4317,7 @@ function runAutonomousStep() {
   objWorldTick();
   insectTick();
   steleTick();
+  toolTick();
   effectsTick();
   // Gathering: anyone (12+) standing near a resource picks some up
   aiAgents.forEach(a => {
@@ -4355,7 +4400,7 @@ function runAutonomousStep() {
     if (hk) {
       const [target, tz] = hk;
       // the hunter has to actually get within 2 tiles of an animal
-      if (tz !== hunter.zone) { if (!hunter.goal) hunter.goal = { zone: tz, x: 40, y: 40, ttl: 12, enter: true }; hunter.bubble = `🏹 ตามรอย${target.name}ไปโซน ${tz}`; travelToGoal(hunter); return; }
+      if (tz !== hunter.zone) { if (!hunter.goal) hunter.goal = { zone: tz, x: 40, y: 40, ttl: 12, enter: true }; hunter.bubble = `🐾 ตามรอย${target.name}ไปโซน ${tz}`; travelToGoal(hunter); return; }
       const hs = huntSpot(target, tz, hunter);
       if (Math.hypot(hs.x - hunter.x, hs.y - hunter.y) > 2) {
         for (let k = 0; k < 3; k++) moveToward(hunter, hs.x, hs.y);
@@ -4382,7 +4427,7 @@ function runAutonomousStep() {
         for (const [m, q] of Object.entries(bonus)) gainItems(hunter, m, q);
         if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
         if (target.predator) hunter.rep += 3;
-        hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `🏹 ล่า${target.name} (+${target.lootFood})`;
+        hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `${weapon === 'bow' ? '🏹' : weapon === 'blade' ? '🗡️' : '✋'} ล่า${target.name} (+${target.lootFood})`;
         godQuestEvent(hunter, 'hunt'); if (target.predator) godQuestEvent(hunter, 'predator');
         huntLogs.unshift({ animal: target.name, remPop: target.pop, food: target.lootFood, hunter: hunter.name });
         addLog(target.predator
@@ -4396,7 +4441,7 @@ function runAutonomousStep() {
         gainExp(hunter, 'vit', 3);
         hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
         addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${hunter.hp})`, '#ef4444');
-      } else hunter.bubble = weapon ? '🏹 ล่าพลาด' : '✋ ไล่จับด้วยมือเปล่าไม่ทัน';
+      } else hunter.bubble = weapon === 'bow' ? '🏹 ยิงพลาด' : weapon ? '🗡️ แทงพลาด' : '✋ ไล่จับด้วยมือเปล่าไม่ทัน';
     }
   });
 
@@ -4799,7 +4844,7 @@ function renderAllUI() {
             <div style="font-size:11px; color:var(--muted);">⭐ ชื่อเสียง ${a.rep} · นิสัย: ${a.kind >= 0.65 ? 'ใจดีชอบช่วย' : a.kind <= 0.35 ? 'หวังผลตอบแทน' : 'กลางๆ'} / ${a.generous >= 1.1 ? 'ใจกว้าง' : a.generous <= 0.7 ? 'ขี้เหนียว' : 'พอประมาณ'}${a.keepsakes.length ? ` · 🎁 ${a.keepsakes.join(', ')}` : ''}${qq ? `<br>📜 กำลังช่วย: ${qq.title}` : ''}</div>`;
         })()}
         ${(a.pastLives || []).length ? `<div style="margin-top:4px; font-size:11px; color:#d8b4fe; padding:4px 8px; border-radius:10px; background:rgba(124,92,255,.15); border:1px dashed rgba(167,139,250,.5);">🔒 ความลับชาติก่อน (มีแต่เจ้าตัวกับพระเจ้าที่รู้): ${a.pastLives.map(l => `${l.name} Lv.${l.level}`).join(' → ')} · ความทรงจำเก่า ${Object.keys(a.pastKnow || {}).length} สูตร</div>` : ''}
-        <div style="margin-top:4px; font-size:11px; color:#93c5fd;">🎒 กระเป๋า ${bagCount(a)}/${bagCap(a)}${(() => { const own = shelters.filter(x => x.owner === a.id).map(x => '🏠' + x.name.split(' (')[0]).concat(toolItems.filter(t => t.owner === a.id).map(t => '🔧' + t.name)); return own.length ? ' · เป็นเจ้าของ: ' + own.join(', ') : ''; })()}</div>
+        <div style="margin-top:4px; font-size:11px; color:#93c5fd;">🎒 กระเป๋า ${bagCount(a)}/${bagCap(a)}${carriedTools(a).length ? ' · 🧰 ถืออยู่: ' + carriedTools(a).map(t => itemIconHTML(t.name, 14) + t.name).join(', ') : ' · 🧰 ไม่มีเครื่องมือติดตัว'}${(() => { const own = shelters.filter(x => x.owner === a.id).map(x => '🏠' + x.name.split(' (')[0]).concat(toolItems.filter(t => t.owner === a.id).map(t => '🔧' + t.name)); return own.length ? ' · เป็นเจ้าของ: ' + own.join(', ') : ''; })()}</div>
         <div style="margin-top:5px; color:#c4b5fd;">📚 ทำเป็น ${byOut.size} อย่าง (จำสูตรได้ ${okE.length}/${recipeCap(a)}) · <span style="color:#fca5a5;">⚠️ จำข้อห้าม ${bad}/${failCap(a)}</span></div>
         <div>${chips || '<span style="color:#64748b;">ยังไม่มีความรู้ใดๆ ในหัว</span>'}</div>
       </div>`;
@@ -4958,7 +5003,7 @@ function getEquip(a) {
   let hand = null;
   if (a.age >= 12) {
     if ((b.includes('🏹') || a.role.includes('ล่า')) && hasTool('bow', a)) hand = 'bow';
-    else if (b.includes('🛠️') && hasTool('blade', a)) hand = toolItems.some(t => t.name === 'มีดเหล็ก' && canUse(a, t)) ? 'iron_knife' : 'stone_knife';
+    else if (b.includes('🛠️') && hasTool('blade', a)) hand = toolItems.some(t => t.name === 'มีดเหล็ก' && t.holder === a.id) ? 'iron_knife' : 'stone_knife';
     else if (a.role.includes('เก็บ') && hasTool('axe', a)) hand = 'axe';
     else if (a.role.includes('ล่า') && hasTool('blade', a)) hand = 'stone_knife';
     else if (b.includes('🔬') || b.includes('🧪')) hand = hasTool('vessel', a) ? 'pot' : null;
@@ -5188,7 +5233,8 @@ function pupActivity(a, moving, fast) {
   const b = a.bubble || '';
   if (a.sleeping && !moving) return 'sleep';
   if (moving) return fast || b.startsWith('💨') || b.startsWith('⚠️') || b.includes('โจมตี') ? 'run' : 'walk';
-  if (b.startsWith('🏹')) return 'bow';
+  if (b.startsWith('🏹')) return hasTool('bow', a) ? 'bow' : hasTool('blade', a) ? 'slash' : 'gather';
+  if (b.startsWith('🗡️')) return hasTool('blade', a) ? 'slash' : 'gather';
   if (b.startsWith('🩸') || b.includes('โจมตี') || b.startsWith('💢')) return 'slash';
   if (b.startsWith('🛠️') || b.startsWith('🔬') || b.startsWith('🔁') || b.startsWith('😓') || b.startsWith('😅')) return 'craft';
   if ((b.startsWith('เก็บ') || b.startsWith('🍃') || b.startsWith('🌿') || b.startsWith('🧺') || a.gatherT) && nearGatherable(a)) {
@@ -5232,12 +5278,12 @@ function drawMouthArt(ctx, mood) {
   one('nose'); return one(MOUTH_ART[mood] ? mood : 'happy');
 }
 // Gemini item art: inventory icons + held tools (vertical art, handle down, edge facing right)
-const ITEM_HELD_IMG = {};
+const ITEM_HELD_IMG = {}, TOOL_ICON_IMG = {};
 (function () { const E = window.ITEM_ART; if (!E) return; for (const k in E) if (E[k].held) { const im = new Image(); im.src = E[k].held.src; ITEM_HELD_IMG[k] = im; } })();
 const MAT_ART = { 'ใบไม้สด': 'leaf_fresh', 'ใบตองสด': 'leaf_fresh' };
 function itemArtKey(name) { const k = keyByName(name) || MAT_ART[name]; return k && window.ITEM_ART && ITEM_ART[k] ? k : null; }
 function itemIconHTML(name, sz = 18) { const k = itemArtKey(name); return k ? `<img src="${ITEM_ART[k].icon}" alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;vertical-align:-4px;margin-right:2px;">` : ''; }
-function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t => { if (!canUse(a, t)) return; const d = productDef(keyByName(t.name)); if (d && (!best || (d.tier || 1) > (best.tier || 1))) best = { tier: d.tier || 1, key: keyByName(t.name) }; }); return best; }
+function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t => { if (t.holder !== a.id) return; const d = productDef(keyByName(t.name)); if (d && (!best || (d.tier || 1) > (best.tier || 1))) best = { tier: d.tier || 1, key: keyByName(t.name) }; }); return best; }
 // what the puppet actually holds for a pose: art for stone-age tools, code drawing for metal ones
 function pupHeldItem(a, kind) {
   if (!kind || kind === 'bow') return kind;
@@ -5841,7 +5887,7 @@ function toolStat(t) {
 }
 function harvestTool(a, o) {
   const d = WOBJ[o.k];
-  return toolItems.filter(t => d.tool.includes(t.type) && canUse(a, t) && toolStat(t).tier >= d.tier)
+  return toolItems.filter(t => d.tool.includes(t.type) && t.holder === a.id && toolStat(t).tier >= d.tier)
     .sort((p, q) => toolStat(q).pow - toolStat(p).pow || d.tool.indexOf(p.type) - d.tool.indexOf(q.type))[0] || null;
 }
 function wearTool(a, t, amt = 1) {
@@ -5894,7 +5940,7 @@ function hitObj(a, o, t) {
 function objTarget(a) {
   const objs = objsOf(a.zone), hungry = (a.food || 0) < 10;
   if (a.objT) { const o = objs.find(x => x.id === a.objT && !x.dead); if (o && (o.fruit || harvestTool(a, o))) return o; a.objT = null; }
-  const myTools = toolItems.filter(t => canUse(a, t));
+  const myTools = toolItems.filter(t => t.holder === a.id);
   if (!hungry && !myTools.length) return null;
   let best = null, bd = 1e9;
   for (const o of objs) {
@@ -5982,7 +6028,7 @@ function seekItem(a, re, label) {
   const nodes = zoneNodes[a.zone] || [];
   const node = nodes.find(n => re.test(n.name));
   if (node) { a.gatherT = Object.assign({ zone: a.zone }, node); moveToward(a, node.x, node.y); a.bubble = label; return true; }
-  const myTools = toolItems.filter(t => canUse(a, t));
+  const myTools = toolItems.filter(t => t.holder === a.id);
   let best = null, bd = 40;
   for (const o of objsOf(a.zone)) {
     if (o.dead) continue; const d = WOBJ[o.k];
@@ -6358,7 +6404,7 @@ function insectTick() {
     if (a.age >= 10 && !a.sleeping && Math.random() < 0.25) {
       const tgt = here.find(b => !b.dead && !(INSECTS[b.k].night && !night) && !(INSECTS[b.k].day && night && INSECTS[b.k].fly) && Math.hypot(b.x - a.x, b.y - a.y) <= 2);
       if (tgt) {
-        const D = INSECTS[tgt.k], blade = toolItems.find(t => (t.type === 'blade' || t.type === 'sickle') && canUse(a, t));
+        const D = INSECTS[tgt.k], blade = toolItems.find(t => (t.type === 'blade' || t.type === 'sickle') && t.holder === a.id);
         const hitP = Math.min(0.9, 0.3 + st(a, 'agi') * 0.02 + st(a, 'dex') * 0.01 + (blade ? 0.15 : 0));
         if (Math.random() < hitP) {
           tgt.hp -= blade ? hitDamage(a, blade) : 1; if (blade) wearTool(a, blade, 1);
@@ -6476,6 +6522,15 @@ function drawCanvas() {
     } else d = drawSized(ctx, key, cx, fy);
     if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
+  toolItems.forEach(t => { if (t.holder || t.zone !== currentZoneId) return;        // tools lying on the ground
+    items.push({ y: t.x + t.y + 0.9, draw: () => {
+      const [cx, fy] = groundAt(t.x + 0.5, t.y + 0.5), k = itemArtKey(t.name), sz = HUMAN_H * 0.42;
+      ctx.fillStyle = 'rgba(40,30,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, sz * 0.45, sz * 0.15, 0, 0, 7); ctx.fill();
+      if (k) { const im = TOOL_ICON_IMG[k] || (TOOL_ICON_IMG[k] = Object.assign(new Image(), { src: ITEM_ART[k].icon })); if (im.complete) ctx.drawImage(im, cx - sz / 2, fy - sz * 0.85, sz, sz); }
+      else { ctx.font = `${sz * 0.7}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText('🔧', cx, fy); ctx.textAlign = 'left'; }
+      if (showLabels) labels.push({ x: cx, y: fy - sz - 2, text: t.name, color: '#7c4a03', bg: 'rgba(255,248,230,.9)' });
+    } });
+  });
   (zoneNodes[currentZoneId] || []).forEach(n => items.push({ y: n.x + n.y + 1, draw: () => {
     const [cx, fy] = groundAt(n.x + 0.5, n.y + 0.5), ic = resIcon(n.name), tall = n.sprite === 'res_tree' || n.sprite === 'res_bamboo';
     ctx.fillStyle = 'rgba(40,30,20,.2)'; ctx.beginPath(); ctx.ellipse(cx, fy, WT * (tall ? 1.6 : 0.7), WT * 0.32, 0, 0, 7); ctx.fill();
