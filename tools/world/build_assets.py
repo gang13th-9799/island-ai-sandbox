@@ -31,6 +31,10 @@ for k,r in [('gray2',0.5),('moss2',0.72),('tall2',0.95),('iron2',0.58),('gold2',
   kind('rock_'+k,[f'rock_{k}_{s}.png' for s in ['full','cracked','rubble']],r)
 for c,r in [('fire',0.38),('bench',0.6),('fence',0.62),('barrel',0.55),('crate',0.48),('hay',0.62)]: kind('camp_'+c,[f'c_{c}_{i}.png' for i in range(3)],r)
 AN={}
+LEGS={k:[] for k in ['deer','boar','rabbit','goat','wolf','leopard','fish']}
+# per-animal back line, measured by eye on each sheet: armor from rump to shoulder, wings over the front legs
+SPAN={'deer':(0.12,0.58,0.48,0.58),'boar':(0.12,0.66,0.52,0.64),'rabbit':(0.08,0.5,0.3,0.45),'goat':(0.1,0.56,0.45,0.56),
+      'wolf':(0.14,0.6,0.48,0.6),'leopard':(0.12,0.62,0.5,0.62),'fish':(0.2,0.7,0.45,0.6)}
 for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.45),('leopard',0.45),('fish',0.12)]:
   ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(5)]
   if n=='boar': ims=[im.transpose(Image.FLIP_LEFT_RIGHT) for im in ims]      # Gemini drew the boar facing left
@@ -53,14 +57,26 @@ for n,rel in [('deer',0.62),('boar',0.42),('rabbit',0.3),('goat',0.5),('wolf',0.
     hb=[x for x in hx_ if tops[x]<=ey+(by1-by0)*0.6]
     hx,hy=ex-bw*0.03, ey+(np.median([tops[x] for x in hb])-ey)*0.6+ (by1-by0)*0.12
     # wings: on the back above the front legs; armor: middle of the back
-    wx,wy=topat(0.58,0.7); ax_,ay_=topat(0.4,0.55)
+    wx=None; ax_,ay_=topat(0.4,0.55)
     # tail: the butt = back-most body point in the upper half of the body
     up=[y for y in range(int(by0),int(by0+(by1-by0)*0.6)+1) if al[y].any()]
     bx_l=[(np.where(al[y])[0].min(),y) for y in up]; tx,ty=min(bx_l) if bx_l else (x0,by0)
-    hx,hy,bx,by,rx,ry=hx,hy,wx,wy,tx+bw*0.04,ty
+    hx,hy,bx,by,rx,ry=hx,hy,0,0,tx+bw*0.04,ty
+    # armor: measured on each animal's own back line (rump -> shoulders), with its slope
+    # measure THIS animal: leg columns below the belly -> front legs / hind legs
+    belly=int(by0+(by1-by0)*0.85)
+    legc=[x for x in cols if al[belly:,x].any()] if belly<H_ else []
+    midx=x0+bw*0.5
+    fl=[x for x in legc if x>midx]; hl=[x for x in legc if x<=midx]
+    fx=float(np.mean(fl)) if fl else x0+bw*0.65; hxl=float(np.mean(hl)) if hl else x0+bw*0.25
+    def topx(x): xs=[c for c in cols if abs(c-x)<=bw*0.04]; return float(np.mean([tops[c] for c in xs]))
+    p1=(hxl,topx(hxl)); p2=(fx,topx(fx))
+    LEGS[n].append((round((fx-W_/2)/RES,1),round((hxl-W_/2)/RES,1)))
+    arm=[(p1[0]+p2[0])/2,(p1[1]+p2[1])/2, (p2[0]-p1[0])*1.25/RES, float(np.arctan2(p2[1]-p1[1],p2[0]-p1[0]))]
+    bx,by=p2[0]-bw*0.03, p2[1]
     extra={'armor':None}
     f=lambda x,y:[round((x-W_/2)/RES,2),round((y-H_)/RES,2)]
-    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry),'mid':f(ax_,ay_)})
+    AN[n].append({'img':b64(q),'w':round(q.width/RES,2),'h':round(q.height/RES,2),'head':f(hx,hy),'back':f(bx,by),'rear':f(rx,ry),'mid':f(ax_,ay_),'arm':f(arm[0],arm[1])+[round(arm[2],2),round(arm[3],3)]})
 MU={}
 for f in sorted(glob.glob('/home/claude/mut/*.png')):
   k=f.split('/')[-1][:-4]; im=Image.open(f).convert('RGBA')
@@ -85,5 +101,6 @@ tex('cobble','cobble.jpg',0.15); tex('shallow','shallow.jpg',0.2,tile=1); tex('d
 W={}
 for n,f,crop in [('dirt','wall_dirt.jpg',0.06),('rock','wall_rock.jpg',0.14),('sand','wall_sand.jpg',0.11),('ice','wall_ice.jpg',0.075)]:
   im=Image.open(f).convert('RGB'); w,h=im.size; im=im.crop((0,int(h*crop),w,h)).resize((128,128),Image.LANCZOS); W[n]=b64(im,80)
+print(LEGS)
 js='window.WORLD_ART='+json.dumps({'res':RES,'sprites':SP,'icons':ic,'tex':TX,'walls':W,'animals':AN,'mut':MU},separators=(',',':'))+';\n'
 open('/home/claude/repo-island/assets/world.js','w').write(js); print(len(js)//1024,'KB')
