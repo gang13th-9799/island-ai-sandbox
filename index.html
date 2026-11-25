@@ -1626,6 +1626,7 @@ function addTeachLog(text) {
 }
 
 function transferKnowledge(from, to, mode) {
+  talkEvent(from, to);
   const cands = Object.entries(from.know).filter(([s]) => !to.know[s]);
   if (!cands.length) return false;
   const succ = cands.filter(([, e]) => e.out);
@@ -1771,6 +1772,7 @@ function canHelp(h, q) {
 
 // Negotiation before accepting. Returns true if a deal was made.
 function negotiate(h, giver, q) {
+  talkEvent(h, giver);
   const r = rel(h, giver);
   const say = (who, text) => q.talk.push(`${who.name}: ${text}`);
   // What the helper hopes to get: greedy & distant AIs ask more, kind friends ask less
@@ -6045,6 +6047,7 @@ function drawCanvas() {
   }
   // screen-space labels (constant size)
   labels.forEach(l => drawLabel(ctx, l));
+  drawTalks(ctx);
 }
 
 function drawLabel(ctx, l) {
@@ -6090,6 +6093,48 @@ function drawAgentTag(ctx, l, sx, sy) {
     ctx.fillStyle = myQ.status === 'open' ? '#f5a524' : '#a78bfa'; ctx.beginPath(); ctx.arc(hx, hy, 9, 0, 7); ctx.fill();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(myQ.status === 'open' ? '!' : '?', hx, hy + 4); ctx.textAlign = 'left';
   }  drawThought(ctx, a, !!myQ);
+}
+// conversations: a shared speech bubble pointing at both people, filled with scrolling divine-script glyphs
+const TALKS = [];
+function talkEvent(a, b) {
+  if (!a || !b || a === b || a.zone !== b.zone || typeof performance === 'undefined') return;
+  const d = Math.hypot(a.x - b.x, a.y - b.y);
+  if (d > 4 && d < 30) for (let k = 0; k < 6; k++) moveToward(b, Math.round(a.x + 1), Math.round(a.y + 1));   // step closer to talk
+  const keys = window.GLYPHS ? Object.keys(GLYPHS).filter(k => k[0] !== '#') : [];
+  const old = TALKS.find(t => (t.a === a.id && t.b === b.id) || (t.a === b.id && t.b === a.id));
+  const t0 = performance.now() / 1000;
+  if (old) { old.t0 = t0; return; }
+  TALKS.push({ a: a.id, b: b.id, t0, seq: Array.from({ length: 14 }, () => pick(keys)) });
+  if (TALKS.length > 30) TALKS.shift();
+}
+function drawTalks(ctx) {
+  const now = performance.now() / 1000;
+  for (let i = TALKS.length - 1; i >= 0; i--) if (now - TALKS[i].t0 > 7) TALKS.splice(i, 1);
+  TALKS.forEach(t => {
+    const A = byId(t.a), B = byId(t.b);
+    if (!A || !B || A.zone !== currentZoneId || B.zone !== currentZoneId || !A._feet || !B._feet || A.sleeping || B.sleeping) return;
+    const [ax, ay] = screenOf(A._feet[0], A._feet[1] - HUMAN_H * 1.05), [bx, by] = screenOf(B._feet[0], B._feet[1] - HUMAN_H * 1.05);
+    if (Math.hypot(ax - bx, ay - by) > 260) return;
+    const w = 62, h = 26, cx = (ax + bx) / 2, cy = Math.min(ay, by) - 60;
+    const fade = Math.min(1, (7 - (now - t.t0)) / 0.6, (now - t.t0) / 0.25);
+    ctx.save(); ctx.globalAlpha = Math.max(0, fade);
+    ctx.fillStyle = 'rgba(255,252,240,.96)'; ctx.strokeStyle = 'rgba(70,55,90,.6)'; ctx.lineWidth = 1.3;
+    // two tails, one to each speaker
+    [[ax, ay], [bx, by]].forEach(([px, py]) => {
+      const sx = cx + Math.sign(px - cx) * Math.min(w / 2 - 10, Math.abs(px - cx)) * 0.6, ex = sx + (px - sx) * 0.35, ey = cy + h / 2 + (py - cy - h / 2) * 0.55;
+      ctx.beginPath(); ctx.moveTo(sx - 5, cy + h / 2 - 1); ctx.lineTo(ex, ey); ctx.lineTo(sx + 5, cy + h / 2 - 1); ctx.closePath(); ctx.fill(); ctx.stroke();
+    });
+    ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 10); ctx.fill(); ctx.stroke();
+    // scrolling glyphs inside
+    ctx.beginPath(); ctx.rect(cx - w / 2 + 4, cy - h / 2 + 2, w - 8, h - 4); ctx.clip();
+    const sp = 18, sc = 0.27, off = (now * 22) % sp;
+    for (let i = 0; i < 6; i++) {
+      const k = t.seq[(Math.floor(now * 22 / sp) + i) % t.seq.length], d = window.GLYPHS && GLYPHS[k]; if (!d) continue;
+      ctx.save(); ctx.translate(cx - w / 2 + 2 + i * sp - off, cy - 30 * sc); ctx.scale(sc, sc);
+      ctx.strokeStyle = '#4b3f63'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(new Path2D(d)); ctx.restore();
+    }
+    ctx.restore();
+  });
 }
 // "…" speech bubble over the head: tap it to read what this person is thinking / doing (sits beside the quest marker)
 function drawThought(ctx, a, hasQuest) {
