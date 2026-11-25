@@ -733,6 +733,8 @@ function syncFauna(f) {
   f.zones = Object.keys(f.zp);
   f.pop = Object.values(f.zp).reduce((t, n) => t + n, 0);
 }
+// leafy places: fresh leaves can be picked by hand (thatch for the first shelters)
+Object.values(ZONES).forEach(z => { if (/forest|grassland|wetland|river/.test(z.geo) && !z.res.includes('ใบไม้สด')) z.res.push('ใบไม้สด'); });
 const START_ZONE = 'C1';   // predators never enter the starting zone
 function moveAnimals(f, from, to, n) {
   if (f.predator && to === START_ZONE) return 0;
@@ -779,7 +781,7 @@ let discoveredElements = [
 ];
 
 let shelters = [
-  { name: 'กระท่อมฐานบัญชาการ (C1)', sprite: 'shelter_hut', zone: 'C1', x: 22, y: 22, station: null }
+  { name: 'กระท่อมฐานบัญชาการ (C1)', sprite: 'shelter_hut', zone: 'C1', x: 22, y: 22, station: null, cap: 8 }
 ];
 
 let families = [];
@@ -901,7 +903,7 @@ const MAT = {
   'กิ่งไม้แห้ง': { wood: 1, dry: 1, fuel: 1 }, 'กิ่งง่ามไม้แข็ง': { wood: 1, dry: 1, fuel: 1 },
   'ขอนไม้ลอยน้ำ': { wood: 1, fuel: 1, wet: 1 }, 'ต้นไม้เนื้อแข็ง': { wood: 1, fuel: 1 }, 'ต้นมะพร้าว': { wood: 1, fuel: 1 },
   'เถาวัลย์เล็ก': { fiber: 1 }, 'ต้นกก': { fiber: 1 }, 'ต้นจาก': { fiber: 1 }, 'กาบมะพร้าว': { fiber: 1, dry: 1, fuel: 1 },
-  'ต้นกล้วยป่า': { fiber: 1, wet: 1 }, 'กอไผ่สด': { wood: 1, bamboo: 1, fiber: 0.5 }, 'ใบตองสด': { leaf: 1, wet: 1 },
+  'ต้นกล้วยป่า': { fiber: 1, wet: 1 }, 'กอไผ่สด': { wood: 1, bamboo: 1, fiber: 0.5 }, 'ใบตองสด': { leaf: 1, wet: 1 }, 'ใบไม้สด': { leaf: 1 },
   'ดินร่วน': { clay: 1 }, 'น้ำจืด': { water: 1, wet: 1 },
   'ทรายละเอียด': { sand: 1, mineral: 1, elem: 'Si' }, 'เปลือกหอยคม': { hard: 1, sharpable: 1, mineral: 1, elem: 'Ca' },
   'ปะการัง': { hard: 1, mineral: 1, elem: 'Ca' }, 'เกลือทะเล': { salt: 1, mineral: 1, elem: 'Na' },
@@ -961,7 +963,19 @@ const PRODUCTS = {
   copper_pick:  { name: 'อีเต้อทองแดง', kind: 'tool', tool: 'pick', dur: 120, pow: 2, tier: 2, props: { hard: 1, metal: 1 } },
   iron_axe:     { name: 'ขวานเหล็ก', kind: 'tool', tool: 'axe', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
   iron_pick:    { name: 'อีเต้อเหล็ก', kind: 'tool', tool: 'pick', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
-  reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' }
+  reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' },
+  // bamboo: the island's basic plant, good for many things
+  split_bamboo:  { name: 'ไม้ไผ่ผ่าซีก', kind: 'item', props: { wood: 1, bamboo: 1, split: 1, fuel: 0.5 } },
+  bamboo_basket: { name: 'ตะกร้าไม้ไผ่สาน', kind: 'item', props: { wood: 1, basket: 1 } },
+  raw_tile:      { name: 'กระเบื้องดิบ', kind: 'item', props: { raw: 1, tile: 1 } },
+  roof_tile:     { name: 'กระเบื้องดินเผา', kind: 'item', props: { hard: 1, tile: 1 } },
+  // homes: places to sleep, from a lean-to up to a tiled brick house (better = warmer and sturdier)
+  leaf_hut:    { name: 'เพิงกิ่งไม้ใบไม้', kind: 'home', tier: 1, warm: 6, hp: 25 },
+  bamboo_hut:  { name: 'กระท่อมไม้ไผ่', kind: 'home', tier: 2, warm: 9, hp: 50 },
+  wood_house:  { name: 'บ้านไม้', kind: 'home', tier: 3, warm: 12, hp: 90 },
+  stone_house: { name: 'บ้านหิน', kind: 'home', tier: 4, warm: 14, hp: 160 },
+  brick_house: { name: 'บ้านอิฐ', kind: 'home', tier: 5, warm: 16, hp: 220 },
+  tile_house:  { name: 'บ้านอิฐหลังคากระเบื้อง', kind: 'home', tier: 6, warm: 18, hp: 300 }
 };
 
 const STATION_SPRITE = { campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
@@ -1018,11 +1032,16 @@ function natureLaw(a, b, m) {
 
   switch (m) {
     case 'knap':
+      if (either(is('bamboo'), is('hard')) && !A.split && !B.split) return ok('split_bamboo');
       if (A.hard && B.hard && (A.mineral || A.sharpable || B.mineral || B.sharpable)) return ok('stone_blade');
       if (A.hard || B.hard) return near('ทุบแล้วแค่แตกละเอียด ไม่ได้อะไร');
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
+      if (either(N('split_bamboo'), P => P.fiber && !P.rope && !P.bamboo)) return ok('bamboo_basket');
       if (A.fiber && B.fiber && !A.rope && !B.rope) return ok('rope');
+      if (either(is('leaf'), P => P.wood && P.dry && !P.bamboo)) return ok('leaf_hut');
+      if (A.fence && B.fence) return ok('wood_house');
+      if (either(N('split_bamboo'), is('rope'))) return ok('bamboo_hut');
       if (either(N('copper_ingot'), is('wood'))) return ok('copper_pick');
       if (either(N('copper_ingot'), is('rope'))) return ok('copper_axe');
       if (either(N('iron_ingot'), is('wood'))) return ok('iron_pick');
@@ -1057,7 +1076,11 @@ function natureLaw(a, b, m) {
         return near(m === 'mix12' ? 'ได้โคลนเหลว ปั้นขึ้นรูปไม่ได้' : 'แห้งร่วน แตกเป็นก้อน ไม่เกาะกัน');
       }
       if (m === 'knead11') {
+        if (either(N('roof_tile'), N('fired_brick'))) return ok('tile_house');
         if (either(N('fired_brick'), N('clay_paste'))) return ok('kiln');
+        if (either(N('fired_brick'), is('wood'))) return ok('brick_house');
+        if (either(is('paste'), P => P.hard && P.mineral && !P.sharp && !P.metal && !P.tile)) return ok('stone_house');
+        if (either(is('paste'), is('leaf'))) return ok('raw_tile');
         if (A.brick && B.brick) return ok('brick_wall');
         if (A.paste && B.paste) return ok('raw_pot');
         if (either(is('paste'), P => P.sand || P.fiber)) return ok('raw_brick');
@@ -1070,6 +1093,7 @@ function natureLaw(a, b, m) {
       if ((A.food && B.food) || either(is('food'), is('fuel'))) return ok('cooked_food');
       if (either(N('raw_pot'), is('fuel'))) return ok('clay_pot');
       if (either(N('raw_brick'), is('fuel'))) return ok('fired_brick');
+      if (either(N('raw_tile'), is('fuel'))) return ok('roof_tile');
       if (A.wood && B.wood) return ok('charcoal');
       if (A.paste || B.paste || A.raw || B.raw) return near('แตกร้าวเพราะไฟไม่ทั่ว');
       return fail('ไหม้เป็นเถ้า');
@@ -1079,6 +1103,7 @@ function natureLaw(a, b, m) {
       if (either(N('clay_paste'), is('sand'))) return ok('crucible');
       if (either(N('fired_brick'), N('charcoal'))) return ok('smelter');
       if (either(is('sand'), P => P.salt || P.elem === 'Ca')) return ok('glass');
+      if (either(N('raw_tile'), () => true)) return ok('roof_tile');
       if (either(N('raw_pot'), () => true)) return ok('clay_pot');
       if (either(N('raw_brick'), () => true)) return ok('fired_brick');
       return fail('ร้อนจัดแต่ไม่เปลี่ยนแปลงอะไร');
@@ -1257,7 +1282,7 @@ let villageSeq = 0;
 function villageOf(a) { return a && a.villageId ? villages.find(v => v.id === a.villageId) || null : null; }
 function isMember(a) { return !!villageOf(a); }
 function bagCount(a) { return Object.values(a.bag || {}).reduce((x, y) => x + Math.max(0, y), 0); }
-function bagCap(a) { return 8 + st(a, 'str') * 2 + ((a.bag || {})[BAG_NAME] > 0 ? 10 : 0); }
+function bagCap(a) { return 8 + st(a, 'str') * 2 + ((a.bag || {})[BAG_NAME] > 0 ? 10 : 0) + ((a.bag || {})['ตะกร้าไม้ไผ่สาน'] > 0 ? 6 : 0); }
 function isToolName(n) { return productDef(keyByName(n))?.kind === 'tool'; }
 // Village storehouse is NOT free: members must be at the storehouse and trade items of equal value
 function itemValue(n, v) {
@@ -1375,6 +1400,7 @@ function produce(key, agent) {
   if (def.kind === 'station') {
     return buildStation(def.station, agent, agent.buildFor ? byId(agent.buildFor) : null) ? `🏗️ สร้าง "${def.name}" ที่โซน ${agent.zone}` : `มี "${def.name}" ของตัวเองอยู่แล้ว/เกาะเต็มแล้ว (วัสดุถูกใช้ไปเปล่าๆ)`;
   }
+  if (def.kind === 'home') return buildHome(key, agent);
   if (def.kind === 'food') { addFood(agent, def.food); return `🍲 ได้ "${def.name}" อาหาร +${def.food}`; }
   if (def.kind === 'tool') { newTool(def.name, agent); return `🔧 ได้ "${def.name}" เป็นของตัวเอง`; }
   put(agent, def.name, 1);
@@ -1553,6 +1579,7 @@ function computeNeeds(forAgent) {
   const needs = [];
   if (!forAgent || (forAgent.food || 0) < 10) needs.push('cooked_food');
   if (aiAgents.some(a => a.hp < maxHp(a) * 0.5) && avail(forAgent, 'ยาต้มสมุนไพร') < 2) needs.push('herbal_medicine');
+  if (forAgent) { const t = bestHomeTier(forAgent); Object.entries(PRODUCTS).filter(([, d]) => d.kind === 'home' && d.tier > t).sort((p, q) => p[1].tier - q[1].tier).slice(0, 2).forEach(([k]) => needs.push(k)); }
   Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
   ['blade', 'vessel', 'axe', 'bow', 'crucible'].forEach(t => {
     if (!hasTool(t, forAgent)) Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.tool === t) needs.push(k); });
@@ -2933,6 +2960,7 @@ function triggerSeasonalDisaster() {
   aiAgents.forEach(a => { a.hp = Math.max(10, Math.round(a.hp - d.hpLoss * wall)); a.bubble = '⚠️ หลบภัยพิบัติ!'; gainExp(a, 'vit', 3); });
   shelters.filter(s => s.station && s.station !== 'wall' && Math.random() < 0.35).forEach(s => damageStation(s, 3 + Math.floor(Math.random() * 10), `โดน${d.name.replace(/^\S+\s/, '')}`));
   steles.filter(x => !x.holder && Math.random() < 0.2).forEach(x => damageStele(x, 4 + Math.floor(Math.random() * 12)));
+  shelters.filter(x => x.rest && x.maxHp && Math.random() < 0.3).forEach(x => damageHome(x, 3 + Math.floor(Math.random() * 14), `โดน${d.name.replace(/^\S+\s/, '')}`));
   if (season.id === 'spring') { const lucky = pick(aiAgents.filter(a => a.age >= 12)); if (lucky) { put(lucky, 'แร่เหล็กบึง', 2); put(lucky, 'กำมะถันดิบ', 2); } }
 
   const banner = bgTick ? { style: {} } : document.getElementById('disaster-banner');
@@ -3031,7 +3059,7 @@ const HUT_CAP = 4;
 function isRestShelter(s) { return s.rest || (!s.station && (s.sprite || 'shelter_hut') === 'shelter_hut'); }
 function restSpotIn(zone, a) {
   const huts = shelters.filter(s => s.zone === zone && isRestShelter(s) && (!s.owner || s.public || s.owner === a.id || (villageOf(a) && s.villageId === villageOf(a).id) || rel(a, byId(s.owner) || a) >= 40));
-  const free = huts.filter(s => aiAgents.filter(o => o.sleepAt === s.name).length < HUT_CAP)
+  const free = huts.filter(s => aiAgents.filter(o => o.sleepAt === s.name).length < (s.cap || HUT_CAP))
     .sort((p, q) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(a.x - q.x, a.y - q.y))[0];
   if (free) return { kind: 'bed', s: free, x: free.x + 1, y: free.y + 2 };
   const fire = stationInZone(zone, 'campfire');
@@ -3091,11 +3119,6 @@ function staminaTick() {
     const near = spot && Math.hypot(a.x - spot.x, a.y - spot.y) <= 3;
     a.sleepKind = near ? spot.kind : 'ground'; a.sleepAt = near && spot.kind === 'bed' ? spot.s.name : null; a.restWait = 0;
     if (near) { a.x = spot.x + Math.floor(Math.random() * 3) - 1; a.y = spot.y + Math.floor(Math.random() * 2); }
-    // nowhere to sleep? build a simple lean-to if you carry enough sticks
-    if (!near && (a.bag || {})['กิ่งไม้แห้ง'] >= 3 && !shelters.some(s => s.zone === a.zone && isRestShelter(s))) {
-      const hut = buildHut(a);
-      a.sleepKind = 'bed'; a.sleepAt = hut.name;
-    }
   });
 }
 
@@ -3157,7 +3180,8 @@ function feltTemp(a) {
   const nearFire = fire && Math.hypot(a.x - fire.x, a.y - fire.y) <= 8;
   t += OUTFIT_WARMTH[pupOutfit(a)] || 0;
   const wz = WEATHER[zoneWeather(a.zone)];
-  if (indoors) t += 12 + wz.wet * 3;         // walls keep the rain and wind off
+  const hs = indoors && shelters.find(x => x.name === a.sleepAt);
+  if (indoors) t += (hs && hs.warm != null ? hs.warm : 12) + wz.wet * 3;         // walls keep the rain and wind off (better homes are warmer)
   else t -= wz.wet * 3;                      // soaked
   if (nearFire) t += 12;
   if (a.sleeping && aiAgents.filter(o => o !== a && o.sleeping && o.zone === a.zone && Math.hypot(o.x - a.x, o.y - a.y) <= 3).length >= 2) t += 3;   // huddling
@@ -3800,7 +3824,11 @@ function runAutonomousStep() {
     if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
       const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14 }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
     }
-    if (!night && a.age >= 12 && Math.random() < 0.3) {
+    if (!night && a.age >= 12) {
+      const sg = steleTarget(a), reading = sg && ((a.readS || {})[sg.id] || 0) > 0;
+      if (sg && Math.random() < (reading ? 0.9 : 0.3)) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) < 2.6) steleAct(a); return; }
+    }
+    if (false) {
       const sg = steleTarget(a);
       if (sg) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); return; }
     }
@@ -4884,7 +4912,7 @@ const WT = 16;                                   // world pixels per tile
 const VIEW = { zoom: 2.4, cx: 40 * WT, cy: 40 * WT, follow: null, w: 0, h: 0, dpr: 1, last: 0 };
 const NATURE = { ocean: '#4a9fd1', river: '#6cc0e8', swamp_water: '#5aa596', sand_bank: '#efdca6', mud_flat: '#b08a5e', grass: '#9bd472',
   tall_grass: '#84c75f', forest: '#6aad55', hill_slope: '#bdb291', mountain_cliff: '#a59e94', mountain_peak: '#d6cfc4' };
-const RES_ICON = [[/ไผ่/, '🎋'], [/มะพร้าว|ต้นจาก/, '🌴'], [/กล้วย/, '🍌'], [/ไม้เนื้อแข็ง/, '🌳'], [/ขอนไม้|กิ่ง/, '🪵'], [/ปลา/, '🐟'], [/กุ้ง/, '🦐'],
+const RES_ICON = [[/ใบไม้สด/, '🍃'], [/ไผ่/, '🎋'], [/มะพร้าว|ต้นจาก/, '🌴'], [/กล้วย/, '🍌'], [/ไม้เนื้อแข็ง/, '🌳'], [/ขอนไม้|กิ่ง/, '🪵'], [/ปลา/, '🐟'], [/กุ้ง/, '🦐'],
   [/ปู/, '🦀'], [/ปะการัง/, '🪸'], [/หอย/, '🐚'], [/น้ำจืด/, '💧'], [/กก/, '🌾'], [/มะละกอ/, '🥭'], [/เบอร์รี่/, '🫐'], [/เห็ด/, '🍄'], [/สมุนไพร/, '🌿'],
   [/สาหร่าย/, '🌱'], [/เถาวัลย์/, '🍃'], [/ผึ้ง/, '🐝'], [/รังนก/, '🪺'], [/มด/, '🐜'], [/เกลือ/, '🧂'], [/ทราย/, '⏳'], [/แร่|เหล็ก/, '⛏️'],
   [/กำมะถัน/, '🟡'], [/ประสิว/, '⚪'], [/ดิน/, '🟤'], [/ยาง/, '🟠'], [/หิน/, '🪨']];
@@ -5201,7 +5229,7 @@ const WOBJ = {
   pine:  { name: 'ต้นสน', tool: ['axe'], hp: 20, tier: 1, yields: { 'ต้นสน': 3, 'กิ่งสนแห้ง': 2 }, st: ['full', 'damaged', 'stump'], regrow: 96, tall: 1 },
   fruit: { name: 'ต้นแอปเปิลป่า', tool: ['axe'], hp: 10, tier: 1, yields: { 'ต้นไม้เนื้อแข็ง': 2, 'กิ่งไม้แห้ง': 1 }, fruit: 'แอปเปิลป่า', fruitN: 3, st: ['full', 'picked', 'damaged', 'stump'], regrow: 72, tall: 1 },
   palm:  { name: 'ต้นมะพร้าว', tool: ['axe'], hp: 10, tier: 1, yields: { 'ต้นมะพร้าว': 2, 'กาบมะพร้าว': 2 }, fruit: 'ลูกมะพร้าว', fruitN: 2, st: ['full', 'picked', 'damaged', 'stump'], regrow: 72, tall: 1 },
-  bush_green:  { name: 'พุ่มไม้', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1, 'เถาวัลย์เล็ก': 1 }, st: ['full', 'damaged', 'stub'], regrow: 36 },
+  bush_green:  { name: 'พุ่มไม้', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1, 'เถาวัลย์เล็ก': 1, 'ใบไม้สด': 1 }, st: ['full', 'damaged', 'stub'], regrow: 36 },
   bush_pink:   { name: 'พุ่มดอกชมพู', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1, 'สมุนไพร': 1 }, st: ['full', 'damaged', 'stub'], regrow: 36 },
   bush_purple: { name: 'พุ่มดอกม่วง', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1, 'สมุนไพร': 1 }, st: ['full', 'damaged', 'stub'], regrow: 36 },
   bush_blue:   { name: 'พุ่มบลูเบอร์รี่', tool: ['blade', 'sickle'], hp: 4, tier: 1, yields: { 'กิ่งไม้แห้ง': 1 }, fruit: 'เบอร์รี่ป่า', fruitN: 2, st: ['full', 'picked', 'damaged', 'stub'], regrow: 36 },
@@ -5385,7 +5413,15 @@ function objWorldTick() {
 // ==========================================
 const FOOD_ITEM = n => propsOf(n).food && !propsOf(n).fuel;
 function personalFood(a) { return (a.food || 0) + Object.entries(a.bag || {}).reduce((t, [n, q]) => t + (q > 0 && FOOD_ITEM(n) ? q * 2 : 0), 0); }
-function hasShelter(a) { const H = homeOf(a); return shelters.some(s => s.zone === H.zone && isRestShelter(s) && (!s.owner || s.public || s.owner === a.id || (villageOf(a) && s.villageId === villageOf(a).id) || rel(a, byId(s.owner) || a) >= 40)); }
+function hasShelter(a) {
+  if (shelters.some(s => s.rest && s.owner === a.id)) return true;
+  const H = homeOf(a);
+  const huts = shelters.filter(s => s.zone === H.zone && isRestShelter(s) && (!s.owner || s.public || (villageOf(a) && s.villageId === villageOf(a).id) || rel(a, byId(s.owner) || a) >= 40));
+  const owners = new Set(huts.map(s => s.owner).filter(Boolean));
+  const free = huts.reduce((t, s) => t + (s.cap || HUT_CAP), 0) - owners.size;   // owners sleep in their own place
+  const queue = aiAgents.filter(o => homeOf(o).zone === H.zone && !owners.has(o.id)).sort((p, q) => (p.age >= 15 ? 1 : 0) - (q.age >= 15 ? 1 : 0) || String(p.id).localeCompare(String(q.id)));
+  return queue.indexOf(a) < free;   // children get a bed first
+}
 function clothWarmth(a) { return OUTFIT_WARMTH[pupOutfit(a)] || 0; }
 function needsOf(a) {
   const H = homeOf(a), cold = airTemp(H.zone) < 22 || (a.warmth ?? 100) < 60;
@@ -5425,6 +5461,26 @@ function seekItem(a, re, label) {
   if (zs.length) { const p = findValidTile(zs[0], false); a.goal = { zone: zs[0], x: p.x, y: p.y, ttl: 12 }; a.bubble = `${label} (ไปโซน ${zs[0]})`; travelToGoal(a); return true; }
   return false;
 }
+// homes built from a recipe: one per person (a better one replaces the old), shared with family & village
+function homesOf(a) { return shelters.filter(s => s.rest && s.owner === a.id); }
+function bestHomeTier(a) { return Math.max(0, ...shelters.filter(s => s.rest && s.zone === homeOf(a).zone && (s.owner === a.id || (villageOf(a) && s.villageId === villageOf(a).id) || (s.owner && rel(a, byId(s.owner) || a) >= 40))).map(s => s.tier || 1)); }
+function buildHome(key, a) {
+  const d = PRODUCTS[key], old = homesOf(a);
+  if (old.some(h => (h.tier || 1) >= d.tier)) { put(a, 'กิ่งไม้แห้ง', 0); return `มีที่พักที่ดีกว่าหรือเท่ากับ "${d.name}" อยู่แล้ว`; }
+  buildZoneTerrain(a.zone);
+  const prev = old[0];
+  const x = prev && prev.zone === a.zone ? prev.x : clampC(a.x - 1), y = prev && prev.zone === a.zone ? prev.y : clampC(a.y - 2);
+  shelters = shelters.filter(h => !old.includes(h));
+  const hut = { id: 'home_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `${d.name}ของ${a.name}`, kind: key, sprite: 'home_' + key, zone: a.zone, x, y, station: null, rest: true,
+    tier: d.tier, warm: d.warm, hp: d.hp, maxHp: d.hp, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
+  shelters.push(hut); gainExp(a, 'dex', 1 + d.tier);
+  addLog(`🏠 [ปัจจัย 4 · ที่อยู่อาศัย] ${a.name} ${prev ? `ปรับปรุง${prev.name.split('ของ')[0]}เป็น` : 'สร้าง'} "${d.name}" ที่ ${ZONES[a.zone].name}`, '#a3e635');
+  return `🏠 สร้าง "${d.name}"`;
+}
+function damageHome(h, dmg, why) {
+  h.hp -= Math.max(1, Math.round(dmg * (1 - (h.tier || 1) * 0.08))); h.hitT = performance.now() / 1000;
+  if (h.hp <= 0) { shelters = shelters.filter(x => x !== h); addLog(`💥 [ที่พักพัง] ${h.name} ${why || ''} พังหายไป`, '#f87171'); }
+}
 // returns true if the person spent this hour on a basic need
 function needStep(a, night) {
   if (a.age < 12 || night) return false;
@@ -5437,12 +5493,28 @@ function needStep(a, night) {
     a.wantHunt = true; return false;
   }
   if (k === 'shelter') {
-    const H = homeOf(a), sticks = (a.bag || {})['กิ่งไม้แห้ง'] || 0;
-    if (sticks >= 3) {
-      if (a.zone !== H.zone) { const p = findValidTile(H.zone, false); a.goal = { zone: H.zone, x: p.x, y: p.y, ttl: 12 }; a.bubble = '🛖 ปัจจัย 4: เอากิ่งไม้กลับไปสร้างที่พัก'; travelToGoal(a); return true; }
-      buildHut(a); a.bubble = '🛖 สร้างเพิงพักเสร็จแล้ว'; return true;
+    // only what this person knows (from experiments, teachers or a stele) can be built
+    const homes = Object.values(a.know).filter(e => e.out && PRODUCTS[e.out] && PRODUCTS[e.out].kind === 'home').sort((p, q) => PRODUCTS[q.out].tier - PRODUCTS[p.out].tier);
+    for (const e of homes) {
+      const step = planFor(a, e.out);
+      if (step && methodUsable(a, step.m) && hasMaterials(step.a, step.b, a)) {
+        const r = craftKnown(a, step); a.bubble = `🏠 ปัจจัย 4: ลงมือทำ${outName(step.out)}`; return true;
+      }
     }
-    return seekItem(a, /กิ่ง/, `🛖 ปัจจัย 4: ยังไม่มีที่พัก หากิ่งไม้ ${sticks}/3`);
+    if (homes.length) {
+      const e = homes[homes.length - 1], miss = [e.a, e.b].find(n => avail(a, n) < (e.a === e.b ? 2 : 1)) || a.wantItem;
+      if (miss && seekItem(a, new RegExp(miss.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `🏠 ปัจจัย 4: หา${miss}มาสร้าง${outName(e.out)}`)) return true;
+      return false;
+    }
+    // no idea yet: an unread tablet nearby may hold the answer
+    const sg = steleTarget(a);
+    if (sg && sg.n === 1) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) < 2.6) steleAct(a); else a.bubble = '📜 ปัจจัย 4: ไปอ่านศิลาโบราณ เผื่อมีวิธีทำที่พัก'; return true; }
+    // no idea yet: collect sticks and leaves, then try things with them (the hunch drives experiments)
+    const leaf = Object.keys(MAT).find(n => MAT[n].leaf && avail(a, n) > 0) || 'ใบตองสด';
+    if (avail(a, 'กิ่งไม้แห้ง') < 2) return seekItem(a, /กิ่ง/, '🏠 ปัจจัย 4: ยังไม่มีที่พัก ลองหากิ่งไม้มาก่อน');
+    if (!a.hunch) a.hunch = { items: ['กิ่งไม้แห้ง', leaf], m: pick(['bind', 'cut', 'knap', 'friction']), ttl: 6 };
+    a.bubble = '🤔 ปัจจัย 4: คิดหาวิธีทำที่พักจากกิ่งไม้ใบไม้';
+    return false;
   }
   if (k === 'cloth') {
     const v = villageOf(a), hide = v && Object.keys(v.store).find(n => /หนัง/.test(n) && v.store[n] > 0);
@@ -5469,6 +5541,7 @@ const GLYPH_STATION = { campfire: 'กองไฟ', kiln: 'เตาเผา',
 function glyphOfThing(name, isOut) {
   const k = keyByName(name), d = k && productDef(k);
   if (d) {
+    if (d.kind === 'home') return 'บ้าน';
     if (d.kind === 'station') return GLYPH_STATION[d.station] || 'มือ';
     if (d.kind === 'food') return 'อาหาร';
     if (d.kind === 'tool') return d.tool === 'vessel' || d.tool === 'crucible' ? 'ภาชนะ' : 'เครื่องมือ';
@@ -5503,7 +5576,8 @@ function seedSteles() {
   steleSeeded = true; steles = steles || [];
   const all = validRecipes(), keys = Object.keys(all).filter(k => PRODUCTS[k].kind !== 'station' || Math.random() < 0.5);
   const zones = Object.keys(ZONES).filter(z => !/ocean|sea/.test(ZONES[z].geo || ''));
-  const chosen = keys.sort(() => Math.random() - 0.5).slice(0, 7);
+  let chosen = keys.sort(() => Math.random() - 0.5).slice(0, 7);
+  const hk = ['leaf_hut', 'bamboo_hut'].filter(k => all[k]); if (hk.length) chosen = [hk[0]].concat(chosen.filter(k => k !== hk[0])).slice(0, 7);   // the island's first lesson: how to make a shelter
   chosen.forEach((k, i) => {
     const rec = pick(all[k]), set = ++steleSeq;
     const plan = i < 3 ? 1 : i < 5 ? 2 : 3;
@@ -5511,7 +5585,8 @@ function seedSteles() {
     const zs = zones.slice().sort(() => Math.random() - 0.5);
     if ((i === 0 || i === 3) && ZONES[START_ZONE]) { zs.splice(zs.indexOf(START_ZONE), 1); zs.unshift(START_ZONE); }   // one tablet and one fragment start near the castaways
     for (let p = 0; p < plan; p++) {
-      const zone = zs[p % zs.length], s = landSpot(zone);
+      const zone = zs[p % zs.length]; let s = landSpot(zone);
+      if (i === 0 && zone === START_ZONE) { for (let t = 0; t < 30; t++) { const q = landSpot(zone); if (Math.hypot(q.x - 38, q.y - 32) < 12) { s = q; break; } } }   // the first tablet stands near where the castaways land
       steles.push({ id: 'st' + (++steleSeq), set, zone, x: s.x, y: s.y, art, rec, ancient: true, n: plan, idx: plan > 1 ? p : null, hp: 60, max: 60 });
     }
   });
@@ -5520,7 +5595,7 @@ const steleName = s => s.n > 1 ? `เศษศิลาโบราณ ${s.idx +
 function steleReadable(s) { return !s.dead && s.n === 1; }
 // AI: walk to a stele worth reading, or a fragment worth picking up
 function steleTarget(a) {
-  let best = null, bd = 30;
+  let best = null, bd = 90;
   for (const s of steles) {
     if (s.zone !== a.zone || s.dead || s.holder || s.vill) continue;
     if (steleReadable(s) && ((a.readS || {})[s.id] || 0) >= 1) continue;
@@ -6014,7 +6089,36 @@ function drawAgentTag(ctx, l, sx, sy) {
     const [hx, hy] = screenOf(a._feet[0], a._feet[1] - HUMAN_H * 1.2);
     ctx.fillStyle = myQ.status === 'open' ? '#f5a524' : '#a78bfa'; ctx.beginPath(); ctx.arc(hx, hy, 9, 0, 7); ctx.fill();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(myQ.status === 'open' ? '!' : '?', hx, hy + 4); ctx.textAlign = 'left';
+  }  drawThought(ctx, a, !!myQ);
+}
+// "…" speech bubble over the head: tap it to read what this person is thinking / doing (sits beside the quest marker)
+function drawThought(ctx, a, hasQuest) {
+  a._thoughtHit = null;
+  if (a.sleeping || !a.bubble || !a._feet) return;
+  const [hx, hy] = screenOf(a._feet[0], a._feet[1] - HUMAN_H * 1.2);
+  const bx = hasQuest ? hx + 22 : hx, by = hy, w = 22, h = 15, now = performance.now() / 1000;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.strokeStyle = 'rgba(60,50,80,.55)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.roundRect(bx - w / 2, by - h / 2, w, h, 7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx - 4, by + h / 2 - 0.5); ctx.lineTo(bx - 7, by + h / 2 + 5); ctx.lineTo(bx + 1, by + h / 2 - 0.5); ctx.closePath(); ctx.fill();
+  const busy = /^(🤔|🔬|🔁|🛠️|📜|😓|😅)/.test(a.bubble);
+  for (let i = 0; i < 3; i++) { const up = busy ? Math.max(0, Math.sin(now * 6 - i * 0.9)) * 2 : 0; ctx.fillStyle = '#5b4f72'; ctx.beginPath(); ctx.arc(bx - 6 + i * 6, by - up, 1.8, 0, 7); ctx.fill(); }
+  a._thoughtHit = { x: bx - w / 2 - 4, y: by - h / 2 - 4, w: w + 8, h: h + 10 };
+  // opened: show the full sentence
+  if (a._thoughtUntil && now < a._thoughtUntil) {
+    ctx.font = '600 12px Kanit, sans-serif';
+    const words = a.bubble, maxW = 190, lines = [];
+    let line = '';
+    const segs = typeof Intl !== 'undefined' && Intl.Segmenter ? [...new Intl.Segmenter('th', { granularity: 'word' }).segment(words)].map(x => x.segment) : [...words];
+    for (const ch of segs) { if (line && ctx.measureText(line + ch).width > maxW) { lines.push(line); line = ch.trimStart(); } else line += ch; }
+    if (line) lines.push(line);
+    const tw = Math.max(...lines.map(l => ctx.measureText(l).width)) + 16, th = lines.length * 16 + 10;
+    const tx = bx - tw / 2, ty = by - h / 2 - th - 8;
+    ctx.fillStyle = 'rgba(255,253,245,.97)'; ctx.strokeStyle = 'rgba(60,50,80,.6)'; ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 9); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx - 5, ty + th - 0.5); ctx.lineTo(bx, ty + th + 6); ctx.lineTo(bx + 5, ty + th - 0.5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2d2540'; ctx.textBaseline = 'top'; lines.forEach((l, i) => ctx.fillText(l, tx + 8, ty + 6 + i * 16)); ctx.textBaseline = 'alphabetic';
   }
+  ctx.restore();
 }
 function drawAgent(ctx, a, now, labels) {
   const H = HUMAN_H;
@@ -6062,6 +6166,9 @@ function toggleFullscreen() {
 function changeZoom(delta) { setZoom(VIEW.zoom * (delta > 0 ? 1.25 : 0.8)); }
 function mapTap(e) {
   const rect = e.target.getBoundingClientRect(); const [wx, wy] = worldOf(e.clientX - rect.left, e.clientY - rect.top);
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const th = aiAgents.find(a => a.zone === currentZoneId && a._thoughtHit && sx >= a._thoughtHit.x && sx <= a._thoughtHit.x + a._thoughtHit.w && sy >= a._thoughtHit.y && sy <= a._thoughtHit.y + a._thoughtHit.h);
+  if (th) { const n = performance.now() / 1000; th._thoughtUntil = th._thoughtUntil && n < th._thoughtUntil ? 0 : n + 5; return; }
   const hit = aiAgents.filter(a => a.zone === currentZoneId && a._hit && wx >= a._hit.x && wx <= a._hit.x + a._hit.w && wy >= a._hit.y && wy <= a._hit.y + a._hit.h)
     .sort((p, q) => (q._rx + q._ry) - (p._rx + p._ry))[0];
   if (hit) { openAgentCard(hit.id); return; }
