@@ -626,7 +626,7 @@ const CROWD_LIMIT = 20;   // more residents than this in one zone feels crowded
 let isRunning = true, simSpeed = 1, simTimer = null;
 // ===== Real-time mode: the clock flows; each person acts on their own schedule (no shared turns) =====
 let REALTIME = true, rtMin = 0, HOUR_NEEDS = null;
-const RT_ON = () => REALTIME && !bgTick;
+const RT_ON = () => REALTIME;
 const gameNow = () => (simDay || 0) * 1440 + (simMinutes || 0) + rtMin;
 let simMinutes = 480, simDay = 1;
 let currentZoneId = 'E1';
@@ -2892,6 +2892,18 @@ function tickAllRealms() {
   if (document.getElementById('lobby').classList.contains('open')) renderLobby();
 }
 
+// one realm's hourly world step (the others stay as they are)
+function tickRealmIdx(i) {
+  if (!realms[i]) return;
+  realms[activeRealm].state = captureRealm();
+  tickingRealm = i; bgTick = i !== activeRealm;
+  restoreRealm(realms[i].state);
+  runAutonomousStep();
+  realmTravelTick(i);
+  realms[i].state = captureRealm();
+  tickingRealm = activeRealm; bgTick = false;
+  restoreRealm(realms[activeRealm].state);
+}
 function switchRealm(i) {
   realms[activeRealm].state = captureRealm();
   activeRealm = i; tickingRealm = i;
@@ -3145,9 +3157,12 @@ function isleNoise(seed) {
     const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1); return a + (b - a) * xf + (c - a) * yf + (a - b - c + d) * xf * yf; };
   return (x, y, oct = 3, f = 1 / 24) => { let t = 0, amp = 1, sum = 0; for (let o = 0; o < oct; o++) { t += v(x * f, y * f) * amp; sum += amp; amp *= 0.5; f *= 2; } return t / sum; };
 }
+const ISLE_MAPS = {};   // one generated island per realm (seed + river layout), so switching realms never regenerates
 function buildIsland() {
   const seed = (worldSeed || 1) | 0;
   if (ISLE.seed === seed && ISLE.map) return ISLE.map;
+  const ikey = seed + ':' + (ISLE.riverZones || []).join(',');
+  if (ISLE_MAPS[ikey]) { ISLE.seed = seed; ISLE.map = ISLE_MAPS[ikey]; return ISLE.map; }
   const W = 400, H = 320, n1 = isleNoise(seed), n2 = isleNoise(seed + 77), n3 = isleNoise(seed + 151);
   // smooth (bilinear between zone centres) value of a per-geo table
   const field = (tbl, gx, gy, def = 0) => {
@@ -3195,7 +3210,7 @@ function buildIsland() {
     const fo = field(GEO_FOREST, x, y) + (n3(x, y, 3, 1 / 12) - 0.5) * 0.8;
     map[y][x] = fo > 0.62 ? 'forest' : fo > 0.42 && n1(x + 999, y, 1, 1 / 5) > 0.55 ? 'tall_grass' : 'grass';
   }
-  ISLE.seed = seed; ISLE.map = map;
+  ISLE.seed = seed; ISLE.map = map; ISLE_MAPS[ikey] = map;
   return map;
 }
 function buildZoneTerrain(zId) {
@@ -3625,7 +3640,7 @@ const GOD_QUESTS = [
 ];
 // God sometimes reveals a real recipe as a quest: the AI still has to gather the things and try it
 let REV_CACHE = null, REV_DAY = -1;
-function revRecipes() { if (!REV_CACHE || REV_DAY !== simDay) { REV_CACHE = validRecipes(); REV_DAY = simDay; } return REV_CACHE; }
+function revRecipes() { const k = Object.keys(PRODUCTS).length; if (!REV_CACHE || REV_DAY !== k) { REV_CACHE = validRecipes(); REV_DAY = k; } return REV_CACHE; }
 function pickRevelation(a) {
   const known = new Set(Object.values(a.know || {}).filter(e => e.out).map(e => e.out));
   const near = [a.zone].concat(getAdjacentZones(a.zone)), onIsle = new Set(near.flatMap(z => (ZONES[z] && ZONES[z].res) || []));
@@ -4514,32 +4529,7 @@ function runAutonomousStep() {
   if (!RT_ON()) aiAgents.forEach(a => agentGather(a, season));
 
   // Leopards
-  aiAgents.forEach(a => {
-    const beast = faunaSpecies.find(f => f.predator && (f.zp[a.zone] || 0) > 0);
-    const crowd = aiAgents.filter(o => o.zone === a.zone && o.age >= 15).length;
-    if (a.sleeping && a.sleepKind === 'bed') return;      // safe inside a shelter
-    if (carriedEff(a, 'light') && Math.random() < 0.7) return;   // beasts keep away from the light
-    if (beast && night && Math.random() < (beast.id === 'f_wolf' ? 0.025 : 0.04) * (1 + trOf(beast, a.zone).fer * 0.3) * Math.min(2, beast.zp[a.zone]) / Math.max(1, crowd) && !stationInZone(a.zone, 'campfire')) {
-      const icon = { f_wolf: '🐺', f_cobra: '🐍', f_croc: '🐊' }[beast.id] || '🐆';
-      if (hasTool('bow', a) && a.age >= 15) { a.bubble = `🏹 ยิงธนูไล่${beast.name}!`; gainExp(a, 'agi', 1); gainExp(a, 'str', 0.5); }
-      else if (Math.random() < Math.min(0.6, st(a, 'agi') * 0.025)) { a.bubble = `💨 หลบ${beast.name}ทัน!`; gainExp(a, 'agi', 2); }
-      else {
-        const ar = carriedEff(a, 'armor'), dmg = Math.round(((beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3) * (ar ? 1 - ar.n / 100 : 1));
-        a.hp = Math.max(0, a.hp - dmg);
-        if (beast.id === 'f_cobra') a.poisonH = (a.poisonH || 0) + 8;
-        gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
-        a.bubble = `${icon} ถูก${beast.name}โจมตี!`; a.sleeping = false; a.wantRest = false;
-        addLog(`${icon} [สัตว์ร้ายโจมตี!] "${a.name}" ถูก${beast.name}ขย้ำในโซน ${a.zone} (HP ${Math.round(a.hp)})`, '#ef4444');
-        // Fighting back with a blade can kill it
-        if (a.hp > 0 && a.age >= 15 && hasTool('blade', a) && Math.random() < 0.12 + st(a, 'str') * 0.01 && beast.pop > 2) {
-          beast.zp[a.zone]--; syncFauna(beast);
-          for (const [m, q] of Object.entries(beast.lootMat)) put(a, m, q);
-          a.rep += 2;
-          addLog(`⚔️ [สู้กลับ!] ${a.name} ฆ่า${beast.name}ได้ในการต่อสู้ ได้ชิ้นส่วนมา`, '#fbbf24');
-        }
-      }
-    }
-  });
+  if (!RT_ON()) aiAgents.forEach(a => beastCheck(a, night, 1));
 
   // Hunting (needs weapons to be reliable)
   if (!RT_ON()) aiAgents.filter(wantsHunt).slice(0, 6).forEach(agentHunt);
@@ -4547,13 +4537,15 @@ function runAutonomousStep() {
   // Work: craft from own knowledge, or experiment
   HOUR_NEEDS = computeNeeds();
   if (!RT_ON()) aiAgents.forEach(a => agentWork(a, HOUR_NEEDS));
+  // background realms: nobody is watching, so their people live the same way but are worked out once an hour
+  if (RT_ON() && bgTick) { bodyRealtime(60); agentsCatchUp(); }
 
   knowledgeExchange();
   stepFauna();
 
+  if (bgTick) return;                      // background realms don't touch the screen
   updateHudChips();
-  renderAllUI();
-  drawCanvas();
+  renderAllUI();                           // (the canvas is redrawn by the render loop every frame)
 }
 function updateHudChips() {
   if (bgTick) return;
@@ -6416,46 +6408,86 @@ function insectsOf(zId) {
   }
   return (INS_CACHE[key] = out);
 }
+// night predators: the chance scales with how long the person was exposed (hrs)
+function beastCheck(a, night, hrs) {
+  const beast = faunaSpecies.find(f => f.predator && (f.zp[a.zone] || 0) > 0);
+  const crowd = aiAgents.filter(o => o.zone === a.zone && o.age >= 15).length;
+  if (a.sleeping && a.sleepKind === 'bed') return;      // safe inside a shelter
+  if (carriedEff(a, 'light') && Math.random() < 0.7) return;   // beasts keep away from the light
+  if (beast && night && Math.random() < hrs * (beast.id === 'f_wolf' ? 0.025 : 0.04) * (1 + trOf(beast, a.zone).fer * 0.3) * Math.min(2, beast.zp[a.zone]) / Math.max(1, crowd) && !stationInZone(a.zone, 'campfire')) {
+    const icon = { f_wolf: '🐺', f_cobra: '🐍', f_croc: '🐊' }[beast.id] || '🐆';
+    if (hasTool('bow', a) && a.age >= 15) { a.bubble = `🏹 ยิงธนูไล่${beast.name}!`; gainExp(a, 'agi', 1); gainExp(a, 'str', 0.5); }
+    else if (Math.random() < Math.min(0.6, st(a, 'agi') * 0.025)) { a.bubble = `💨 หลบ${beast.name}ทัน!`; gainExp(a, 'agi', 2); fleeFrom(a); }
+    else {
+      const ar = carriedEff(a, 'armor'), dmg = Math.round(((beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3) * (ar ? 1 - ar.n / 100 : 1));
+      a.hp = Math.max(0, a.hp - dmg);
+      if (beast.id === 'f_cobra') a.poisonH = (a.poisonH || 0) + 8;
+      gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
+      a.bubble = `${icon} ถูก${beast.name}โจมตี!`; a.sleeping = false; a.wantRest = false; fleeFrom(a);
+      addLog(`${icon} [สัตว์ร้ายโจมตี!] "${a.name}" ถูก${beast.name}ขย้ำในโซน ${a.zone} (HP ${Math.round(a.hp)})`, '#ef4444');
+      // Fighting back with a blade can kill it
+      if (a.hp > 0 && a.age >= 15 && hasTool('blade', a) && Math.random() < 0.12 + st(a, 'str') * 0.01 && beast.pop > 2) {
+        beast.zp[a.zone]--; syncFauna(beast);
+        for (const [m, q] of Object.entries(beast.lootMat)) put(a, m, q);
+        a.rep += 2;
+        addLog(`⚔️ [สู้กลับ!] ${a.name} ฆ่า${beast.name}ได้ในการต่อสู้ ได้ชิ้นส่วนมา`, '#fbbf24');
+      }
+    }
+  }
+}
+// run a few tiles away and think again right now
+function fleeFrom(a) {
+  const ang = Math.random() * 6.28; for (let k = 0; k < 2; k++) moveToward(a, Math.round(a.x + Math.cos(ang) * 8), Math.round(a.y + Math.sin(ang) * 8));
+  a.goal = null; a.gatherT = null; a._hunt = null;
+  if (REALTIME) { const n = gameNow(); a.walkUntil = n + 3; a.busyUntil = n + 3; }
+}
+// swatting / catching insects within 2 tiles (an action)
+function insectAct(a, night, chance) {
+  if (a.sleeping && a.sleepKind === 'bed') return;
+  const here = insectsOf(a.zone);
+  // insects are wildlife too: AI swat / hunt them for their parts (bare hands work, a blade is better)
+  if (a.age >= 10 && !a.sleeping && Math.random() < chance) {
+    const tgt = here.find(b => !b.dead && !(INSECTS[b.k].night && !night) && !(INSECTS[b.k].day && night && INSECTS[b.k].fly) && Math.hypot(b.x - a.x, b.y - a.y) <= 2);
+    if (tgt) {
+      const D = INSECTS[tgt.k], blade = toolItems.find(t => (t.type === 'blade' || t.type === 'sickle') && t.holder === a.id);
+      const hitP = Math.min(0.9, 0.3 + st(a, 'agi') * 0.02 + st(a, 'dex') * 0.01 + (blade ? 0.15 : 0));
+      if (Math.random() < hitP) {
+        tgt.hp -= blade ? hitDamage(a, blade) : 1; if (blade) wearTool(a, blade, 1);
+        gainExp(a, 'agi', 0.4); gainExp(a, 'dex', 0.2);
+        if (tgt.hp <= 0) {
+          tgt.dead = true; tgt.respawnAt = nowH() + 12 + Math.floor(Math.random() * 24);
+          const got = [];
+          for (const [n, q] of Object.entries(D.drops)) { gainItems(a, n, q); got.push(n); }
+          if (D.bonus && Math.random() < D.bonus[1]) { put(a, D.bonus[0], 1); addFood(a, 3); got.push(D.bonus[0]); }
+          if (!a.goal) a.bubble = `✋ จับ${D.name}ได้ → ${got.join(', ')}`;
+          godQuestEvent(a, 'gather', got[0], 1);
+        } else if (!a.goal) a.bubble = `👋 ตบ${D.name}`;
+      } else if (D.fightBack && Math.random() < 0.5) {
+        a.hp = Math.max(1, a.hp - D.sting); a.bubble = tgt.k === 'bee' ? '🐝 ตบพลาด โดนผึ้งต่อย!' : '🦂 จับพลาด โดนแมงป่องต่อย!';
+        if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
+      }
+    }
+  }
+}
+// stings and poison over time
+function insectBody(a, night, hrs) {
+  if (a.sleeping && a.sleepKind === 'bed') { if (a.poisonH > 0) { a.poisonH = Math.max(0, a.poisonH - hrs); a.hp = Math.max(1, a.hp - hrs); } return; }
+  const here = insectsOf(a.zone);
+  for (const b of here) {
+    if (b.dead) continue;
+    const D = INSECTS[b.k]; if (!D.sting || (D.day && night)) continue;
+    if (Math.hypot(b.x - a.x, b.y - a.y) <= 2 && Math.random() < 0.03 * hrs) {
+      a.hp = Math.max(1, a.hp - D.sting); gainExp(a, 'vit', 0.5);
+      a.bubble = b.k === 'bee' ? '🐝 โดนผึ้งต่อย!' : '🦂 โดนแมงป่องต่อย ติดพิษ!';
+      if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
+      break;
+    }
+  }
+  if (a.poisonH > 0) { a.poisonH = Math.max(0, a.poisonH - hrs); a.hp = Math.max(1, a.hp - hrs); }
+}
 function insectTick() {
   const night = isNightTime();
-  aiAgents.forEach(a => {
-    if (a.sleeping && a.sleepKind === 'bed') return;
-    const here = insectsOf(a.zone);
-    // insects are wildlife too: AI swat / hunt them for their parts (bare hands work, a blade is better)
-    if (a.age >= 10 && !a.sleeping && Math.random() < 0.25) {
-      const tgt = here.find(b => !b.dead && !(INSECTS[b.k].night && !night) && !(INSECTS[b.k].day && night && INSECTS[b.k].fly) && Math.hypot(b.x - a.x, b.y - a.y) <= 2);
-      if (tgt) {
-        const D = INSECTS[tgt.k], blade = toolItems.find(t => (t.type === 'blade' || t.type === 'sickle') && t.holder === a.id);
-        const hitP = Math.min(0.9, 0.3 + st(a, 'agi') * 0.02 + st(a, 'dex') * 0.01 + (blade ? 0.15 : 0));
-        if (Math.random() < hitP) {
-          tgt.hp -= blade ? hitDamage(a, blade) : 1; if (blade) wearTool(a, blade, 1);
-          gainExp(a, 'agi', 0.4); gainExp(a, 'dex', 0.2);
-          if (tgt.hp <= 0) {
-            tgt.dead = true; tgt.respawnAt = nowH() + 12 + Math.floor(Math.random() * 24);
-            const got = [];
-            for (const [n, q] of Object.entries(D.drops)) { gainItems(a, n, q); got.push(n); }
-            if (D.bonus && Math.random() < D.bonus[1]) { put(a, D.bonus[0], 1); addFood(a, 3); got.push(D.bonus[0]); }
-            if (!a.goal) a.bubble = `✋ จับ${D.name}ได้ → ${got.join(', ')}`;
-            godQuestEvent(a, 'gather', got[0], 1);
-          } else if (!a.goal) a.bubble = `👋 ตบ${D.name}`;
-        } else if (D.fightBack && Math.random() < 0.5) {
-          a.hp = Math.max(1, a.hp - D.sting); a.bubble = tgt.k === 'bee' ? '🐝 ตบพลาด โดนผึ้งต่อย!' : '🦂 จับพลาด โดนแมงป่องต่อย!';
-          if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
-        }
-      }
-    }
-    for (const b of here) {
-      if (b.dead) continue;
-      const D = INSECTS[b.k]; if (!D.sting || (D.day && night)) continue;
-      if (Math.abs(b.x - a.x) < 2.5 && Math.abs(b.y - a.y) < 2.5 && Math.random() < 0.03) {
-        a.hp = Math.max(1, a.hp - D.sting); gainExp(a, 'vit', 0.5);
-        a.bubble = b.k === 'bee' ? '🐝 โดนผึ้งต่อย!' : '🦂 โดนแมงป่องต่อย ติดพิษ!';
-        if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
-        break;
-      }
-    }
-    if (a.poisonH > 0) { a.poisonH--; a.hp = Math.max(1, a.hp - 1); }
-  });
+  if (!RT_ON()) aiAgents.forEach(a => { insectAct(a, night, 0.25); insectBody(a, night, 1); });
   // natural: dead insects come back somewhere else in the same zone
   const h = nowH();
   for (const key in INS_CACHE) INS_CACHE[key].forEach(b => {
@@ -6983,19 +7015,31 @@ function startSimLoop() {
   }, 100);
 }
 // move the game clock forward by some game minutes: hourly world systems on the hour, people whenever they're free
+let BG_Q = [];
 function advanceGame(mins) {
   rtMin += mins;
-  while (rtMin >= 60) {
-    rtMin -= 60;
-    tickAllRealms();
-    if (++ticksSinceLastSave >= 5) { ticksSinceLastSave = 0; saveGameState(); }
+  for (;;) {
+    if (BG_Q.length && rtMin >= BG_Q[0].at) { tickRealmIdx(BG_Q.shift().i); continue; }
+    if (rtMin >= 60) {
+      while (BG_Q.length) tickRealmIdx(BG_Q.shift().i);
+      rtMin -= 60;
+      tickRealmIdx(activeRealm);
+      godTick();
+      updateHudChips(); renderAllUI();
+      if (document.getElementById('lobby').classList.contains('open')) renderLobby();
+      BG_Q = realms.map((r, i) => i).filter(i => i !== activeRealm).map((i, k) => ({ i, at: 15 * (k + 1) }));
+      if (++ticksSinceLastSave >= 5) { ticksSinceLastSave = 0; saveGameState(); }
+      continue;
+    }
+    break;
   }
   if (REALTIME && isRunning) { bodyRealtime(mins); agentsRealtime(); }
   updateClockHud();
 }
 // bodies change continuously: hunger, warmth, stamina and health flow minute by minute
 function bodyRealtime(mins) {
-  const season = SEASONS[currentSeasonIdx], reactorMult = stationsOf('reactor').length ? 0.75 : 1;
+  const season = SEASONS[currentSeasonIdx], reactorMult = stationsOf('reactor').length ? 0.75 : 1, night = isNightTime(), now = gameNow();
+  const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
   let anyDead = false;
   for (const a of aiAgents) {
     a._bodyAcc = (a._bodyAcc || 0) + mins;
@@ -7003,7 +7047,15 @@ function bodyRealtime(mins) {
     const hrs = a._bodyAcc / 60; a._bodyAcc = 0;
     bodyHunger(a, season, reactorMult, hrs);
     bodyTemp(a, hrs);
-    if (bodyStamina(a, hrs) && !a.wantRest) { a.wantRest = true; a.restWait = 0; a.busyUntil = Math.min(a.busyUntil ?? 0, gameNow()); }
+    if (bodyStamina(a, hrs) && !a.wantRest) { a.wantRest = true; a.restWait = 0; a.busyUntil = Math.min(a.busyUntil ?? 0, now); }
+    beastCheck(a, night, hrs);
+    insectBody(a, night, hrs);
+    // noticing things on the way: a hungry walker passing food stops to deal with it now
+    if (!a.sleeping && a.age >= 12 && a.hunger >= 55 && (a.walkUntil ?? 0) > now && !(a.gatherT && FOODRX.test(a.gatherT.name))) {
+      const n = (zoneNodes[a.zone] || []).find(n => FOODRX.test(n.name) && Math.hypot(n.x - a.x, n.y - a.y) <= 3)
+        || objsOf(a.zone).find(o => !o.dead && o.fruit && Math.hypot(o.x - a.x - 0.5, o.y - a.y - 0.5) <= 3);
+      if (n) { a.busyUntil = now; a.walkUntil = now; }
+    }
     if (a.hp <= 0) anyDead = true;
   }
   if (anyDead) {
@@ -7028,6 +7080,13 @@ function agentsRealtime() {
     agentStep(a, night, season, now);
   }
 }
+function agentsCatchUp() {
+  const now = gameNow(), night = isNightTime(), season = SEASONS[currentSeasonIdx];
+  for (const a of aiAgents.slice()) {
+    if (a.busyUntil === undefined || a.busyUntil > now + 240 || a.busyUntil < now - 120) a.busyUntil = now - Math.random() * 60;
+    for (let n = 0; n < 3 && a.busyUntil <= now && aiAgents.includes(a); n++) agentStep(a, night, season, a.busyUntil);
+  }
+}
 // one free moment for one person: decide, walk, act. How long it takes decides when they think again.
 function agentStep(a, night, season, now) {
   const z0 = a.zone, x0 = a.x, y0 = a.y;
@@ -7037,6 +7096,12 @@ function agentStep(a, night, season, now) {
   agentGather(a, season);
   if (wantsHunt(a)) agentHunt(a);
   agentWork(a, HOUR_NEEDS || computeNeeds());
+  if (!a.sleeping) insectAct(a, night, 0.2);
+  // bump into someone? a short chat (they turn to face each other)
+  if (!a.sleeping && a.age >= 8 && Math.random() < 0.08) {
+    const b = aiAgents.find(o => o !== a && !o.sleeping && o.zone === a.zone && o.age >= 8 && Math.hypot(o.x - a.x, o.y - a.y) <= 2);
+    if (b && (bgTick || !talkOf(a, b))) { if (!bgTick) talkEvent(a, b); addRel(a, b, 1); addRel(b, a, 1); }
+  }
   // walking time: about 4-8 game minutes per tile depending on agility
   const pace = Math.max(3.5, 8 - st(a, 'agi') / 6);
   const walked = a.zone === z0 ? Math.hypot(a.x - x0, a.y - y0) : 40;
