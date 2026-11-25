@@ -739,7 +739,138 @@ function syncFauna(f) {
 }
 // leafy places: fresh leaves can be picked by hand (thatch for the first shelters)
 Object.values(ZONES).forEach(z => { if (/forest|grassland|wetland|river/.test(z.geo) && !z.res.includes('ใบไม้สด')) z.res.push('ใบไม้สด'); });
-const START_ZONE = 'E1';   // castaways wash up on the river plain (fresh water); predators never enter the starting zone
+// ==========================================
+// RULE-BASED RANDOM ISLAND LAYOUT (new for every world)
+// Always: a mountain range with a waterfall spring, a river that reaches the sea, beaches, wetland, forests.
+// The castaways land on the river plain. Zone names, resources and animals follow the land that was rolled.
+// ==========================================
+const GEO_NAMES = {
+  mountain_peak: ['ยอดภูเขาและสันเขาสูง', 'ยอดเขาหินผาสูงชัน', 'สันเขาหินแกรนิต'],
+  mountain_cliff: ['ภูเขาหินและหน้าผา', 'หน้าผาสูงชัน', 'เทือกเขาหินลาดชัน'],
+  mountain_cave: ['โถงหน้าถ้ำและเชิงเขา', 'ถ้ำหินปูนเชิงผา', 'เพิงผาและถ้ำลึก'],
+  waterfall_river: ['ภูเขาน้ำตกและต้นน้ำ', 'น้ำตกต้นธารเชิงเขา', 'ลำธารต้นน้ำบนเนินเขา'],
+  river_grassland: ['ที่ราบผืนหญ้าและแม่น้ำสายหลัก', 'ทุ่งหญ้าริมคุ้งแม่น้ำ', 'ที่ราบลุ่มแม่น้ำคดเคี้ยว'],
+  river_beach: ['ปากแม่น้ำบรรจบทะเล', 'สามเหลี่ยมปากแม่น้ำ', 'ปากอ่าวน้ำกร่อย'],
+  beach_ocean: ['หาดทรายขาวและดงมะพร้าว', 'ชายหาดทรายและแนวปะการัง', 'อ่าวทรายน้ำตื้น'],
+  rocky_beach: ['หาดหินน้ำเค็ม', 'หาดกรวดและขอนไม้', 'ชายฝั่งโขดหิน'],
+  wetland: ['ที่ราบลุ่มบ่อดินเหนียว', 'พื้นที่ลุ่มน้ำขัง', 'ป่าชายเลนและบึงโคลน'],
+  hill_grassland: ['เนินลาดดงไผ่และทุ่งหญ้า', 'เนินเขาหญ้าและกอไผ่', 'ทุ่งเนินลูกคลื่น'],
+  hill_forest: ['เนินลาดดงไม้ผลป่า', 'ป่าเนินเขาไม้ผล', 'ป่าโปร่งบนเนิน'],
+  deep_forest: ['ป่าดิบชื้นไม้ใหญ่ทึบ', 'ป่าทึบไม้ยักษ์', 'ดงไม้ใหญ่ร่มครึ้ม'],
+  open_grassland: ['ที่ราบผืนหญ้ากว้างและพุ่มไม้', 'ทุ่งหญ้าโล่งและพุ่มเบอร์รี่', 'ทุ่งราบดอกไม้ป่า']
+};
+const GEO_RES = {
+  mountain_peak: [['ต้นไม้เนื้อแข็ง', 'กิ่งง่ามไม้แข็ง'], ['หินกรวด']],
+  mountain_cliff: [['หินกรวด', 'หินเหล็กไฟ'], ['กำมะถันดิบ', 'รังนกทะเล']],
+  mountain_cave: [['หินเหล็กไฟ', 'ดินประสิว'], ['กิ่งไม้แห้ง']],
+  waterfall_river: [['น้ำจืด', 'ปลาซิว'], ['ดินร่วน']],
+  river_grassland: [['น้ำจืด'], ['ทรายละเอียด', 'กุ้งฝอย', 'ต้นกล้วยป่า', 'ปลาช่อน']],
+  river_beach: [['ปลากระบอก', 'หอยกาบ'], []],
+  beach_ocean: [[], ['ต้นมะพร้าว', 'กาบมะพร้าว', 'หอยมือเสือ', 'ปะการัง', 'เปลือกหอยคม', 'ทรายละเอียด']],
+  rocky_beach: [[], ['เกลือทะเล', 'หอยนางรม', 'ขอนไม้ลอยน้ำ', 'สาหร่ายทะเล']],
+  wetland: [['ดินร่วน'], ['ต้นกก', 'แร่เหล็กบึง', 'ต้นจาก', 'ปูทะเล']],
+  hill_grassland: [['กอไผ่สด'], ['เห็ดป่า', 'กิ่งไม้แห้ง', 'เถาวัลย์เล็ก']],
+  hill_forest: [['กิ่งไม้แห้ง'], ['รังผึ้งป่า', 'มะละกอป่า']],
+  deep_forest: [['ต้นไม้เนื้อแข็ง'], ['ยางไม้เหนียว', 'เถาวัลย์เล็ก']],
+  open_grassland: [['กิ่งไม้แห้ง'], ['เบอร์รี่ป่า', 'สมุนไพร', 'มดแดง']]
+};
+// every world must have these somewhere (key materials for the tech tree)
+const MUST_RES = { 'น้ำจืด': ['river_grassland', 'waterfall_river'], 'ดินร่วน': ['wetland', 'waterfall_river'], 'หินเหล็กไฟ': ['mountain_cliff', 'mountain_cave'],
+  'กอไผ่สด': ['hill_grassland', 'river_grassland'], 'ต้นไม้เนื้อแข็ง': ['deep_forest', 'mountain_peak'], 'แร่เหล็กบึง': ['wetland'], 'กำมะถันดิบ': ['mountain_cliff', 'mountain_cave'],
+  'ทรายละเอียด': ['beach_ocean', 'river_grassland'], 'เกลือทะเล': ['rocky_beach', 'beach_ocean'], 'ต้นมะพร้าว': ['beach_ocean'], 'กาบมะพร้าว': ['beach_ocean'],
+  'เถาวัลย์เล็ก': ['deep_forest', 'hill_grassland'], 'ต้นกก': ['wetland', 'river_grassland'], 'สมุนไพร': ['open_grassland', 'hill_forest'], 'ดินประสิว': ['mountain_cave', 'mountain_cliff'], 'หินกรวด': ['mountain_cliff', 'mountain_peak'] };
+// where each animal likes to live
+const FAUNA_HABITAT = { f_deer: ['open_grassland', 'hill_grassland', 'river_grassland', 'hill_forest'], f_boar: ['hill_forest', 'deep_forest', 'hill_grassland', 'wetland'],
+  f_rabbit: ['hill_grassland', 'open_grassland', 'river_grassland', 'wetland', 'beach_ocean'], f_goat: ['mountain_cliff', 'mountain_peak', 'rocky_beach', 'waterfall_river'],
+  f_fish: ['river_grassland', 'waterfall_river', 'river_beach', 'wetland', 'beach_ocean'], f_leopard: ['mountain_cliff', 'deep_forest'], f_wolf: ['rocky_beach', 'wetland', 'mountain_peak'],
+  f_monitor: ['deep_forest', 'hill_forest', 'hill_grassland'], f_turtle: ['beach_ocean', 'rocky_beach'], f_frog: ['wetland', 'river_grassland'], f_cobra: ['deep_forest', 'open_grassland'], f_croc: ['wetland', 'river_beach'] };
+let START_ZONE = 'E1';
+function rollLayout(seed) {
+  const R = wobjRng((seed % 2147483000) + 7), pk = a => a[Math.floor(R() * a.length)];
+  const cells = []; for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) cells.push([r, c]);
+  const key = (r, c) => r + ',' + c, inb = (r, c) => r >= 0 && r < 4 && c >= 0 && c < 5, isEdge = (r, c) => r === 0 || r === 3 || c === 0 || c === 4;
+  const nb = (r, c) => [[-1, 0], [1, 0], [0, -1], [0, 1]].map(([a, b]) => [r + a, c + b]).filter(([a, b]) => inb(a, b));
+  for (let tries = 0; tries < 200; tries++) {
+    const G = {};
+    // 1) mountain range (3-4 zones)
+    let m = pk(cells.filter(([r, c]) => r <= 2 && c >= 1 && c <= 3)); const range = [m]; G[key(...m)] = 'mountain_peak';
+    const want = 3 + (R() < 0.5 ? 1 : 0);
+    while (range.length < want) { const f = nb(...pk(range)).filter(([r, c]) => !G[key(r, c)]); if (!f.length) break; const n = pk(f); range.push(n); G[key(...n)] = 'mountain_cliff'; }
+    if (range.length < 3) continue;
+    G[key(...pk(range.slice(1)))] = 'mountain_cave';
+    // 2) the spring beside the range
+    const srcs = []; range.forEach(c => nb(...c).forEach(n => { if (!G[key(...n)] && !isEdge(...n)) srcs.push(n); }));
+    if (!srcs.length) range.forEach(c => nb(...c).forEach(n => { if (!G[key(...n)]) srcs.push(n); }));
+    if (!srcs.length) continue;
+    const src = pk(srcs); G[key(...src)] = 'waterfall_river';
+    // 3) river: walk away from the mountains until it reaches the coast
+    const path = [src]; let cur = src, ok = false;
+    for (let s = 0; s < 8; s++) {
+      const opts = nb(...cur).filter(([r, c]) => !G[key(r, c)] && !path.some(p => p[0] === r && p[1] === c));
+      if (!opts.length) break;
+      cur = pk(opts); path.push(cur);
+      if (isEdge(...cur) && path.length >= 3) { ok = true; break; }
+    }
+    if (!ok) continue;
+    path.slice(1, -1).forEach(p => { G[key(...p)] = 'river_grassland'; });
+    G[key(...cur)] = 'river_beach';
+    if (path.length < 3) continue;
+    // 4) beaches on the coast (rocky next to the mountains)
+    const freeEdge = () => cells.filter(([r, c]) => isEdge(r, c) && !G[key(r, c)]);
+    const nBeach = 3 + Math.floor(R() * 2);
+    for (let i = 0; i < nBeach; i++) { const f = freeEdge(); if (!f.length) break; const b = pk(f); G[key(...b)] = nb(...b).some(n => /mountain/.test(G[key(...n)] || '')) ? 'rocky_beach' : (R() < 0.75 ? 'beach_ocean' : 'rocky_beach'); }
+    if (!Object.values(G).includes('beach_ocean')) { const f = freeEdge(); if (!f.length) continue; G[key(...pk(f))] = 'beach_ocean'; }
+    // 5) a wetland patch (2-3 zones)
+    let free = cells.filter(([r, c]) => !G[key(r, c)]);
+    if (free.length) { const w0 = pk(free); G[key(...w0)] = 'wetland'; const wl = [w0];
+      for (let i = 0; i < 1 + (R() < 0.5 ? 1 : 0); i++) { const f = nb(...pk(wl)).filter(n => !G[key(...n)]); if (!f.length) break; const n = pk(f); G[key(...n)] = 'wetland'; wl.push(n); } }
+    // 6) forests and grassland for the rest
+    free = cells.filter(([r, c]) => !G[key(r, c)]).sort(() => R() - 0.5);
+    const fill = ['deep_forest', 'hill_grassland', 'hill_forest', 'deep_forest', 'hill_grassland', 'open_grassland'];
+    free.forEach((p, i) => { G[key(...p)] = fill[i] || 'open_grassland'; });
+    if (!Object.values(G).includes('hill_grassland') || !Object.values(G).includes('deep_forest')) continue;
+    // where the castaways land: the river plain (fresh water, not on the coast if possible)
+    const plains = path.slice(1, -1).sort((p, q) => (isEdge(...p) ? 1 : 0) - (isEdge(...q) ? 1 : 0));
+    return { G, river: path, start: plains[0] };
+  }
+  return null;
+}
+function applyLayout(seed) {
+  const L = rollLayout(seed); if (!L) return false;
+  const R = wobjRng((seed % 2147483000) + 99), pk = a => a[Math.floor(R() * a.length)];
+  const used = {};
+  Object.values(ZONES).forEach(z => {
+    z.geo = L.G[z.r + ',' + z.c];
+    const pool = GEO_NAMES[z.geo], nm = pool.filter(n => !used[n]); const name = pk(nm.length ? nm : pool); used[name] = 1;
+    const id = Object.keys(ZONES).find(k => ZONES[k] === z);
+    z.name = `${id}: ${name}`;
+    const [must, opt] = GEO_RES[z.geo];
+    z.res = must.concat(opt.slice().sort(() => R() - 0.5).slice(0, 1 + Math.floor(R() * 2)));
+  });
+  // key materials must exist somewhere on the island
+  Object.entries(MUST_RES).forEach(([item, geos]) => {
+    if (Object.values(ZONES).some(z => z.res.includes(item))) return;
+    const z = Object.values(ZONES).filter(z => geos.includes(z.geo))[0] || Object.values(ZONES).find(z => !/beach|ocean/.test(z.geo));
+    z.res.push(item);
+  });
+  Object.values(ZONES).forEach(z => { if (/forest|grassland|wetland|river/.test(z.geo) && !z.res.includes('ใบไม้สด')) z.res.push('ใบไม้สด'); });
+  ISLE.riverZones = L.river.map(([r, c]) => [r, c]);
+  START_ZONE = getZoneAt(L.start[0], L.start[1]);
+  return true;
+}
+// animals move to the land that suits them
+function placeFauna() {
+  faunaSpecies.forEach(f => {
+    const hab = FAUNA_HABITAT[f.id]; if (!hab) return;
+    let zs = Object.keys(ZONES).filter(z => hab.includes(ZONES[z].geo) && !(f.predator && z === START_ZONE));
+    if (!zs.length) zs = Object.keys(ZONES).filter(z => !(f.predator && z === START_ZONE));
+    zs = zs.sort(() => Math.random() - 0.5).slice(0, Math.max(2, Math.min(5, f.zones.length || 3)));
+    const total = f.pop || Object.values(f.zp || {}).reduce((t, n) => t + n, 0);
+    f.zp = {}; f.tr = {}; f.zoneCoords = {};
+    for (let i = 0; i < total; i++) { const z = zs[i % zs.length]; f.zp[z] = (f.zp[z] || 0) + 1; }
+    syncFauna(f);
+  });
+}
 function moveAnimals(f, from, to, n) {
   if (f.predator && to === START_ZONE) return 0;
   n = Math.min(n, f.zp[from] || 0);
@@ -2422,13 +2553,15 @@ function captureRealm() {
   return { simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
-    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq };
+    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, START_ZONE, riverZones: ISLE.riverZones };
 }
 function restoreRealm(st) {
   ({ simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
     villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq } = st);
+  if (st.START_ZONE) START_ZONE = st.START_ZONE; else START_ZONE = 'E1';
+  if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
   zoneTerrainGrid = zoneTerrainGrid || {}; zoneNodes = zoneNodes || {}; logBuffer = logBuffer || [];
 }
@@ -2500,8 +2633,11 @@ function makeRealmState(def, idx) {
   restoreRealm(JSON.parse(JSON.stringify(INITIAL_REALM)));
   worldSeed = Math.floor(Math.random() * 1e9);
   ZONES = JSON.parse(JSON.stringify(BASE_ZONES));
+  ISLE.seed = null; applyLayout(worldSeed);
   Object.values(ZONES).forEach(z => { z.res = z.res.map(r => def.sub[r] || r); });
   zoneTerrainGrid = {}; zoneNodes = {}; logBuffer = [];
+  placeFauna();
+  { const bh = shelters.find(x => /ฐานบัญชาการ/.test(x.name)); if (bh) { bh.zone = START_ZONE; bh.name = `กระท่อมฐานบัญชาการ (${START_ZONE})`; } }
   if (def.winter) currentSeasonIdx = 3;
   { const bh = shelters.find(x => /ฐานบัญชาการ/.test(x.name)); if (bh) { const p = landNear(bh.zone, bh.x, bh.y); bh.x = p.x; bh.y = p.y; } currentZoneId = START_ZONE; }
   // founders
@@ -2924,7 +3060,13 @@ function buildIsland() {
   };
   const zoneGeo = (gx, gy) => { const id = getZoneAt(Math.min(3, Math.floor(gy / 80)), Math.min(4, Math.floor(gx / 80))); return id ? ZONES[id].geo : ''; };
   // rivers: from the waterfall (C2) east across the plains to the sea, one arm south to the river mouth
-  const RIV = [[[205, 92], [210, 125], [250, 122], [285, 118], [330, 126], [372, 120], [404, 124]], [[285, 118], [292, 150], [300, 185], [326, 205], [360, 208]]];
+  const RIV = (() => {
+    const rz = ISLE.riverZones || [[1, 2], [1, 3], [1, 4]];
+    const rr = isleNoise(seed + 5), pts = rz.map(([r, c], i) => [c * 80 + 40 + (i ? (rr(c, r, 1, 1) - 0.5) * 30 : 0), r * 80 + 40 + (i ? (rr(r + 9, c, 1, 1) - 0.5) * 30 : -12)]);
+    const [lr, lc] = rz[rz.length - 1], last = pts[pts.length - 1];   // run out into the sea beyond the mouth
+    const out = lr === 0 ? [last[0], -10] : lr === 3 ? [last[0], 330] : lc === 0 ? [-10, last[1]] : [410, last[1]];
+    return [pts.concat([out])];
+  })();
   const riverDist = (gx, gy) => {
     let best = 1e9;
     for (const line of RIV) for (let k = 0; k < line.length - 1; k++) {
