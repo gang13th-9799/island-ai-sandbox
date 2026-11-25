@@ -6403,7 +6403,62 @@ function inspectCanvasPointer() {}
 // ---------- agent card (tap a character) ----------
 let cardAgentId = null;
 function openAgentCard(id) { cardAgentId = id; VIEW.follow = id; renderAgentCard(); document.getElementById('agent-card').classList.add('open'); }
-function closeAgentCard() { cardAgentId = null; VIEW.follow = null; document.getElementById('agent-card').classList.remove('open'); }
+function closeAgentCard() { closeAgentPop(); cardAgentId = null; VIEW.follow = null; document.getElementById('agent-card').classList.remove('open'); }
+// ===== Bag & knowledge popup =====
+let AP = { tab: 'bag', sel: null, open: new Set(), who: null };
+const OUTFIT_TH = { under: 'ผ้าอ้อม', cape: 'ผ้าคลุมหัวหน้า', winter: 'ชุดกันหนาว', village: 'ชุดชาวบ้าน', cloth: 'ชุดผ้า', deer: 'ชุดหนังกวาง', hide: 'ชุดหนังสัตว์', flower: 'ชุดใบไม้ประดับดอกไม้', leaf: 'ชุดใบไม้' };
+const PROP_TH = { food: 'กินได้', bad: 'รสแย่', fuel: 'เชื้อเพลิง', wood: 'เนื้อไม้', hard: 'แข็ง', sharp: 'คม', sharpable: 'ฝนให้คมได้', fiber: 'เส้นใย', sticky: 'เหนียวติด', herb: 'สมุนไพร', mineral: 'แร่', salt: 'เค็ม', clay: 'ดินปั้นได้', dry: 'แห้ง', wet: 'ชื้น', hide: 'หนังสัตว์', glow: 'เรืองแสง', poison: 'มีพิษ', water: 'น้ำ', soft: 'นิ่ม', flammable: 'ติดไฟง่าย', leaf: 'ใบไม้', liquid: 'ของเหลว' };
+function itemIcon(n, sz) { return itemIconHTML(n, sz) || `<span>${resIcon(n)}</span>`; }
+function itemDesc(n) {
+  const k = keyByName(n), d = k && productDef(k);
+  if (d && d.eff) return effText(d.eff);
+  if (d && d.kind === 'tool') return `เครื่องมือ (${TOOL_LABEL[d.tool] || d.tool})`;
+  if (d && d.desc) return d.desc;
+  const pr = Object.keys(propsOf(n) || {}).filter(x => PROP_TH[x]).map(x => PROP_TH[x]);
+  return (d ? 'ของที่ทำขึ้น' : 'วัตถุดิบ') + (pr.length ? ' · ' + pr.join(', ') : '');
+}
+function openAgentPop(tab) { AP.tab = tab; AP.sel = null; if (AP.who !== cardAgentId) { AP.open = new Set(); AP.who = cardAgentId; } document.getElementById('agent-pop').classList.add('open'); renderAgentPop(); }
+function closeAgentPop() { document.getElementById('agent-pop').classList.remove('open'); }
+function apSel(n) { AP.sel = AP.sel === n ? null : n; renderAgentPop(); }
+function apToggle(sig) { AP.open.has(sig) ? AP.open.delete(sig) : AP.open.add(sig); renderAgentPop(); }
+function renderAgentPop() {
+  const box = document.getElementById('ap-box'), a = aiAgents.find(x => x.id === cardAgentId);
+  if (!a || !document.getElementById('agent-pop').classList.contains('open')) return closeAgentPop();
+  const tabs = `<div class="ap-tabs"><button class="${AP.tab === 'bag' ? 'on' : ''}" onclick="AP.tab='bag';renderAgentPop()">🎒 กระเป๋า</button><button class="${AP.tab === 'know' ? 'on' : ''}" onclick="AP.tab='know';renderAgentPop()">🧠 ความรู้</button></div>`;
+  const head = `<div class="ap-head"><span class="t">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}</span><button class="gbtn ghost round close" onclick="closeAgentPop()">✕</button></div>`;
+  let body = '';
+  if (AP.tab === 'bag') {
+    // worn & carried
+    const slot = (lb, ic, name, sub) => `<div class="eq ${name ? '' : 'empty'}"><div class="ic">${ic}</div><div>${name || '—'}</div><div class="lb">${lb}${sub ? ' · ' + sub : ''}</div></div>`;
+    const tools = carriedTools(a), effItem = type => { let best = null, bn = null; for (const nm in a.bag || {}) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type && (!best || (d.eff.n || 0) > (best.n || 0))) { best = d.eff; bn = nm; } } return bn; };
+    const of = OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา';
+    const wear = [slot('ชุด', '👕', of)];
+    [['warm', '🧥', 'เสื้อผ้าเสริม'], ['armor', '🛡️', 'โล่'], ['bag', '👜', 'ย่าม/ตะกร้า'], ['light', '🔦', 'แสงไฟ'], ['charm', '📿', 'เครื่องราง']].forEach(([t, ic, lb]) => { const n = effItem(t); wear.push(slot(lb, n ? itemIcon(n, 28) : ic, n)); });
+    for (let i = 0; i < TOOL_CARRY; i++) { const t = tools[i]; wear.push(slot(`มือ ${i + 1}`, t ? itemIcon(t.name, 28) : '✋', t && t.name, t ? `สึก ${t.wear}/${productDef(keyByName(t.name))?.dur || '?'}` : '')); }
+    const items = Object.entries(a.bag || {}).filter(([, n]) => n > 0).sort((p, q) => q[1] - p[1]);
+    const cap = bagCap(a), used = bagCount(a);
+    let cells = items.map(([n, c]) => `<div class="slot ${AP.sel === n ? 'sel' : ''}" onclick="apSel('${n.replace(/'/g, "\\'")}')" title="${n}">${itemIcon(n, 30)}<span class="n">${c}</span></div>`).join('');
+    const freeCells = Math.max(0, Math.min(40, cap - used) - 0);
+    cells += Array.from({ length: Math.min(freeCells, Math.max(0, 24 - items.length)) }, () => '<div class="slot free"></div>').join('');
+    const sel = AP.sel && (a.bag || {})[AP.sel] > 0 ? AP.sel : null;
+    const info = sel ? `${itemIcon(sel, 20)} <b>${sel}</b> ×${a.bag[sel]}<br><span style="color:#8a6a3a">${itemDesc(sel)}</span>` : '<span style="color:#a0845a">แตะที่ช่องเพื่อดูรายละเอียดของ</span>';
+    body = `<div class="ap-sec">👕 สวมใส่ / ถือติดตัว</div><div class="eq-grid">${wear.join('')}</div>
+      <div class="ap-sec">🎒 ในกระเป๋า ${used}/${cap} ช่อง · 🍖 อาหารติดตัว ${Math.round(a.food || 0)}</div>
+      <div class="bag-grid">${cells || ''}</div>${items.length ? '' : '<div class="ac-sub">กระเป๋าว่าง</div>'}
+      <div class="item-info">${info}</div>`;
+  } else {
+    const ents = Object.entries(a.know || {}), good = ents.filter(([, e]) => e.out), bad = ents.filter(([, e]) => !e.out);
+    const srcTxt = e => e.from === 'self' ? '🧪 ค้นพบเอง' : e.from === 'ชาติก่อน' ? '🔮 จำได้จากชาติก่อน' : /ศิลา/.test(e.from || '') ? `📜 อ่านจาก${e.from}` : `📖 เรียนจาก ${e.from}`;
+    const row = ([sig, e]) => {
+      const d = productDef(e.out), M = METHODS[e.m] || { name: e.m };
+      const det = `🧩 ${itemIcon(e.a, 16)}${e.a} + ${itemIcon(e.b, 16)}${e.b}<br>🔧 วิธี: ${M.name}${M.station ? ` (ต้องใช้${STATION_LABEL[M.station] || M.station})` : ''}${M.tool ? ` · ต้องถือ${TOOL_LABEL[M.tool] || M.tool}` : ''}<br>✨ ได้: ${outName(e.out)}${d && d.eff ? ' — ' + effText(d.eff) : d && d.kind === 'home' ? ` — ที่พักระดับ ${d.tier}` : ''}<br>${srcTxt(e)} · วันที่ ${e.day ?? '-'} · ทำมาแล้ว ${e.practice || 0} ครั้ง`;
+      return `<div class="kn ${AP.open.has(sig) ? 'open' : ''}"><div class="row">${itemIcon(e.out ? outName(e.out) : '', 22)}<span class="nm">${outName(e.out)}</span><span class="src">${srcTxt(e).split(' ')[0]}</span><button onclick="apToggle('${sig.replace(/'/g, "\\'")}')">${AP.open.has(sig) ? 'ซ่อน' : 'รายละเอียด'}</button></div><div class="det">${det}</div></div>`;
+    };
+    body = `<div class="ap-sec">🧠 รู้วิธีทำ ${good.length} อย่าง (จำได้สูงสุด ${recipeCap(a)})</div>${good.length ? good.map(row).join('') : '<div class="ac-sub">ยังไม่มีความรู้ใดๆ ในหัว — ต้องทดลองเอง เรียนจากคนอื่น หรืออ่านศิลา</div>'}
+      ${bad.length ? `<div class="kn ${AP.open.has('__bad') ? 'open' : ''}"><div class="row"><span class="nm">⚠️ ข้อห้ามที่จำได้ ${bad.length} อย่าง</span><button onclick="apToggle('__bad')">${AP.open.has('__bad') ? 'ซ่อน' : 'รายละเอียด'}</button></div><div class="det">${bad.map(([, e]) => `❌ ${e.a} + ${e.b} ด้วย${(METHODS[e.m] || { name: e.m }).name}`).join('<br>')}</div></div>` : ''}`;
+  }
+  const sc = box.scrollTop; box.innerHTML = head + tabs + body; box.scrollTop = sc;
+}
 function renderAgentCard() {
   const el = document.getElementById('agent-card'); if (!cardAgentId) return;
   const a = aiAgents.find(x => x.id === cardAgentId); if (!a) { closeAgentCard(); return; }
@@ -6436,7 +6491,7 @@ ${(() => {   // quests this person asked for, or is helping with
         return `<div class="gq">${q.giverId === a.id ? '🙏' : '🛠️'} ${q.title}${prog}<div class="d" style="margin-left:18px;font-size:11px">${who} · ตอบแทน ${rewardText(q.agreed || q.offer)} · เหลือ ${hrs} ชม.</div>${last}</div>`;
       }).join('')}</div>`;
     })()}
-    <div class="ac-sub">🧠 รู้ ${kn} สูตร · 🎒 ${Object.entries(a.bag || {}).filter(([, n]) => n > 0).slice(0, 5).map(([k, n]) => `${k}×${n}`).join(', ') || 'กระเป๋าว่าง'}</div>`;
+    <div class="ac-btns"><button class="gbtn moss" onclick="openAgentPop('bag')">🎒 กระเป๋า <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn" onclick="openAgentPop('know')">🧠 ความรู้ <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
   if (PUP.ready) { const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, 42, 90, 80, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); }
 }
@@ -6446,6 +6501,7 @@ function renderLoop(ts) {
   if (!renderLoop.last || ts - renderLoop.last > 32) { renderLoop.last = ts; try { drawCanvas(); } catch (err) { console.error(err); } }
   if (!renderLoop.mmT || ts - renderLoop.mmT > 120) { renderLoop.mmT = ts; try { drawMiniMap(); } catch (err) { console.error(err); } }
   if (!renderLoop.cardT || ts - renderLoop.cardT > 500) { renderLoop.cardT = ts; if (cardAgentId) renderAgentCard();
+    if ((renderLoop.popN = (renderLoop.popN || 0) + 1) % 3 === 0 && document.getElementById('agent-pop').classList.contains('open')) renderAgentPop();
     const open = typeof godRequests !== 'undefined' && godRequests.some(q => q.status !== 'done');
     const gd = document.getElementById('god-dot'); if (gd) gd.classList.toggle('on', open);
     const gc = document.getElementById('cnt-god'); if (gc) gc.style.display = open ? '' : 'none'; }
