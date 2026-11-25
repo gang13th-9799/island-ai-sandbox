@@ -2323,6 +2323,22 @@ function tickAllRealms() {
   if (document.getElementById('lobby').classList.contains('open')) renderLobby();
 }
 
+// Prepare each realm's heavy one-off things (recipe table, ancient steles) at its own moment after loading,
+// one realm at a time, so nothing piles up on the same frame
+function warmRealm(i) {
+  if (!realms[i] || !realms[i].state) return;
+  realms[activeRealm].state = captureRealm();
+  tickingRealm = i; bgTick = i !== activeRealm;
+  restoreRealm(realms[i].state);
+  try { revRecipes(); if (!steleSeeded) seedSteles(); } catch (e) { console.error(e); }
+  realms[i].state = captureRealm();
+  tickingRealm = activeRealm; bgTick = false;
+  restoreRealm(realms[activeRealm].state);
+}
+function scheduleWarmup() {
+  const order = [activeRealm].concat(realms.map((r, i) => i).filter(i => i !== activeRealm));
+  order.forEach((i, k) => setTimeout(() => warmRealm(i), 400 + k * 700));
+}
 // one realm's hourly world step (the others stay as they are)
 function tickRealmIdx(i) {
   if (!realms[i]) return;
@@ -3071,7 +3087,8 @@ const GOD_QUESTS = [
 ];
 // God sometimes reveals a real recipe as a quest: the AI still has to gather the things and try it
 let REV_CACHE = null, REV_DAY = -1;
-function revRecipes() { const k = Object.keys(PRODUCTS).length; if (!REV_CACHE || REV_DAY !== k) { REV_CACHE = validRecipes(); REV_DAY = k; } return REV_CACHE; }
+const REV_BY = {};   // per realm, rebuilt only when the list of products changes
+function revRecipes() { const k = tickingRealm + ':' + Object.keys(PRODUCTS).length; return REV_BY[k] || (REV_BY[k] = validRecipes()); }
 function pickRevelation(a) {
   const known = new Set(Object.values(a.know || {}).filter(e => e.out).map(e => e.out));
   const near = [a.zone].concat(getAdjacentZones(a.zone)), onIsle = new Set(near.flatMap(z => (ZONES[z] && ZONES[z].res) || []));
@@ -5621,7 +5638,7 @@ function validRecipes() {
 function landSpot(zId) { buildZoneTerrain(zId); const p = findValidTile(zId, false); return { x: p.x + 0.3 + Math.random() * 0.4, y: p.y + 0.3 + Math.random() * 0.4 }; }
 function seedSteles() {
   steleSeeded = true; steles = steles || [];
-  const all = validRecipes(), keys = Object.keys(all).filter(k => PRODUCTS[k].kind !== 'station' || Math.random() < 0.5);
+  const all = revRecipes(), keys = Object.keys(all).filter(k => PRODUCTS[k].kind !== 'station' || Math.random() < 0.5);
   const zones = Object.keys(ZONES).filter(z => !/ocean|sea/.test(ZONES[z].geo || ''));
   let chosen = keys.sort(() => Math.random() - 0.5).slice(0, 7);
   const hk = ['leaf_hut', 'bamboo_hut'].filter(k => all[k]); if (hk.length) chosen = [hk[0]].concat(chosen.filter(k => k !== hk[0])).slice(0, 7);   // the island's first lesson: how to make a shelter
@@ -6567,4 +6584,5 @@ window.addEventListener('DOMContentLoaded', () => {
   requestAnimationFrame(renderLoop);
   if (hasSaved) addLog(`💾 โหลดเซฟสำเร็จ! ${realms.length} ดินแดนเดินเวลาต่อพร้อมกัน`, '#38bdf8');
   startSimLoop();
+  scheduleWarmup();
 });
