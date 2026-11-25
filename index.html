@@ -4963,11 +4963,13 @@ function fleeStep(o, x, y, dt, range, speed, aquatic) {
     const st = speed * dt;
     const dirs = []; for (let k = 0; k < 12; k++) { const an = k * Math.PI / 6; dirs.push([Math.cos(an), Math.sin(an)]); }
     dirs.sort((p, q) => (q[0] * dx + q[1] * dy) - (p[0] * dx + p[1] * dy));          // most "away" first
-    for (const [ux, uy] of dirs.filter(d => d[0] * dx + d[1] * dy > -0.75 * L)) {      // never into water (or onto land for fish)
-      if (okAt(x + o.fx + ux * st, y + o.fy + uy * st)) { o.fx += ux * st; o.fy += uy * st; o.ffx = ux - uy; break; }
+    // keep running the way it already chose (no dithering along a shore), unless that now leads back to the person
+    if (o.dir && o.dir[0] * dx + o.dir[1] * dy > -0.3 * L) dirs.unshift(o.dir);
+    for (const [ux, uy] of dirs) {      // best escape direction that stays on its own ground: land animals never enter water, fish never leave it
+      if (okAt(x + o.fx + ux * st * 2, y + o.fy + uy * st * 2)) { o.fx += ux * st; o.fy += uy * st; o.ffx = ux - uy; o.dir = [ux, uy]; break; }
     }
     o.fleeing = 1;
-  } else { o.fx *= 1 - Math.min(1, dt * 0.15); o.fy *= 1 - Math.min(1, dt * 0.15); o.fleeing = Math.max(0, (o.fleeing || 0) - dt); }
+  } else { o.dir = null; o.fx *= 1 - Math.min(1, dt * 0.15); o.fy *= 1 - Math.min(1, dt * 0.15); o.fleeing = Math.max(0, (o.fleeing || 0) - dt); }
   const m = Math.hypot(o.fx, o.fy); if (m > 9) { o.fx *= 9 / m; o.fy *= 9 / m; }
   return [x + o.fx, y + o.fy];
 }
