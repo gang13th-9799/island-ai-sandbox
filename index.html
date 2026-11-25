@@ -4982,7 +4982,7 @@ function fleeStep(o, x, y, dt, range, speed, aquatic) {
   const m = Math.hypot(o.fx, o.fy); if (m > 9) { o.fx *= 9 / m; o.fy *= 9 / m; }
   return [x + o.fx, y + o.fy];
 }
-const ANIM_REL = { monitor: 0.55, cobra: 0.62, turtle: 0.5, frog: 0.5, croc: 0.48, butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
+const ANIM_REL = { monitor: 0.66, cobra: 0.62, turtle: 0.5, frog: 0.5, croc: 0.62, butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
 // mutated look: recolour (keeps shading) + Gemini part art (horns, wings, tails, scales, thick hide, back armor)
 WA.mut = {};

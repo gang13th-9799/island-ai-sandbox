@@ -36,7 +36,7 @@ LEGS={k:[] for k in ['deer','boar','rabbit','goat','wolf','leopard','fish','butt
 SPAN={'deer':(0.12,0.58,0.48,0.58),'boar':(0.12,0.66,0.52,0.64),'rabbit':(0.08,0.5,0.3,0.45),'goat':(0.1,0.56,0.45,0.56),
       'wolf':(0.14,0.6,0.48,0.6),'leopard':(0.12,0.62,0.5,0.62),'fish':(0.2,0.7,0.45,0.6)}
 ANRES=4   # animals are stored sharper: the map zooms in a lot
-for n,rel in [('deer',1.1),('boar',0.74),('rabbit',0.84),('goat',0.93),('wolf',0.8),('leopard',0.75),('fish',0.54),('butterfly',0.52),('bee',0.5),('firefly',0.5),('scorpion',0.5),('monitor',0.55),('cobra',0.62),('turtle',0.5),('frog',0.5),('croc',0.48)]:
+for n,rel in [('deer',1.1),('boar',0.74),('rabbit',0.84),('goat',0.93),('wolf',0.8),('leopard',0.75),('fish',0.54),('butterfly',0.52),('bee',0.5),('firefly',0.5),('scorpion',0.5),('monitor',0.66),('cobra',0.62),('turtle',0.5),('frog',0.5),('croc',0.62)]:
   import os
   ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(6) if os.path.exists(f'/home/claude/fauna/{n}_{i}.png')]
   if n=='boar': ims=[im.transpose(Image.FLIP_LEFT_RIGHT) for im in ims]      # Gemini drew the boar facing left
