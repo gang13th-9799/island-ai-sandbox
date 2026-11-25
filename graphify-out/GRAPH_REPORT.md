@@ -4,25 +4,25 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 428 nodes · 1307 edges · 16 communities (14 shown, 2 thin omitted)
+- 428 nodes · 1308 edges · 16 communities (14 shown, 2 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 11 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d3b40b9f`
+- Built from commit: `dbe38b9c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - game.js
 - drawCanvas
-- st
 - addLog
+- st
 - runAutonomousStep
 - experiment
 - runQuests
 - ecologyTick
-- renderAllUI
+- rel
 - renderAgentCard
 - drawPuppet
 - zoneWeather
@@ -40,14 +40,14 @@
 6. `runQuests()` - 27 edges
 7. `experiment()` - 25 edges
 8. `gainExp()` - 22 edges
-9. `rel()` - 22 edges
-10. `villageOf()` - 22 edges
+9. `villageOf()` - 22 edges
+10. `rel()` - 22 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `makeRealmState()` --indirect_call--> `syncFauna()`  [INFERRED]
+  game.js → game.js  _Bridges community 2 → community 7_
 - `loadGameState()` --indirect_call--> `ensureAgent()`  [INFERRED]
   game.js → game.js  _Bridges community 4 → community 7_
-- `makeRealmState()` --indirect_call--> `syncFauna()`  [INFERRED]
-  game.js → game.js  _Bridges community 7 → community 8_
 - `buildStation()` --calls--> `addOwnLog()`  [EXTRACTED]
   game.js → game.js  _Bridges community 1 → community 6_
 - `produce()` --calls--> `buildStation()`  [EXTRACTED]
@@ -65,16 +65,16 @@ Cohesion: 0.02
 Nodes (114): aiAgents, aiCrisisProposals, alchemyLogs, ANIM_ART, ANIM_REL, animalLogs, BACK_ITEMS, BASE_ZONES (+106 more)
 
 ### Community 1 - "drawCanvas"
-Cohesion: 0.07
-Nodes (46): animalArt(), buildStation(), buildZoneTerrain(), centerOnZone(), clampC(), clampView(), drawAgent(), drawAnimal() (+38 more)
+Cohesion: 0.06
+Nodes (48): animalArt(), buildStation(), buildZoneTerrain(), centerOnZone(), clampC(), clampView(), damageStation(), drawAgent() (+40 more)
 
-### Community 2 - "st"
+### Community 2 - "addLog"
+Cohesion: 0.08
+Nodes (44): addLog(), answerPrayer(), assignGodQuests(), assignQuests(), canHelp(), captureRealm(), closeLobby(), createQuest() (+36 more)
+
+### Community 3 - "st"
 Cohesion: 0.12
 Nodes (39): addTeachLog(), agentLevel(), bagCap(), bagCount(), chooseKept(), completeQuest(), depositTick(), destroyObj() (+31 more)
-
-### Community 3 - "addLog"
-Cohesion: 0.10
-Nodes (37): addLog(), assignGodQuests(), assignJobs(), assignQuests(), byId(), canHelp(), createQuest(), crossRealm() (+29 more)
 
 ### Community 4 - "runAutonomousStep"
 Cohesion: 0.12
@@ -92,9 +92,9 @@ Nodes (25): accessibleStations(), addOwnLog(), addRel(), askToUse(), avail(), ca
 Cohesion: 0.13
 Nodes (25): addAnimals(), animalLog(), animalPower(), applyAISolution(), carryTraits(), ecologyTick(), evolveOne(), evolveTick() (+17 more)
 
-### Community 8 - "renderAllUI"
-Cohesion: 0.13
-Nodes (25): answerPrayer(), captureRealm(), closeLobby(), cycleSpeed(), fateChance(), godAutoLevel(), inRealm(), knowersOf() (+17 more)
+### Community 8 - "rel"
+Cohesion: 0.23
+Nodes (16): assignJobs(), byId(), electChief(), score(), holdFoundingMeeting(), holdVillageMeeting(), jobFit(), nameVillage() (+8 more)
 
 ### Community 9 - "renderAgentCard"
 Cohesion: 0.16
@@ -122,17 +122,17 @@ Nodes (3): pr(), pupKeys(), smooth()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `drawCanvas`, `st`, `addLog`, `experiment`, `runQuests`, `ecologyTick`, `renderAllUI`, `renderAgentCard`, `zoneWeather`?**
+- **Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `drawCanvas`, `addLog`, `st`, `experiment`, `runQuests`, `ecologyTick`, `rel`, `renderAgentCard`, `zoneWeather`?**
   _High betweenness centrality (0.019) - this node is a cross-community bridge._
 - **Should `game.js` be split into smaller, more focused modules?**
   _Cohesion score 0.016129032258064516 - nodes in this community are weakly interconnected._
-- **Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `drawCanvas`, `st`, `addLog`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `renderAgentCard`, `drawPuppet`, `drawAgentTag`?**
+- **Why does `renderAllUI()` connect `addLog` to `game.js`, `drawCanvas`, `st`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `rel`, `renderAgentCard`, `drawPuppet`, `drawAgentTag`?**
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
 - **Should `drawCanvas` be split into smaller, more focused modules?**
-  _Cohesion score 0.06859903381642513 - nodes in this community are weakly interconnected._
-- **Why does `addLog()` connect `addLog` to `game.js`, `drawCanvas`, `st`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `renderAllUI`, `zoneWeather`?**
+  _Cohesion score 0.06471631205673758 - nodes in this community are weakly interconnected._
+- **Why does `addLog()` connect `addLog` to `game.js`, `drawCanvas`, `st`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `rel`, `zoneWeather`?**
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
+- **Should `addLog` be split into smaller, more focused modules?**
+  _Cohesion score 0.0824524312896406 - nodes in this community are weakly interconnected._
 - **Should `st` be split into smaller, more focused modules?**
   _Cohesion score 0.11605937921727395 - nodes in this community are weakly interconnected._
-- **Should `addLog` be split into smaller, more focused modules?**
-  _Cohesion score 0.1021021021021021 - nodes in this community are weakly interconnected._

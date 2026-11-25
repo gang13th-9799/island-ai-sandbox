@@ -51,6 +51,7 @@ function drawPixelSprite(ctx, spriteKey, px, py, scale, recolor) {
 // ==========================================
 const SAVE_KEY = 'island_ai_sandbox_v20_realms';
 const MAX_POPULATION = 50;
+const START_POP = 20;          // castaways at the start of a new world
 const CROWD_LIMIT = 20;   // more residents than this in one zone feels crowded
 
 let isRunning = true, simSpeed = 1, simTimer = null;
@@ -1921,6 +1922,12 @@ function makeRealmState(def, idx) {
     aiAgents[0].rel[aiAgents[1].id] = 50; aiAgents[1].rel[aiAgents[0].id] = 50;
     Object.entries(START_ITEMS).forEach(([n, q]) => { const nn = def.sub[n] || n; aiAgents[0].bag[nn] = Math.ceil(q / 2); aiAgents[1].bag[nn] = Math.floor(q / 2); });
     usedNames = def.founders.map(f => f[0]);
+    // the rest of the castaways: 20 people in total washed ashore together
+    for (let i = aiAgents.length; i < START_POP; i++) {
+      const gender = i % 2 ? 'หญิง' : 'ชาย', name = pickChildName(gender, 1);
+      const a = newAgent({ name, gender, age: 16 + Math.floor(Math.random() * 25), zone: 'C1', home: 'C1', x: 28 + Math.floor(Math.random() * 24), y: 24 + Math.floor(Math.random() * 18) });
+      a.food = 10; aiAgents.push(a);
+    }
   }
   // the gate God placed in this realm
   buildZoneTerrain(def.gate);
@@ -5106,7 +5113,7 @@ function toggleFullscreen() {
 }
 ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => {
   const b = document.getElementById('btn-full'); const on = document.fullscreenElement || document.webkitFullscreenElement;
-  if (b) { b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'ออกจากเต็มจอ' : 'เต็มจอ'; }
+  if (b) b.textContent = on ? '🗗 ออกจากเต็มจอ' : '⛶ เต็มจอ';
   setTimeout(() => { resizeView(); clampView(); }, 120);
 }));
 function changeZoom(delta) { setZoom(VIEW.zoom * (delta > 0 ? 1.25 : 0.8)); }

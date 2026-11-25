@@ -133,6 +133,7 @@
       "game_centeronzone",
       "game_clampc",
       "game_clampview",
+      "game_damagestation",
       "game_drawagent",
       "game_drawanimal",
       "game_drawcanvas",
@@ -166,6 +167,7 @@
       "game_shadecol",
       "game_socialtick",
       "game_stationinzone",
+      "game_stationmaxhp",
       "game_tinted",
       "game_togglegrid",
       "game_togglelabels",
@@ -175,6 +177,52 @@
       "game_wobjrng"
     ],
     "2": [
+      "game_addlog",
+      "game_answerprayer",
+      "game_assigngodquests",
+      "game_assignquests",
+      "game_canhelp",
+      "game_capturerealm",
+      "game_closelobby",
+      "game_createquest",
+      "game_crossrealm",
+      "game_cyclespeed",
+      "game_fatechance",
+      "game_gateof",
+      "game_givesoul",
+      "game_godautolevel",
+      "game_godtick",
+      "game_inrealm",
+      "game_knowersof",
+      "game_logtorealm",
+      "game_makerealmstate",
+      "game_materialwish",
+      "game_negotiate",
+      "game_openlobby",
+      "game_prayertick",
+      "game_realmlog",
+      "game_realmstatus",
+      "game_realmtraveltick",
+      "game_rellabel",
+      "game_renderallui",
+      "game_renderlobby",
+      "game_renderprayers",
+      "game_requestsynthesis",
+      "game_resolveprayer",
+      "game_restorerealm",
+      "game_rewardpackage",
+      "game_rewardtext",
+      "game_rewardvalue",
+      "game_savegamestate",
+      "game_savegoddb",
+      "game_setgodauto",
+      "game_startsimloop",
+      "game_switchrealm",
+      "game_testcollapse",
+      "game_tickallrealms",
+      "game_updatehudchips"
+    ],
+    "3": [
       "game_addteachlog",
       "game_agentlevel",
       "game_bagcap",
@@ -214,45 +262,6 @@
       "game_transferknowledge",
       "game_trimfails",
       "game_trimmemory"
-    ],
-    "3": [
-      "game_addlog",
-      "game_assigngodquests",
-      "game_assignjobs",
-      "game_assignquests",
-      "game_byid",
-      "game_canhelp",
-      "game_createquest",
-      "game_crossrealm",
-      "game_damagestation",
-      "game_electchief",
-      "game_electchief_score",
-      "game_gateof",
-      "game_givesoul",
-      "game_godtick",
-      "game_holdfoundingmeeting",
-      "game_holdvillagemeeting",
-      "game_jobfit",
-      "game_logtorealm",
-      "game_namevillage",
-      "game_negotiate",
-      "game_negotiatetax",
-      "game_proposetax",
-      "game_proposevillagename",
-      "game_realmlog",
-      "game_realmtraveltick",
-      "game_rel",
-      "game_requestsynthesis",
-      "game_resolveprayer",
-      "game_rewardpackage",
-      "game_rewardtext",
-      "game_rewardvalue",
-      "game_savegoddb",
-      "game_secrettick",
-      "game_souldecides",
-      "game_stationmaxhp",
-      "game_villagemembers",
-      "game_villagetick"
     ],
     "4": [
       "game_addaiagent",
@@ -379,31 +388,22 @@
       "game_zoneappeal"
     ],
     "8": [
-      "game_answerprayer",
-      "game_capturerealm",
-      "game_closelobby",
-      "game_cyclespeed",
-      "game_fatechance",
-      "game_godautolevel",
-      "game_inrealm",
-      "game_knowersof",
-      "game_makerealmstate",
-      "game_materialwish",
-      "game_openlobby",
-      "game_prayertick",
-      "game_realmstatus",
-      "game_rellabel",
-      "game_renderallui",
-      "game_renderlobby",
-      "game_renderprayers",
-      "game_restorerealm",
-      "game_savegamestate",
-      "game_setgodauto",
-      "game_startsimloop",
-      "game_switchrealm",
-      "game_testcollapse",
-      "game_tickallrealms",
-      "game_updatehudchips"
+      "game_assignjobs",
+      "game_byid",
+      "game_electchief",
+      "game_electchief_score",
+      "game_holdfoundingmeeting",
+      "game_holdvillagemeeting",
+      "game_jobfit",
+      "game_namevillage",
+      "game_negotiatetax",
+      "game_proposetax",
+      "game_proposevillagename",
+      "game_rel",
+      "game_secrettick",
+      "game_souldecides",
+      "game_villagemembers",
+      "game_villagetick"
     ],
     "9": [
       "game_closeagentcard",
@@ -463,14 +463,14 @@
   },
   "cohesion": {
     "0": 0.016129032258064516,
-    "1": 0.06859903381642513,
-    "2": 0.11605937921727395,
-    "3": 0.1021021021021021,
+    "1": 0.06471631205673758,
+    "2": 0.0824524312896406,
+    "3": 0.11605937921727395,
     "4": 0.12477718360071301,
     "5": 0.1350806451612903,
     "6": 0.14666666666666667,
     "7": 0.12666666666666668,
-    "8": 0.12666666666666668,
+    "8": 0.225,
     "9": 0.16483516483516483,
     "10": 0.25,
     "11": 0.5238095238095238,
@@ -521,17 +521,28 @@
       "degree": 22
     },
     {
-      "id": "game_rel",
-      "label": "rel()",
+      "id": "game_villageof",
+      "label": "villageOf()",
       "degree": 22
     },
     {
-      "id": "game_villageof",
-      "label": "villageOf()",
+      "id": "game_rel",
+      "label": "rel()",
       "degree": 22
     }
   ],
   "surprises": [
+    {
+      "source": "makeRealmState()",
+      "target": "syncFauna()",
+      "source_files": [
+        "game.js",
+        "game.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "indirect_call",
+      "note": "Bridges community 2 → community 7"
+    },
     {
       "source": "loadGameState()",
       "target": "ensureAgent()",
@@ -542,17 +553,6 @@
       "confidence": "INFERRED",
       "relation": "indirect_call",
       "note": "Bridges community 4 → community 7"
-    },
-    {
-      "source": "makeRealmState()",
-      "target": "syncFauna()",
-      "source_files": [
-        "game.js",
-        "game.js"
-      ],
-      "confidence": "INFERRED",
-      "relation": "indirect_call",
-      "note": "Bridges community 7 → community 8"
     },
     {
       "source": "buildStation()",
@@ -591,7 +591,7 @@
   "questions": [
     {
       "type": "bridge_node",
-      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `drawCanvas`, `st`, `addLog`, `experiment`, `runQuests`, `ecologyTick`, `renderAllUI`, `renderAgentCard`, `zoneWeather`?",
+      "question": "Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `drawCanvas`, `addLog`, `st`, `experiment`, `runQuests`, `ecologyTick`, `rel`, `renderAgentCard`, `zoneWeather`?",
       "why": "High betweenness centrality (0.019) - this node is a cross-community bridge."
     },
     {
@@ -601,28 +601,28 @@
     },
     {
       "type": "bridge_node",
-      "question": "Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `drawCanvas`, `st`, `addLog`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `renderAgentCard`, `drawPuppet`, `drawAgentTag`?",
+      "question": "Why does `renderAllUI()` connect `addLog` to `game.js`, `drawCanvas`, `st`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `rel`, `renderAgentCard`, `drawPuppet`, `drawAgentTag`?",
       "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
     },
     {
       "type": "low_cohesion",
       "question": "Should `drawCanvas` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.06859903381642513 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.06471631205673758 - nodes in this community are weakly interconnected."
     },
     {
       "type": "bridge_node",
-      "question": "Why does `addLog()` connect `addLog` to `game.js`, `drawCanvas`, `st`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `renderAllUI`, `zoneWeather`?",
+      "question": "Why does `addLog()` connect `addLog` to `game.js`, `drawCanvas`, `st`, `runAutonomousStep`, `experiment`, `runQuests`, `ecologyTick`, `rel`, `zoneWeather`?",
       "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `addLog` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.0824524312896406 - nodes in this community are weakly interconnected."
     },
     {
       "type": "low_cohesion",
       "question": "Should `st` be split into smaller, more focused modules?",
       "why": "Cohesion score 0.11605937921727395 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `addLog` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.1021021021021021 - nodes in this community are weakly interconnected."
     }
   ]
 }
