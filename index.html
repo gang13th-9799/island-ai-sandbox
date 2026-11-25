@@ -548,6 +548,7 @@
 
 <script src="assets/chars.js"></script>
 <script src="assets/world.js"></script>
+<script src="assets/hair.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -4621,6 +4622,26 @@ function pupActivity(a, moving, fast) {
   return 'idle';
 }
 function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+// Gemini hairstyles (gray art, tinted per person). Front layer over the head, back layer behind the body.
+const HAIR_STYLES = { 'ชาย': ['m1', 'm2', 'm3', 'm4', 'm5'], 'หญิง': ['f1', 'm4'] };
+const HAIR_IMG = {}, HAIR_TINT = {};
+(function () { const H = window.HAIR_ART; if (!H) return; for (const k in H) for (const L in H[k]) { const im = new Image(); im.src = H[k][L].src; HAIR_IMG[k + L] = im; } })();
+function hairStyleOf(a) { if (a.hairStyle && window.HAIR_ART && HAIR_ART[a.hairStyle]) return a.hairStyle; const l = HAIR_STYLES[a.gender] || HAIR_STYLES['ชาย']; return l[hashStr((a.name || '') + 'hair') % l.length]; }
+function tintedHair(key, color) {
+  const id = key + color; if (HAIR_TINT[id]) return HAIR_TINT[id];
+  const im = HAIR_IMG[key]; if (!im || !im.complete || !im.naturalWidth) return null;
+  const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const g = c.getContext('2d');
+  g.drawImage(im, 0, 0); g.globalCompositeOperation = 'multiply'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = 0.18; g.drawImage(im, 0, 0); g.globalAlpha = 1;   // keep a little highlight
+  g.globalCompositeOperation = 'destination-in'; g.drawImage(im, 0, 0);
+  return (HAIR_TINT[id] = c);
+}
+function drawHairLayer(ctx, a, L, color) {
+  if (!window.HAIR_ART || a.age < 2) return false;
+  const k = hairStyleOf(a), e = HAIR_ART[k] && HAIR_ART[k][L]; if (!e) return L === 'B' && !!HAIR_ART[k];
+  const c = tintedHair(k + L, color); if (!c) return false;
+  ctx.drawImage(c, e.x, e.y, e.w, e.h); return true;
+}
 const HAIR_COLORS = ['#2b1d16', '#3b2417', '#4a2c1a', '#1f1a17', '#6b3e22', '#8a5a2b', '#22303f'];
 
 // 2-bone IK for an arm in rig rest space; returns [upper, fore] angles
@@ -4691,6 +4712,7 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   // long hair behind the head (girls)
   const hd = rig.pieces.head; const hcx = hd.x + hd.w * 0.5, hcy = hd.y + hd.h * 0.5, hr = hd.w * 0.5;
   const hairBack = () => {
+    ctx.setTransform(withBase(Mb)); if (drawHairLayer(ctx, a, 'B', hc)) return;
     if (a.gender !== 'หญิง' || a.age < 4) return;
     ctx.setTransform(withBase(Mb)); ctx.fillStyle = hc; ctx.beginPath();
     ctx.ellipse(hcx - hr * 0.35, hcy + hr * 0.45, hr * 0.62, hr * 0.95, 0.25, 0, Math.PI * 2); ctx.fill();
@@ -4705,7 +4727,8 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   if (rig.cape) drawP('cape_front', Mb);
   // hair cap + face
   ctx.setTransform(withBase(Mb));
-  if (a.age >= 2) {
+  const artHair = a.age >= 2 && drawHairLayer(ctx, a, 'F', hc);
+  if (a.age >= 2 && !artHair) {
     ctx.fillStyle = hc; ctx.beginPath();
     ctx.ellipse(hcx + hr * 0.05, hcy - hr * 0.32, hr * 1.0, hr * 0.72, -0.08, Math.PI * 0.98, Math.PI * 2.02); ctx.fill();
     ctx.beginPath(); ctx.ellipse(hcx + hr * 0.35, hcy - hr * 0.45, hr * 0.55, hr * 0.32, 0.4, 0, Math.PI * 2); ctx.fill();
