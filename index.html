@@ -978,7 +978,8 @@ function ensureAgent(a) {
   if (a.crowd === undefined) a.crowd = 0;
   return a;
 }
-function st(a, k) { return a.stats ? a.stats[k] : 1; }
+function st(a, k) { return (a.stats ? a.stats[k] : 1) + effBonus(a, k); }
+function stBase(a, k) { return a.stats ? a.stats[k] : 1; }
 function maxHp(a) { return 80 + st(a, 'vit') * 4; }
 function agentLevel(a) { return STAT_KEYS.reduce((s, k) => s + st(a, k), 0) - STAT_KEYS.length + 1; }
 function recipeCap(a) { return 4 + st(a, 'int') * 2; }
@@ -1419,7 +1420,7 @@ let villageSeq = 0;
 function villageOf(a) { return a && a.villageId ? villages.find(v => v.id === a.villageId) || null : null; }
 function isMember(a) { return !!villageOf(a); }
 function bagCount(a) { return Object.values(a.bag || {}).reduce((x, y) => x + Math.max(0, y), 0); }
-function bagCap(a) { return 8 + st(a, 'str') * 2 + ((a.bag || {})[BAG_NAME] > 0 ? 10 : 0) + ((a.bag || {})['ตะกร้าไม้ไผ่สาน'] > 0 ? 6 : 0); }
+function bagCap(a) { const be = carriedEff(a, 'bag'); return 8 + (be ? be.n : 0) + st(a, 'str') * 2 + ((a.bag || {})[BAG_NAME] > 0 ? 10 : 0) + ((a.bag || {})['ตะกร้าไม้ไผ่สาน'] > 0 ? 6 : 0); }
 function isToolName(n) { return productDef(keyByName(n))?.kind === 'tool'; }
 // Village storehouse is NOT free: members must be at the storehouse and trade items of equal value
 function itemValue(n, v) {
@@ -3376,6 +3377,7 @@ function feltTemp(a) {
   const fire = stationInZone(a.zone, 'campfire');
   const nearFire = fire && Math.hypot(a.x - fire.x, a.y - fire.y) <= 8;
   t += OUTFIT_WARMTH[pupOutfit(a)] || 0;
+  { const w = carriedEff(a, 'warm'); if (w) t += w.n; }
   const wz = WEATHER[zoneWeather(a.zone)];
   const hs = indoors && shelters.find(x => x.name === a.sleepAt);
   if (indoors) t += (hs && hs.warm != null ? hs.warm : 12) + wz.wet * 3;         // walls keep the rain and wind off (better homes are warmer)
@@ -3722,24 +3724,85 @@ function setGodAuto(v) { try { localStorage.setItem('island_ai_god_auto', String
 // ---------- inventions: new recipes from new materials are imagined by AI (or players) and must be approved by God ----------
 const INVENT_MATS = new Set(['ปีกผีเสื้อ', 'เหล็กในผึ้ง', 'น้ำผึ้งป่า', 'ก้นหิ่งห้อยเรืองแสง', 'เหล็กในแมงป่อง', 'เปลือกแมงป่อง', 'แร่ทองแดง', 'ถ่านหิน', 'แร่ดีบุก', 'แร่ทอง', 'ผลึกคริสตัล', 'แอปเปิลป่า', 'ลูกมะพร้าว']);
 Object.assign(KIND_LABEL, { invent: '💡 สิ่งประดิษฐ์' });
+// What an invention DOES. eff types: buff (drink: stat +n for d days), heal, food, warm (worn), bag (carry more),
+// light (keeps beasts away at night), armor (less damage from beasts), charm (stat +n while carried), tool
+const STAT_TH = { str: 'พละกำลัง', agi: 'ความว่องไว', vit: 'ความอึด', int: 'ปัญญา', dex: 'ความชำนาญ', cha: 'เสน่ห์' };
+function short(n) { if (/หมาป่า$/.test(n)) return n; return n.replace(/(ป่า|สด|แห้ง|เล็ก|หนา|นิ่ม|ละเอียด|ทะเล|ดิบ|แข็ง|เรืองแสง|ไหม้)$/, ''); }
+function effText(e) {
+  if (!e) return '';
+  if (e.type === 'buff') return `ดื่ม/กินแล้ว ${e.stat.toUpperCase()} +${e.n} ชั่วคราว ${e.days} วัน`;
+  if (e.type === 'heal') return `รักษาเลือด +${e.n} ทันที${e.cure ? ' และแก้พิษ' : ''}`;
+  if (e.type === 'food') return `กินอิ่ม อาหาร +${e.n}`;
+  if (e.type === 'warm') return `สวมใส่แล้วอุ่นขึ้น +${e.n}°`;
+  if (e.type === 'bag') return `ใส่ของได้เพิ่ม +${e.n} ช่อง`;
+  if (e.type === 'light') return 'ให้แสงตอนกลางคืน สัตว์ร้ายไม่กล้าเข้าใกล้ผู้ถือ';
+  if (e.type === 'armor') return `ลดความเสียหายจากสัตว์ร้าย ${e.n}%`;
+  if (e.type === 'charm') return `พกติดตัวแล้ว ${e.stat.toUpperCase()} +${e.n} ตลอดเวลา`;
+  if (e.type === 'tool') return `เครื่องมือ${TOOL_LABEL[e.tool] || ''} พลัง ${e.pow} ทนทาน ${e.dur}`;
+  return '';
+}
 function designInvention(a, b, m) {
   const A = propsOf(a), B = propsOf(b), has = k => A[k] || B[k], key = n => (A[n] ? a : b);
-  const pair = (x, y) => (A[x] && B[y]) || (A[y] && B[x]);
+  const r = hashStr(sigOf(a, b, m) + worldSeed), lv = 1 + (r % 3), days = 2 + (r >> 3) % 3;
+  const mk = (stars, name, kind, eff, extra = {}) => ({ stars, def: Object.assign({ name, kind, eff, props: Object.assign({}, A, B, extra.props || {}) }, extra.def || {}), desc: `ได้ "${name}" — ${effText(eff)}` });
+  const liquid = m === 'mix12' || m === 'roast' || m === 'kiln';
   if (has('poison') && (has('wood') || has('bamboo') || has('rope')))
-    return { stars: 3, def: { name: `หอกพิษ${key('poison').replace('เหล็กใน', '')}`, kind: 'tool', tool: 'blade', dur: 40, pow: 2, tier: 1, props: { sharp: 1, hard: 1, poison: 1 } }, desc: 'หอกปลายพิษ แทงแล้วศัตรูติดพิษ' };
+    return mk(3, `หอกพิษ${short(key('poison')).replace('เหล็กใน', '')}`, 'tool', { type: 'tool', tool: 'blade', pow: 2, dur: 40 }, { def: { tool: 'blade', dur: 40, pow: 2, tier: 1 }, props: { sharp: 1, hard: 1, poison: 1 } });
   if (has('sharp') && (has('wood') || has('bamboo') || has('rope')))
-    return { stars: 3, def: { name: `หอก${key('sharp')}`, kind: 'tool', tool: 'blade', dur: 30, pow: 2, tier: 1, props: { sharp: 1, hard: 1 } }, desc: 'อาวุธปลายแหลมไว้ล่าสัตว์' };
-  if (has('glow') && (has('water') || has('fiber') || has('bamboo') || has('glass') || has('hard')))
-    return { stars: 3, def: { name: 'ตะเกียงหิ่งห้อย', kind: 'item', props: { glow: 1, light: 1 } }, desc: 'ให้แสงสว่างตอนกลางคืน สัตว์ร้ายไม่กล้าเข้าใกล้' };
-  if (has('hard') && has('hide') && (has('rope') || has('fiber') || has('wood')))
-    return { stars: 3, def: { name: `โล่${key('hide')}`, kind: 'item', props: { hard: 1, armor: 1 } }, desc: 'โล่กันการโจมตี ลดความเสียหาย' };
-  if (has('sticky') && (has('herb') || has('water')))
-    return { stars: 3, def: { name: 'ยาน้ำผึ้งสมุนไพร', kind: 'item', props: { herb: 1, medicine: 1, food: 1 } }, desc: 'ยารักษาบาดแผลและแก้พิษ' };
-  if (((A.fiber && B.fiber) || has('rope')) && (a === 'ปีกผีเสื้อ' || b === 'ปีกผีเสื้อ'))
-    return { stars: 2, def: { name: 'ผ้าคลุมปีกผีเสื้อ', kind: 'item', props: { fiber: 2, pretty: 1 } }, desc: 'ผ้าสวยงาม ใช้ทำเสื้อผ้าหรือของขวัญ' };
-  if (has('food') && (has('fuel') || has('water')))
-    return { stars: 2, def: { name: `${a.split(' ')[0]}ปรุง${b.split(' ')[0]}`, kind: 'food', food: 9, props: { food: 1 } }, desc: 'อาหารเมนูใหม่' };
-  return { stars: 1, def: { name: `สิ่งประดิษฐ์จาก${a}และ${b}`, kind: 'item', props: Object.assign({}, A, B) }, desc: 'ยังไม่แน่ใจว่าใช้ทำอะไร แต่น่าจะมีประโยชน์' };
+    return mk(3, `หอก${short(key('sharp'))}`, 'tool', { type: 'tool', tool: 'blade', pow: 2, dur: 30 }, { def: { tool: 'blade', dur: 30, pow: 2, tier: 1 }, props: { sharp: 1, hard: 1 } });
+  if (has('glow')) return mk(3, 'ตะเกียงหิ่งห้อย', 'item', { type: 'light' }, { props: { glow: 1, light: 1 } });
+  if (has('fuel') && (has('fiber') || has('sticky')) && (m === 'bind' || m === 'friction')) return mk(3, `คบไฟ${short(key('fuel'))}`, 'item', { type: 'light' }, { props: { light: 1 } });
+  if (has('hard') && has('hide') && (m === 'bind' || m === 'cut')) return mk(3, `โล่${short(key('hide'))}`, 'item', { type: 'armor', n: 20 + lv * 10 }, { props: { armor: 1 } });
+  if ((has('hide') || (A.fiber && B.fiber && !has('bamboo') && !has('wood'))) && (m === 'bind' || m === 'cut' || m === 'knead11'))
+    return mk(3, `เสื้อ${short(has('hide') ? key('hide') : a)}`, 'item', { type: 'warm', n: 3 + lv }, { props: { wear: 1 } });
+  if ((has('bamboo') || has('wood') || has('basket')) && has('fiber') && (m === 'bind' || m === 'cut'))
+    return mk(3, `ย่าม${short(has('bamboo') ? key('bamboo') : key('fiber'))}สาน`, 'item', { type: 'bag', n: 3 + lv * 2 });
+  if (has('herb') && has('sticky')) return mk(3, 'ยาน้ำผึ้งสมุนไพร', 'item', { type: 'heal', n: 30, cure: 1 }, { props: { medicine: 1 } });
+  if (has('herb') && liquid) return mk(3, `ยาต้ม${short(key('herb'))}`, 'item', { type: 'heal', n: 20 + lv * 5 }, { props: { medicine: 1 } });
+  // tonics: what goes in decides which strength it gives
+  const statOf = P => P.food && P.bad ? 'str' : P.sticky ? 'cha' : P.food ? 'agi' : P.herb ? 'vit' : P.glow || P.salt || P.mineral ? 'int' : P.hide || P.fiber ? 'dex' : null;
+  const sA = statOf(A), sB = statOf(B), stat = sA || sB;
+  if (stat && (liquid || m === 'knead11' || m === 'knap') && (has('food') || has('herb') || has('sticky') || has('water')))
+    return mk(lv >= 2 ? 3 : 2, `ยา${STAT_TH[stat]}${short(stat === sA ? a : b)}`, 'item', { type: 'buff', stat, n: lv, days }, { props: { tonic: 1 } });
+  if (has('food') && (has('fuel') || has('water'))) return mk(2, `${short(a)}ปรุง${short(b)}`, 'food', { type: 'food', n: 7 + lv * 2 }, { def: { food: 7 + lv * 2 } });
+  // anything else: a lucky charm made from the pair
+  const cs = stat || ['str', 'agi', 'vit', 'int', 'dex', 'cha'][r % 6];
+  return mk(1, `เครื่องราง${short(a)}${a === b ? '' : short(b)}`, 'item', { type: 'charm', stat: cs, n: 1 });
+}
+// effects in play
+function effBonus(a, k) {
+  const h = nowH();
+  if (!a._effC || a._effC.h !== h) {          // recomputed once per game hour (st() is called a lot)
+    const c = {}; (a.buffs || []).forEach(b => { if (b.until > h) c[b.stat] = (c[b.stat] || 0) + b.n; });
+    if (a.bag) { const seen = {}; for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'charm' && !seen[d.eff.stat]) { seen[d.eff.stat] = 1; c[d.eff.stat] = (c[d.eff.stat] || 0) + d.eff.n; } } }
+    a._effC = { h, c };
+  }
+  return a._effC.c[k] || 0;
+}
+function effBonusSlow(a, k) {
+  let n = 0;
+  (a.buffs || []).forEach(b => { if (b.stat === k) n += b.n; });
+  if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'charm' && d.eff.stat === k) { n += d.eff.n; break; } }
+  return n;
+}
+function carriedEff(a, type) { let best = null; if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type && (!best || (d.eff.n || 0) > (best.n || 0))) best = d.eff; } return best; }
+function effectsTick() {
+  const h = nowH();
+  aiAgents.forEach(a => {
+    if (a.buffs) a.buffs = a.buffs.filter(b => b.until > h);
+    if (!a.bag || a.sleeping) return;
+    for (const nm in a.bag) {
+      if (a.bag[nm] <= 0) continue;
+      const d = productDef(keyByName(nm)), e = d && d.eff; if (!e) continue;
+      if (e.type === 'buff' && !(a.buffs || []).some(b => b.stat === e.stat) && Math.random() < 0.3) {
+        take(a, nm); (a.buffs = a.buffs || []).push({ stat: e.stat, n: e.n, until: h + e.days * 24, from: nm }); a._effC = null;
+        a.bubble = `🧪 ดื่ม${nm} ${e.stat.toUpperCase()} +${e.n} (${e.days} วัน)`; break;
+      }
+      if (e.type === 'heal' && (a.hp < maxHp(a) * 0.55 || (e.cure && a.poisonH))) {
+        take(a, nm); a.hp = Math.min(maxHp(a), a.hp + e.n); if (e.cure) a.poisonH = 0; a.bubble = `💊 ใช้${nm} เลือด +${e.n}`; break;
+      }
+    }
+  });
 }
 function proposeInvention(agent, a, b, m) {
   const sig = sigOf(a, b, m);
@@ -3748,7 +3811,7 @@ function proposeInvention(agent, a, b, m) {
   const d = designInvention(a, b, m);
   const p = { offering: 5, id: 'pr' + (prayerSeq++) + '_' + Date.now().toString(36), realm: tickingRealm, realmName: realms[tickingRealm].def.name, agentId: agent.id, agentName: agent.name,
     zone: agent.zone, need: 'invent:' + sig, kind: 'invent', tier: 1, stars: d.stars, wish: { name: d.def.name, desc: d.desc }, invent: { a, b, m, def: d.def },
-    reason: `ลอง ${a} + ${b} ด้วยวิธี "${METHODS[m].name}" แล้วคิดว่าน่าจะประดิษฐ์ "${d.def.name}" ได้ ขอพระเจ้าอนุมัติสูตรนี้`, day: simDay, status: 'pending', attempt: 1 };
+    reason: `ลอง ${a} + ${b} ด้วยวิธี "${METHODS[m].name}" แล้วคิดว่าจะได้ "${d.def.name}" ซึ่ง${effText(d.def.eff)} ขอพระเจ้าอนุมัติสูตรนี้`, day: simDay, status: 'pending', attempt: 1 };
   prayers.unshift(p);
   agent.bubble = `💡 คิดค้น "${d.def.name}" ได้! ขอพระเจ้าอนุมัติ`;
   addLog(`💡 [คิดค้นสิ่งใหม่] ${agent.name} เสนอสูตร "${d.def.name}" (${a} + ${b} · ${METHODS[m].name}) รอพระเจ้าอนุมัติ`, '#fde68a');
@@ -4053,6 +4116,7 @@ function runAutonomousStep() {
   objWorldTick();
   insectTick();
   steleTick();
+  effectsTick();
   // Gathering: anyone (12+) standing near a resource picks some up
   aiAgents.forEach(a => {
     if (a.age < 12 || a.sleeping) return;
@@ -4083,12 +4147,13 @@ function runAutonomousStep() {
     const beast = faunaSpecies.find(f => f.predator && (f.zp[a.zone] || 0) > 0);
     const crowd = aiAgents.filter(o => o.zone === a.zone && o.age >= 15).length;
     if (a.sleeping && a.sleepKind === 'bed') return;      // safe inside a shelter
+    if (carriedEff(a, 'light') && Math.random() < 0.7) return;   // beasts keep away from the light
     if (beast && night && Math.random() < (beast.id === 'f_wolf' ? 0.025 : 0.04) * (1 + trOf(beast, a.zone).fer * 0.3) * Math.min(2, beast.zp[a.zone]) / Math.max(1, crowd) && !stationInZone(a.zone, 'campfire')) {
       const icon = { f_wolf: '🐺', f_cobra: '🐍', f_croc: '🐊' }[beast.id] || '🐆';
       if (hasTool('bow', a) && a.age >= 15) { a.bubble = `🏹 ยิงธนูไล่${beast.name}!`; gainExp(a, 'agi', 1); gainExp(a, 'str', 0.5); }
       else if (Math.random() < Math.min(0.6, st(a, 'agi') * 0.025)) { a.bubble = `💨 หลบ${beast.name}ทัน!`; gainExp(a, 'agi', 2); }
       else {
-        const dmg = (beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3;
+        const ar = carriedEff(a, 'armor'), dmg = Math.round(((beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3) * (ar ? 1 - ar.n / 100 : 1));
         a.hp = Math.max(0, a.hp - dmg);
         if (beast.id === 'f_cobra') a.poisonH = (a.poisonH || 0) + 8;
         gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
@@ -6586,6 +6651,7 @@ function renderAgentCard() {
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
+    ${(a.buffs || []).length ? `<div class="ac-sub">🧪 ${(a.buffs || []).map(b => `${b.stat.toUpperCase()} +${b.n} (${b.from}, เหลือ ${Math.max(0, Math.round((b.until - nowH()) / 24 * 10) / 10)} วัน)`).join(' · ')}</div>` : ''}
     <div class="ac-sub">ปัจจัย 4: ${Object.entries(needsOf(a)).map(([k, v]) => `<span style="margin-right:6px;${v.ok ? '' : 'color:#dc2626;font-weight:600'}">${NEED_LABEL[k]} ${v.ok ? '✓' : '✗'}</span>`).join('')}</div>
 ${(a.godQuests || []).length ? `<div class="ac-gq">📯 เควสพระเจ้าวันนี้ · ✨ ศรัทธา <b>${a.faith || 0}</b>${(a.faith || 0) >= 10 ? ' (อธิษฐานได้)' : ''}${a.godQuests.map(q => `<div class="gq ${q.done ? 'done' : ''}">${q.done ? '✅' : q.accepted ? '⏳' : '💤'} ${q.title} <span class="d">${DIFF_STARS(q.diff)} +${q.faith}✨</span> ${q.done ? '' : q.accepted ? `<span class="p">${q.prog}/${q.qty}</span>` : '<span class="p">ไม่รับ</span>'}</div>`).join('')}</div>` : `<div class="ac-sub">✨ ศรัทธา ${a.faith || 0}</div>`}
 ${(() => {   // quests this person asked for, or is helping with
