@@ -4619,7 +4619,8 @@ function pupActivity(a, moving, fast) {
   if (b.startsWith('🛠️') || b.startsWith('🔬') || b.startsWith('🔁') || b.startsWith('😓') || b.startsWith('😅')) return 'craft';
   if (b.startsWith('เก็บ') || b.startsWith('🍃') || b.startsWith('🌿') || b.startsWith('🧺') || a.gatherT) {
     if (/ไม้|ไผ่/.test(b) && getEquip(a).hand === 'axe') return 'chop';
-    if (/หิน|แร่/.test(b) && hasTool('pick', a)) return 'chop';
+    if (/หิน|แร่/.test(b) && (hasTool('pick', a) || hasTool('hammer', a))) return 'chop';
+    if (/กก|หญ้า|สมุนไพร|เถาวัลย์|ข้าว|ใย|ฟาง|ใบ/.test(b) && hasTool('sickle', a)) return 'chop';
     return 'gather';
   }
   if (isNightTime() && !a.goal && stationInZone(a.zone, 'campfire')) return 'sit';
@@ -4666,10 +4667,13 @@ function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t 
 function pupHeldItem(a, kind) {
   if (!kind || kind === 'bow') return kind;
   if (kind === 'axe') {
-    const mining = /หิน|แร่|ทองแดง|เหล็ก/.test(a.bubble || '');
-    const t = usableToolTier(a, mining ? 'pick' : 'axe') || usableToolTier(a, 'axe');
+    const b = a.bubble || '';
+    const mining = /หิน|แร่|ทองแดง|เหล็ก/.test(b), reaping = !/ไม้|ไผ่/.test(b) && /กก|หญ้า|สมุนไพร|เถาวัลย์|ข้าว|ใย|ฟาง|ใบ/.test(b);
+    // same swing as the axe: sickle for plants, pick (or hammer) for stone, axe for wood
+    const type = reaping && hasTool('sickle', a) ? 'sickle' : mining ? (hasTool('pick', a) ? 'pick' : hasTool('hammer', a) ? 'hammer' : 'axe') : 'axe';
+    const t = usableToolTier(a, type);
     if (t && t.tier >= 2) return 'axe';
-    const k = mining && t && t.key === 'stone_pick' ? 'stone_pick' : 'stone_axe';
+    const k = { sickle: 'stone_sickle', pick: 'stone_pick', hammer: 'stone_hammer', axe: 'stone_axe' }[type];
     return ITEM_HELD_IMG[k] ? 'art:' + k : 'axe';
   }
   if (kind === 'sword') {
@@ -4825,6 +4829,23 @@ function drawBow(ctx, m, b, s, part) {
   const K = 0.3125, bend = b.dl * 22;
   const P = (a, n) => [g.x + (ad.x * a + an.x * n) * K, g.y + (ad.y * a + an.y * n) * K];
   const top = P(-(10 + bend * 0.4), -118), bot = P(-(10 + bend * 0.4), 118);
+  const art = ITEM_HELD_IMG.bow, ea = window.ITEM_ART && ITEM_ART.bow && ITEM_ART.bow.held;
+  if (art && art.complete && art.naturalWidth && ea) {
+    // static bow art (no limb bend); art is drawn with the belly to the left, so mirror it so the belly faces the aim
+    const phi = Math.atan2(ad.y, ad.x);
+    if (part === 'limb') {
+      const h = ea.len, w = h * ea.ar;
+      ctx.save(); ctx.transform(-ad.x, -ad.y, an.x, an.y, g.x, g.y);   // art x → backward (string side), art y → along the bow
+      ctx.drawImage(art, -ea.gx * w, -ea.gy * h, w, h); ctx.restore();
+    } else if (b.dl > 0.03 && !b.hold) {
+      const ar = ITEM_HELD_IMG.arrow, eo = ITEM_ART.arrow && ITEM_ART.arrow.held;
+      if (ar && ar.complete && eo) {
+        const tail = b.dl > 0.05 ? h : { x: g.x - ad.x * 4, y: g.y - ad.y * 4 }, L = eo.len, w = L * eo.ar;
+        ctx.save(); ctx.translate(tail.x, tail.y); ctx.rotate(phi + Math.PI / 2); ctx.drawImage(ar, -0.5 * w, -eo.gy * L, w, L); ctx.restore();
+      }
+    }
+    return;
+  }
   if (part === 'limb') {
     const c1 = P(18 + bend * 0.3, -70), c2 = P(18 + bend * 0.3, 70);
     ctx.lineCap = 'round';
