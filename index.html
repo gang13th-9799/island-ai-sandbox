@@ -558,6 +558,7 @@
 <script src="assets/items.js"></script>
 <script src="assets/stele.js"></script>
 <script src="assets/glyphs.js"></script>
+<script src="assets/homes.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -6013,6 +6014,14 @@ function damageStation(s, dmg, why) {
     addLog(`💥 [สิ่งก่อสร้างพัง] ${s.name.split(' (')[0]} ${why || ''} พังหายไป ต้องสร้างใหม่`, '#f87171');
   }
 }
+// home art: recipe homes use their own picture; old lean-tos and the starting hut get the closest one
+const HOME_IMG = {};
+function homeImg(k) { let im = HOME_IMG[k]; if (!im) { im = HOME_IMG[k] = new Image(); im.src = HOME_ART[k].src; } return im.complete && im.naturalWidth ? im : null; }
+function homeArtKey(s) {
+  if (s.kind && PRODUCTS[s.kind] && PRODUCTS[s.kind].kind === 'home') return s.kind;
+  if ((s.sprite || 'shelter_hut') === 'shelter_hut' && !s.station) return /ฐานบัญชาการ/.test(s.name) ? 'wood_house' : 'leaf_hut';
+  return null;
+}
 // draw one world object
 function drawWorldObj(ctx, o, cx, fy, now) {
   const d = WOBJ[o.k], s = window.WORLD_ART && WORLD_ART.sprites[o.k]; if (!s) return;
@@ -6149,7 +6158,16 @@ function drawCanvas() {
     const sw = art && window.WORLD_ART ? WORLD_ART.sprites[art].w * 0.8 : w;
     ctx.fillStyle = 'rgba(40,30,20,0.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, sw * 0.55, sw * 0.16, 0, 0, 7); ctx.fill();
     let d;
-    if (art && window.WORLD_ART) {
+    const hk = homeArtKey(s), HA = hk && window.HOME_ART && HOME_ART[hk], him = HA && homeImg(hk);
+    if (him) {
+      const hh = HUMAN_H * (hk === 'leaf_hut' ? 1.45 : 2.0), hw = hh * HA.w / HA.h;
+      const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
+      const hurt = s.maxHp && s.hp < s.maxHp * 0.5;
+      if (hurt) ctx.filter = 'brightness(.78) saturate(.8)';
+      ctx.drawImage(him, cx - hw / 2 + sx, fy - hh * 0.97, hw, hh);
+      ctx.filter = 'none';
+      d = { h: hh * 0.97 };
+    } else if (art && window.WORLD_ART) {
       const mh = stationMaxHp(s), hp = s.hp == null ? mh : s.hp, stI = hp < mh * 0.5 ? 1 : 0, A = WORLD_ART.sprites[art];
       let sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
       drawProp(ctx, art, stI, cx + sx, fy);
