@@ -74,7 +74,7 @@
     box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 4px 0 #160f3a; }
   .gbtn:hover { filter: brightness(1.15); }
   .gbtn.amber { background: linear-gradient(180deg, #ffb53d, #e0851a); color: #2a1300; border-color: #ffd58a; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 4px 0 #8a4a07, var(--glow-amber); }
-  .gbtn.ember { background: linear-gradient(180deg, #ff6a4d, #c83a2b); border-color: #ffb3a1; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 0 #6d1b14; }
+  .gbtn.redbtn { background: linear-gradient(180deg, #ff6a4d, #c83a2b); border-color: #ffb3a1; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 0 #6d1b14; }
   .gbtn.moss { background: linear-gradient(180deg, #34c486, #1d8a5b); border-color: #9ff2c8; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 0 #0e4a30; }
   .gbtn.ghost { background: rgba(28,23,64,.8); box-shadow: none; }
   .round { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; }
@@ -391,6 +391,7 @@
       <button class="tab-btn" data-title="⚛️ แปรธาตุ" onclick="switchTab('alchemy', this)"><span class="ico">🔮</span>แปรธาตุ<span class="cnt" id="cnt-elem">7</span></button>
       <button class="tab-btn" data-title="📜 กระดานเควส & ความสัมพันธ์" onclick="switchTab('quest', this)"><span class="ico">📜</span>เควส<span class="cnt" id="cnt-quest">0</span></button>
       <button class="tab-btn" data-title="🆘 วิกฤต & สัตว์ป่า" onclick="switchTab('crisis', this)"><span class="ico">🆘</span>วิกฤต<span class="cnt" id="cnt-sol">0</span></button>
+      <button class="tab-btn" data-title="🙏 คำอธิษฐานถึงพระเจ้า" onclick="switchTab('prayer', this); renderPrayers()"><span class="ico">🙏</span>คำขอ<span class="cnt" id="cnt-pray" style="display:none">0</span></button>
       <button class="tab-btn" onclick="openLobby()"><span class="ico">🌀</span>ดินแดน<span class="cnt" id="cnt-god" style="display:none">!</span></button>
     </div>
 
@@ -399,7 +400,6 @@
     <!-- Left edge: chronicle + god requests -->
     <div class="side-left">
       <button class="side-btn" onclick="document.getElementById('log-bar').classList.toggle('hide')" title="บันทึกเหตุการณ์">💬</button>
-      <button class="side-btn" data-title="🙏 คำอธิษฐานถึงพระเจ้า" onclick="switchTab('prayer', this); renderPrayers()" title="คำอธิษฐานจาก AI">🙏<span class="dot on" id="cnt-pray" style="display:none; width:auto; min-width:18px; height:18px; font-size:10px; color:#fff; line-height:14px; text-align:center;">0</span></button>
       <button class="side-btn" onclick="openLobby()" title="คำขอจากพระเจ้า">✉️<span class="dot" id="god-dot"></span></button>
     </div>
     <div class="log-bar" id="log-bar"></div>
@@ -542,7 +542,7 @@
         <div id="fauna-pop-list"></div>
         <h4 style="color:var(--blood);">⚙️ ตั้งค่าโลก</h4>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="gbtn ember" onclick="triggerSeasonalDisaster()">🌪️ เรียกภัยพิบัติ</button>
+          <button class="gbtn redbtn" onclick="triggerSeasonalDisaster()">🌪️ เรียกภัยพิบัติ</button>
           <button class="gbtn ghost" onclick="resetSaveData()">🗑️ เริ่มโลกใหม่</button>
         </div>
       </div>
@@ -2869,7 +2869,7 @@ function renderLobby() {
       <div style="font-size:11px; color:var(--muted); margin-top:3px;">🌀 เกจอยู่ที่ ${r.def.gate} · วัตถุดิบเฉพาะถิ่น: ${Object.values(r.def.sub).slice(0, 4).join(', ') || 'ดั้งเดิม'}</div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="gbtn ${i === activeRealm ? 'ghost' : 'amber'}" style="flex:1;" onclick="switchRealm(${i})">${i === activeRealm ? '📍 อยู่ที่นี่' : '🌀 เข้าดินแดนนี้'}</button>
-        ${st.aiAgents.length ? `<button class="gbtn ember" onclick="testCollapse(${i})" title="ทดสอบ">☠️ ทดสอบล่มสลาย</button>` : ''}
+        ${st.aiAgents.length ? `<button class="gbtn redbtn" onclick="testCollapse(${i})" title="ทดสอบ">☠️ ทดสอบล่มสลาย</button>` : ''}
       </div></div>`;
   }).join('');
   document.getElementById('lobby-log').innerHTML = realmLogs.slice(0, 15).map(t => `<div class="card" style="padding:5px 9px; font-size:11px;">${t}</div>`).join('') || '<div class="sec-note">ยังไม่มีเหตุการณ์ข้ามดินแดน</div>';
@@ -3794,7 +3794,7 @@ function renderPrayers() {
       <input id="pr-note-${p.id}" placeholder="เหตุผลที่ปฏิเสธ (ไม่บังคับ)" style="width:100%; padding:7px 9px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.25); color:var(--text); margin-bottom:6px;">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
         <button class="gbtn moss" onclick="answerPrayer('${p.id}', true)">✅ อนุมัติ</button>
-        <button class="gbtn ember" onclick="answerPrayer('${p.id}', false)">⛔ ปฏิเสธ</button>
+        <button class="gbtn redbtn" onclick="answerPrayer('${p.id}', false)">⛔ ปฏิเสธ</button>
       </div></div>`).join('') : '<div class="sec-note">ยังไม่มีคำอธิษฐานใหม่ AI ที่มีศรัทธา 10 ขึ้นไปจะอธิษฐานเมื่อขาดแคลนจริงๆ เช่น ไม่มีของกิน ไม่มีสัตว์ให้ล่า หนาวแต่ไม่มีไม้ หรือขาดวัตถุดิบที่ไม่มีบนเกาะ</div>';
   const au = document.getElementById('god-auto'); if (au && document.activeElement !== au) au.value = godAutoLevel() || '';
   const hist = document.getElementById('god-db-list');
