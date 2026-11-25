@@ -4408,10 +4408,11 @@ function drawPart(ctx, k, x, y, hgt, rot, color, amt) {
   ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot);
   ctx.drawImage(src, -M.rx * w, -M.ry * hgt, w, hgt); ctx.restore();
 }
+const MUT_PARTS_ON = false;   // horns / wings / tails / armor art disabled for now: mutants are only recoloured
 function drawAnimal(ctx, art, pose, cx, fy, face, scale, tt, now) {
   const P = WORLD_ART.animals[art][pose], im = WA.anim[art] && WA.anim[art][pose];
   if (!im || !im.complete || !im.naturalWidth) return false;
-  const w = P.w * scale, h = P.h * scale, parts = (tt && tt.parts) || [], sleeping = pose === 3;
+  const w = P.w * scale, h = P.h * scale, parts = MUT_PARTS_ON ? ((tt && tt.parts) || []) : [], sleeping = pose === 3;
   const H0 = WORLD_ART.animals[art][0].h * scale;           // standing height, keeps parts the same size in every pose
   ctx.save(); ctx.translate(cx, fy); if (face < 0) ctx.scale(-1, 1);
   const mx = (P.mid || P.back)[0] * scale, my = (P.mid || P.back)[1] * scale, bx = P.back[0] * scale, by = P.back[1] * scale, hx = P.head[0] * scale, hy = P.head[1] * scale, rx = P.rear[0] * scale, ry = P.rear[1] * scale;
