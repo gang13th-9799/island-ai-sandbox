@@ -27,6 +27,8 @@ for b in ['blue','red']: kind('bush_'+b,[f'bush_{b}_{s}.png' for s in ['full','p
 for g,r in [('round',0.3),('tall',0.5),('wheat',0.58),('clover',0.2),('fern',0.42),('reed',0.45)]: kind('grass_'+g,[f'g_{g}_{i}.png' for i in range(3)],r)
 for k,r in [('gray',0.42),('moss',0.62),('tall',0.95),('copper',0.5),('coal',0.5),('tin',0.5),('iron',0.55),('gold',0.55),('crystal',0.65)]:
   kind('rock_'+k,[f'rock_{k}_{s}.png' for s in ['full','cracked','rubble']],r)
+for k,r in [('gray2',0.5),('moss2',0.72),('tall2',0.95),('iron2',0.58),('gold2',0.6),('crystal2',0.68)]:
+  kind('rock_'+k,[f'rock_{k}_{s}.png' for s in ['full','cracked','rubble']],r)
 for c,r in [('fire',0.38),('bench',0.6),('fence',0.62),('barrel',0.55),('crate',0.48),('hay',0.62)]: kind('camp_'+c,[f'c_{c}_{i}.png' for i in range(3)],r)
 # tool icons
 ic={}
