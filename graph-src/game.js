@@ -4093,6 +4093,13 @@ function drawEyeArt(ctx, a, mood) {
   if (!e || !im || !im.complete || !im.naturalWidth) return false;
   ctx.drawImage(im, e.x, e.y, e.w, e.h); return true;
 }
+const MOUTH_IMG = {};
+(function () { const E = window.MOUTH_ART; if (!E) return; for (const k in E) { const im = new Image(); im.src = E[k].src; MOUTH_IMG[k] = im; } })();
+function drawMouthArt(ctx, mood) {
+  if (!window.MOUTH_ART) return false;
+  const one = k => { const e = MOUTH_ART[k], im = MOUTH_IMG[k]; if (!e || !im || !im.complete || !im.naturalWidth) return false; ctx.drawImage(im, e.x, e.y, e.w, e.h); return true; };
+  one('nose'); return one(MOUTH_ART[mood] ? mood : 'happy');
+}
 function drawHairLayer(ctx, a, L, color) {
   if (!window.HAIR_ART || a.age < 2) return false;
   const k = hairStyleOf(a), e = HAIR_ART[k] && HAIR_ART[k][L]; if (!e) return L === 'B' && !!HAIR_ART[k];
@@ -4186,6 +4193,7 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   ctx.setTransform(withBase(Mb));
   const mood = getMood(a);
   const artEyes = drawEyeArt(ctx, a, mood);
+  const artMouth = drawMouthArt(ctx, mood);
   const artHair = a.age >= 2 && drawHairLayer(ctx, a, 'F', hc);
   if (a.age >= 2 && !artHair) {
     ctx.fillStyle = hc; ctx.beginPath();
@@ -4195,7 +4203,7 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   }
   ctx.lineWidth = Math.max(0.6, hr * 0.09); ctx.lineCap = 'round';
   const fxh = hcx + hr * 0.28, fyh = hcy + hr * 0.12, fr = hr * 0.62;
-  if (!artEyes) FACE.eyes(ctx, fxh, fyh, fr, mood); FACE.mouth(ctx, fxh, fyh, fr, mood);
+  if (!artEyes) FACE.eyes(ctx, fxh, fyh, fr, mood); if (!artMouth) FACE.mouth(ctx, fxh, fyh, fr, mood);
   if (item === 'bow') drawBow(ctx, withBase(Mb), bowInfo, s, 'string');
   if (item && item !== 'bow') drawItem(ctx, withBase(base), base.inverse().multiply(M.foN), rig, item, p);
   drawP('upN', M.upN);
