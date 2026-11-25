@@ -344,6 +344,8 @@ const MAT = {
   'ยางไม้เหนียว': { sticky: 1, fuel: 0.5 }, 'รังผึ้งป่า': { food: 1, sticky: 1 }, 'ไขมันหมู': { fuel: 1, food: 0.5, sticky: 0.5 },
   'สมุนไพร': { herb: 1 }, 'หนังกวางนิ่ม': { hide: 1 }, 'หนังหมูหนา': { hide: 1 }, 'หนังเสือดาวหนา': { hide: 1 },
   'เขากวางแข็ง': { hard: 1, sharpable: 1 },
+  'ปีกผีเสื้อ': { fiber: 1, dry: 1, leaf: 0.5 }, 'เหล็กในผึ้ง': { sharp: 1, hard: 0.5 }, 'น้ำผึ้งป่า': { food: 1, sticky: 1 }, 'ก้นหิ่งห้อยเรืองแสง': { glow: 1, food: 0.3 },
+  'เหล็กในแมงป่อง': { sharp: 1, hard: 1, poison: 1 }, 'เปลือกแมงป่อง': { hard: 1, hide: 0.5 },
   'แร่ทองแดง': { ore: 1, mineral: 1, elem: 'Cu' }, 'ถ่านหิน': { fuel: 2, mineral: 1, elem: 'C' }, 'แร่ดีบุก': { ore: 1, mineral: 1, elem: 'Sn' },
   'แร่ทอง': { ore: 1, mineral: 1, elem: 'Au' }, 'ผลึกคริสตัล': { hard: 1, mineral: 1, elem: 'Si' }, 'แอปเปิลป่า': { food: 1 }, 'ลูกมะพร้าว': { food: 1, water: 0.5 },
   'หินออบซิเดียน': { hard: 1, mineral: 1, sharpable: 1 }, 'ดินเถ้าภูเขาไฟ': { clay: 1 }, 'ใยปาล์มไหม้': { fiber: 1, dry: 1, fuel: 1 },
@@ -4663,10 +4665,10 @@ function drawWorldObj(ctx, o, cx, fy, now) {
 
 // ----- insects: butterflies & bees by day, fireflies at night near water, scorpions on rocky ground -----
 const INSECTS = {
-  butterfly: { tiles: ['grass', 'tall_grass', 'hill_slope'], n: 10, fly: true, day: true, h: 9, sp: 0.5, r: 3 },
-  bee:       { tiles: ['forest', 'grass'], n: 8, fly: true, day: true, h: 7, sp: 0.8, r: 1.6, sting: 3 },
-  firefly:   { tiles: ['river', 'swamp_water', 'mud_flat', 'sand_bank'], near: true, n: 14, fly: true, night: true, h: 8, sp: 0.4, r: 2.2 },
-  scorpion:  { tiles: ['mountain_cliff', 'mountain_peak', 'hill_slope'], n: 5, sp: 0.12, r: 1.2, sting: 6, poison: true }
+  butterfly: { name: 'ผีเสื้อ', hp: 1, drops: { 'ปีกผีเสื้อ': 1 }, tiles: ['grass', 'tall_grass', 'hill_slope'], n: 10, fly: true, day: true, h: 9, sp: 0.5, r: 3 },
+  bee:       { name: 'ผึ้ง', hp: 2, drops: { 'เหล็กในผึ้ง': 1 }, bonus: ['น้ำผึ้งป่า', 0.4], fightBack: true, tiles: ['forest', 'grass'], n: 8, fly: true, day: true, h: 7, sp: 0.8, r: 1.6, sting: 3 },
+  firefly:   { name: 'หิ่งห้อย', hp: 1, drops: { 'ก้นหิ่งห้อยเรืองแสง': 1 }, tiles: ['river', 'swamp_water', 'mud_flat', 'sand_bank'], near: true, n: 14, fly: true, night: true, h: 8, sp: 0.4, r: 2.2 },
+  scorpion:  { name: 'แมงป่อง', hp: 5, drops: { 'เหล็กในแมงป่อง': 1, 'เปลือกแมงป่อง': 1 }, fightBack: true, tiles: ['mountain_cliff', 'mountain_peak', 'hill_slope'], n: 5, sp: 0.12, r: 1.2, sting: 6, poison: true }
 };
 const INS_CACHE = {};
 function insectsOf(zId) {
@@ -4681,7 +4683,8 @@ function insectsOf(zId) {
       if (D.near ? (!WATER.includes(t) && [[1,0],[-1,0],[0,1],[0,-1]].some(([a, b]) => D.tiles.includes(g[y + b * 2][x + a * 2]) && WATER.includes(g[y + b * 2][x + a * 2])) || (t === 'mud_flat')) : D.tiles.includes(t)) cand.push([x, y]);
     }
     if (cand.length < 4) continue;
-    for (let i = 0; i < D.n; i++) { const [x, y] = cand[Math.floor(r() * cand.length)]; out.push({ k, x: x + r(), y: y + r(), ph: r() * 6.28 }); }
+    out._cand = out._cand || {}; out._cand[k] = cand;
+    for (let i = 0; i < D.n; i++) { const [x, y] = cand[Math.floor(r() * cand.length)]; out.push({ k, x: x + r(), y: y + r(), ph: r() * 6.28, hp: D.hp }); }
   }
   return (INS_CACHE[key] = out);
 }
@@ -4690,7 +4693,31 @@ function insectTick() {
   aiAgents.forEach(a => {
     if (a.sleeping && a.sleepKind === 'bed') return;
     const here = insectsOf(a.zone);
+    // insects are wildlife too: AI swat / hunt them for their parts (bare hands work, a blade is better)
+    if (a.age >= 10 && !a.sleeping && Math.random() < 0.25) {
+      const tgt = here.find(b => !b.dead && !(INSECTS[b.k].night && !night) && !(INSECTS[b.k].day && night && INSECTS[b.k].fly) && Math.abs(b.x - a.x) < 3 && Math.abs(b.y - a.y) < 3);
+      if (tgt) {
+        const D = INSECTS[tgt.k], blade = toolItems.find(t => (t.type === 'blade' || t.type === 'sickle') && canUse(a, t));
+        const hitP = Math.min(0.9, 0.3 + st(a, 'agi') * 0.02 + st(a, 'dex') * 0.01 + (blade ? 0.15 : 0));
+        if (Math.random() < hitP) {
+          tgt.hp -= blade ? hitDamage(a, blade) : 1; if (blade) wearTool(a, blade, 1);
+          gainExp(a, 'agi', 0.4); gainExp(a, 'dex', 0.2);
+          if (tgt.hp <= 0) {
+            tgt.dead = true; tgt.respawnAt = nowH() + 12 + Math.floor(Math.random() * 24);
+            const got = [];
+            for (const [n, q] of Object.entries(D.drops)) { gainItems(a, n, q); got.push(n); }
+            if (D.bonus && Math.random() < D.bonus[1]) { put(a, D.bonus[0], 1); addFood(a, 3); got.push(D.bonus[0]); }
+            if (!a.goal) a.bubble = `✋ จับ${D.name}ได้ → ${got.join(', ')}`;
+            godQuestEvent(a, 'gather', got[0], 1);
+          } else if (!a.goal) a.bubble = `👋 ตบ${D.name}`;
+        } else if (D.fightBack && Math.random() < 0.5) {
+          a.hp = Math.max(1, a.hp - D.sting); a.bubble = tgt.k === 'bee' ? '🐝 ตบพลาด โดนผึ้งต่อย!' : '🦂 จับพลาด โดนแมงป่องต่อย!';
+          if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
+        }
+      }
+    }
     for (const b of here) {
+      if (b.dead) continue;
       const D = INSECTS[b.k]; if (!D.sting || (D.day && night)) continue;
       if (Math.abs(b.x - a.x) < 2.5 && Math.abs(b.y - a.y) < 2.5 && Math.random() < 0.03) {
         a.hp = Math.max(1, a.hp - D.sting); gainExp(a, 'vit', 0.5);
@@ -4701,9 +4728,14 @@ function insectTick() {
     }
     if (a.poisonH > 0) { a.poisonH--; a.hp = Math.max(1, a.hp - 1); }
   });
+  // natural: dead insects come back somewhere else in the same zone
+  const h = nowH();
+  for (const key in INS_CACHE) INS_CACHE[key].forEach(b => {
+    if (b.dead && h >= b.respawnAt) { const c = INS_CACHE[key]._cand && INS_CACHE[key]._cand[b.k]; if (c) { const [x, y] = c[Math.floor(Math.random() * c.length)]; b.x = x + Math.random(); b.y = y + Math.random(); } b.dead = false; b.hp = INSECTS[b.k].hp; }
+  });
 }
 function drawInsect(ctx, b, now, night) {
-  const D = INSECTS[b.k], A = window.WORLD_ART && WORLD_ART.animals[b.k]; if (!A) return;
+  const D = INSECTS[b.k], A = window.WORLD_ART && WORLD_ART.animals[b.k]; if (!A || b.dead) return;
   if (D.night && !night) return;
   const sleep = (D.day && night) || (b.k === 'scorpion' && night);
   if (sleep && D.fly) return;                       // flying insects hide at night
