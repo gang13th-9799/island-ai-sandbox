@@ -99,7 +99,10 @@
   /* ---------- Minimap ---------- */
   .minimap-box { position: absolute; top: 108px; left: 10px; z-index: 9; padding: 8px; border-radius: var(--r);
     background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.4); transition: transform .25s; }
-  .minimap-box.collapsed .minimap-grid { display: none; }
+  .minimap-box.collapsed .minimap-grid, .minimap-box.collapsed .mm-canvas { display: none; }
+  .minimap-grid { display: none !important; }
+  .mm-canvas { display: block; width: 220px; height: 182px; margin-top: 6px; border-radius: 14px; cursor: pointer; box-shadow: 0 0 0 3px #e9d6a8, 0 0 0 5px #8a6a3a, 0 6px 14px rgba(40,25,10,.35); }
+  @media (max-width: 520px) { .mm-canvas { width: 190px; height: 158px; } }
   .mm-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-family: var(--head); font-size: 11px; color: var(--muted); cursor: pointer; }
   .minimap-grid { display: grid; grid-template-columns: repeat(5, 34px); gap: 3px; margin-top: 6px; }
   .mm-cell { height: 22px; font-size: 9px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer;
