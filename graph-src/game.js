@@ -5656,9 +5656,20 @@ function drawInsect(ctx, b, now, night) {
   if (b.k === 'butterfly' && Math.sin(t * 0.37) > 0.75) pose = 1;
   const P = A[pose], sc = (ANIM_REL[b.k] || 0.5) / (A[0].h / HUMAN_H);
   ctx.fillStyle = 'rgba(30,40,20,.16)'; ctx.beginPath(); ctx.ellipse(cx, fy, P.w * sc * 0.3, P.w * sc * 0.08, 0, 0, 7); ctx.fill();
-  if (b.k === 'firefly') { const gl = 0.35 + 0.35 * Math.sin(now * 4 + b.ph); const g = ctx.createRadialGradient(cx, fy - hov - 4, 0, cx, fy - hov - 4, 14); g.addColorStop(0, `rgba(220,255,140,${gl})`); g.addColorStop(1, 'rgba(220,255,140,0)'); ctx.fillStyle = g; ctx.fillRect(cx - 14, fy - hov - 18, 28, 28); }
   drawAnimal(ctx, b.k, pose, cx, fy - hov, face, sc, null, now);
+  if (b.k === 'firefly') {                          // glowing lantern on the abdomen (measured per pose)
+    const L = FF_LAMP[pose] || FF_LAMP[0], w = P.w * sc, h = P.h * sc;
+    const lx = cx + face * (L[0] - 0.5) * w, ly = fy - hov - (1 - L[1]) * h;
+    const gl = 0.6 + 0.4 * Math.sin(now * 3.2 + b.ph * 5);
+    FF_GLOWS.push([lx, ly, gl]);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(lx, ly, 0, lx, ly, w * 0.16);
+    g.addColorStop(0, `rgba(255,255,210,${0.9 * gl})`); g.addColorStop(0.5, `rgba(230,255,120,${0.55 * gl})`); g.addColorStop(1, 'rgba(200,255,80,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(lx, ly, w * 0.16, 0, 7); ctx.fill(); ctx.restore();
+  }
 }
+const FF_LAMP = [[0.762, 0.843], [0.536, 0.753], [0.684, 0.868], [0.848, 0.872], [0.771, 0.861], [0.803, 0.863]];
+let FF_GLOWS = [];
 function drawCanvas() {
   if (bgTick) return;
   const canvas = document.getElementById('mapCanvas'); if (!VIEW.w) resizeView();
@@ -5824,6 +5835,7 @@ function drawCanvas() {
     if (tk) { const o = byId(tk.a === a.id ? tk.b : tk.a); if (o && o.zone === a.zone && o._rx !== undefined) { const d = (o._rx - o._ry) - (a._rx - a._ry); if (Math.abs(d) > 0.05) a._face = d > 0 ? 1 : -1; } }
     items.push({ y: a._rx + a._ry + 1.05, draw: () => drawAgent(ctx, a, now, labels) });
   });
+  FF_GLOWS = [];
   items.sort((p, q) => p.y - q.y).forEach(it => it.draw());
 
   // ambient wildlife (decorative): butterflies by day, fireflies at night, birds crossing the sky
@@ -5842,6 +5854,13 @@ function drawCanvas() {
     ctx.setTransform(d, 0, 0, d, 0, 0);
     ctx.fillStyle = 'rgba(30, 26, 80, 0.42)'; ctx.fillRect(0, 0, VIEW.w, VIEW.h);
     ctx.globalCompositeOperation = 'lighter';
+    FF_GLOWS.forEach(([x, y, gl]) => {               // firefly lanterns shine through the night tint
+      const [sx, sy] = screenOf(x, y), r1 = 1.8 * z, R = 20 * z;
+      const h = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
+      h.addColorStop(0, `rgba(235,255,150,${0.55 * gl})`); h.addColorStop(0.35, `rgba(200,255,90,${0.22 * gl})`); h.addColorStop(1, 'rgba(180,255,80,0)');
+      ctx.fillStyle = h; ctx.fillRect(sx - R, sy - R, R * 2, R * 2);
+      ctx.fillStyle = `rgba(245,255,170,${0.7 * gl})`; ctx.beginPath(); ctx.arc(sx, sy, r1, 0, 7); ctx.fill();
+    });
     shelters.filter(s => s.zone === currentZoneId && s.station === 'campfire').forEach(s => {
       const [fx, fy] = screenOf(...groundAt(s.x + 1.5, s.y + 1.5)); const R = WT * 9 * z;
       const g = ctx.createRadialGradient(fx, fy, 4, fx, fy, R);
