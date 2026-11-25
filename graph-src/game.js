@@ -1041,14 +1041,17 @@ function experiment(agent, forcedMethod) {
     let m = pick(methods);
     let a = smart ? smartPick(m) : pick(weighted), b = smart ? smartPick(m) : pick(weighted);
     let triedEquiv = null;
-    if (dejaList.length && tries === 0 && Math.random() < 0.5) { const e = pick(dejaList); a = e.a; b = e.b; m = e.m; agent.bubble = '🌀 รู้สึกคุ้นๆ เหมือนเคยทำ'; }
+    const rv = tries === 0 ? revelationOf(agent) : null;
+    const useRv = rv && methods.includes(rv.rm) && hasMaterials(rv.ra, rv.rb, agent);
+    if (useRv) { a = rv.ra; b = rv.rb; m = rv.rm; agent.bubble = `📜 ลองตามนิมิตของพระเจ้า`; }
+    else if (dejaList.length && tries === 0 && Math.random() < 0.5) { const e = pick(dejaList); a = e.a; b = e.b; m = e.m; agent.bubble = '🌀 รู้สึกคุ้นๆ เหมือนเคยทำ'; }
     else if (equivList.length && tries === 0 && Math.random() < 0.7) {
       triedEquiv = pick(equivList); a = triedEquiv.a; b = triedEquiv.b; m = triedEquiv.m;
       agent.equivTry = agent.equivTry.filter(x => x !== triedEquiv);
       agent.bubble = `🔁 ลองสูตรเทียบเคียง "${triedEquiv.orig}"`;
     }
     // Hunch from a near-miss: keep the same idea but change one thing
-    if (hunch && tries < 30 && Math.random() < 0.3 + st(agent, 'int') * 0.03) {
+    if (!useRv && hunch && tries < 30 && Math.random() < 0.3 + st(agent, 'int') * 0.03) {
       if (Math.random() < 0.5 && methods.includes(hunch.m)) { m = hunch.m; a = pick(hunch.items); }
       else { a = hunch.items[0]; b = hunch.items[1]; }
     }
@@ -1079,7 +1082,7 @@ function experiment(agent, forcedMethod) {
       markDiscovery(res.key, agent);
       trimMemory(agent);
       observe(agent, sig);
-      agent.bubble = `💡 ค้นพบ ${outName(res.key)}!`; godQuestEvent(agent, 'discover');
+      agent.bubble = `💡 ค้นพบ ${outName(res.key)}!`; godQuestEvent(agent, 'discover'); godQuestEvent(agent, 'recipe', res.key);
       agent.hunch = null;
       pushTrial({ title: `${a} + ${b}`, detail: `${M.name} · ${where}`, success: true, note: `✅ ${res.novel ? 'ผลที่ไม่คาดคิด! ' : ''}${note}`, actor: agent.name });
     } else {
@@ -1141,7 +1144,7 @@ function craftKnown(agent, entry) {
   if (Math.random() < Math.min(0.95, skill)) {
     const note = produce(entry.out, agent);
     agent.bubble = `🛠️ ทำ ${outName(entry.out)}`;
-    godQuestEvent(agent, 'craft');
+    godQuestEvent(agent, 'craft'); godQuestEvent(agent, 'recipe', entry.out);
     pushTrial({ title: `ผลิต: ${outName(entry.out)}`, detail: `${entry.a} + ${entry.b} · ${M.name}`, success: true, note: `🛠️ ${note} (ฝึกแล้ว ${entry.practice} ครั้ง)`, actor: agent.name, craft: true });
   } else {
     agent.bubble = '😓 ทำพลาด เสียวัตถุดิบ';
@@ -2873,19 +2876,68 @@ const GOD_QUESTS = [
   { type: 'help', diff: 3, faith: 5, title: () => 'ช่วยเควสของเพื่อนบ้านให้สำเร็จ 1 ครั้ง', make: () => ({ qty: 1 }) },
   { type: 'craft', diff: 3, faith: 6, title: () => 'ประดิษฐ์ของสำเร็จ 2 ชิ้น', make: () => ({ qty: 2 }), need: a => Object.values(a.know || {}).some(e => e.out) },
   { type: 'hunt', diff: 3, faith: 6, title: () => 'ล่าสัตว์สำเร็จ 1 ตัว', make: () => ({ qty: 1 }) },
+  { type: 'recipe', diff: 2, faith: 5, title: q => `ลองทำ "${outName(q.item)}" จาก ${q.ra} + ${q.rb} ด้วยวิธี${METHODS[q.rm].name}`, make: a => Object.assign({ qty: 1 }, a._rev), need: a => a.age >= 12 && Math.random() < 0.5 && !!(a._rev = pickRevelation(a)) },
   { type: 'discover', diff: 5, faith: 12, title: () => 'ค้นพบสิ่งใหม่ด้วยตัวเอง 1 อย่าง', make: () => ({ qty: 1 }) },
   { type: 'predator', diff: 5, faith: 15, title: () => 'ปราบสัตว์นักล่า 1 ตัว', make: () => ({ qty: 1 }), need: a => a.age >= 18 }
 ];
+// God sometimes reveals a real recipe as a quest: the AI still has to gather the things and try it
+let REV_CACHE = null, REV_DAY = -1;
+function revRecipes() { if (!REV_CACHE || REV_DAY !== simDay) { REV_CACHE = validRecipes(); REV_DAY = simDay; } return REV_CACHE; }
+function pickRevelation(a) {
+  const known = new Set(Object.values(a.know || {}).filter(e => e.out).map(e => e.out));
+  const near = [a.zone].concat(getAdjacentZones(a.zone)), onIsle = new Set(near.flatMap(z => (ZONES[z] && ZONES[z].res) || []));
+  const pool = [];
+  for (const [k, rs] of Object.entries(revRecipes())) {
+    if (known.has(k)) continue;
+    const d = PRODUCTS[k]; if (!d) continue;
+    rs.forEach(r => {
+      const got = n => onIsle.has(n) || avail(a, n) > 0;
+      if (!got(r.a) || !got(r.b)) return;                       // only recipes the island can actually supply
+      const stn = METHODS[r.m].station;
+      if (!methodUsable(a, r.m) && !(stn && shelters.some(x => x.station === stn))) return;   // and a way to do it
+      let w = 1 + (MAT[r.a] && MAT[r.b] ? 2 : 0) + (methodUsable(a, r.m) ? 2 : 0);
+      if (d.kind === 'home' && !hasShelter(a)) w += 4;
+      if (d.station === 'campfire') w += 3;
+      for (let i = 0; i < w; i++) pool.push(r);
+    });
+  }
+  if (!pool.length) return null;
+  const r = pick(pool); return { item: r.out, ra: r.a, rb: r.b, rm: r.m };
+}
+function revelationStep(a) {
+  const rv = revelationOf(a); if (!rv) return false;
+  if (hasMaterials(rv.ra, rv.rb, a)) {
+    if (methodUsable(a, rv.rm) && Math.random() < 0.6) { experiment(a, rv.rm); return true; }
+    const stn = METHODS[rv.rm].station, s = stn && !methodUsable(a, rv.rm) && shelters.find(x => x.station === stn);
+    if (s && Math.random() < 0.4) { a.goal = { zone: s.zone, x: s.x, y: s.y, method: rv.rm, ttl: 16 }; a.bubble = `📜 ไปลองสูตรนิมิตที่${STATION_LABEL[stn]}`; return true; }
+    return false;
+  }
+  if (Math.random() > 0.4) return false;
+  const miss = (rv.ra === rv.rb ? [rv.ra] : [rv.ra, rv.rb].filter(n => avail(a, n) < 1))[0];
+  if (!miss) return false;
+  if (!(zoneNodes[a.zone] || []).some(n => n.name === miss)) {
+    const z = Object.keys(ZONES).filter(id => ZONES[id].res.includes(miss)).sort((p, q) => zoneDist(a.zone, p) - zoneDist(a.zone, q))[0];
+    if (!z || z === a.zone) return false;
+    a.goal = { zone: z, x: 40, y: 40, ttl: 20 }; a.bubble = `📜 ไปหา${miss}ที่โซน ${z} ตามนิมิต`; return true;
+  }
+  return seekItem(a, new RegExp('^' + miss.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), `📜 หา${miss} ตามนิมิต`);
+}
+function revelationOf(a) { return (a.godQuests || []).find(q => q.type === 'recipe' && q.accepted && !q.done) || null; }
 const DIFF_STARS = d => '◆'.repeat(d) + '◇'.repeat(5 - d);
 function assignGodQuests() {
   aiAgents.forEach(a => {
-    if (a.age < 8) { a.godQuests = []; return; }
-    const pool = GOD_QUESTS.filter(t => !t.need || t.need(a)).filter(t => a.age >= 15 || t.diff <= 2);
-    const picks = pool.slice().sort(() => Math.random() - 0.5).slice(0, 2);
-    a.godQuests = picks.map(t => Object.assign({ type: t.type, diff: t.diff, faith: t.faith, prog: 0, done: false, day: simDay }, t.make(a)))
-      .map(q => Object.assign(q, { title: GOD_QUESTS.find(t => t.type === q.type).title(q) }));
+    if (a.age < 8) { a.godQuests = []; a.gqDay = simDay; return; }
+    a.gqDay = simDay;
+    const keep = (a.godQuests || []).find(q => q.type === 'recipe' && q.accepted && !q.done && simDay - q.day < 3);
+    const pool = GOD_QUESTS.filter(t => !keep || t.type !== 'recipe').filter(t => !t.need || t.need(a)).filter(t => a.age >= 15 || t.diff <= 2);
+    const picks = pool.slice().sort(() => Math.random() - 0.5).slice(0, keep ? 1 : 2);
+    a.godQuests = (keep ? [keep] : []).concat(picks.map(t => Object.assign({ type: t.type, diff: t.diff, faith: t.faith, prog: 0, done: false, day: simDay }, t.make(a)))
+      .map(q => Object.assign(q, { title: GOD_QUESTS.find(t => t.type === q.type).title(q) })));
     // accepting is optional: depends on personality, skill vs difficulty, and current faith
-    a.godQuests.forEach(q => { const skill = (st(a, 'str') + st(a, 'dex') + st(a, 'int')) / 3; q.accepted = Math.random() < 0.35 + (a.kind || 0.5) * 0.4 + skill * 0.02 - q.diff * 0.07; });
+    a.godQuests.forEach(q => { if (q === keep) return; const skill = (st(a, 'str') + st(a, 'dex') + st(a, 'int')) / 3; q.accepted = Math.random() < 0.35 + (a.kind || 0.5) * 0.4 + skill * 0.02 - q.diff * 0.07; });
+    delete a._rev;
+    const rv = revelationOf(a);
+    if (rv && rv !== keep && !bgTick) addLog(`📜✨ [พระเจ้าเผยสูตร] ${a.name} ได้รับนิมิต: ${rv.title}`, '#fde68a');
   });
   if (!bgTick) addLog(`📯 [เควสพระเจ้า] วันที่ ${simDay}: พระเจ้ามอบเควสใหม่ให้ทุกคนคนละ 2 เควส (ไม่บังคับ ทำแล้วได้ศรัทธา)`, '#fde68a');
 }
@@ -2893,7 +2945,7 @@ function godQuestEvent(a, type, item, n = 1) {
   if (!a || !a.godQuests) return;
   a.godQuests.forEach(q => {
     if (q.done || !q.accepted || q.type !== type) return;
-    if (type === 'gather' && item !== q.item) return;
+    if ((type === 'gather' || type === 'recipe') && item !== q.item) return;
     q.prog = Math.min(q.qty, q.prog + n);
     if (q.prog >= q.qty) {
       q.done = true; a.faith = (a.faith || 0) + q.faith;
@@ -2903,6 +2955,11 @@ function godQuestEvent(a, type, item, n = 1) {
   });
 }
 function godQuestSteer(a) {
+  const rv = revelationOf(a);
+  if (rv && !a.gatherT && !a.goal) {
+    const miss = (rv.ra === rv.rb ? (avail(a, rv.ra) < 2 ? [rv.ra] : []) : [rv.ra, rv.rb].filter(n => avail(a, n) < 1))[0];
+    if (miss) { const n = (zoneNodes[a.zone] || []).find(n => n.name === miss); if (n) { a.gatherT = Object.assign({ zone: a.zone }, n); a.bubble = `📜 หา${miss} ตามนิมิต`; return; } }
+  }
   // accepted gather quest: head for that resource if it is in this zone
   const q = (a.godQuests || []).find(q => q.accepted && !q.done && q.type === 'gather');
   if (!q || a.gatherT) return;
@@ -3468,7 +3525,7 @@ function runAutonomousStep() {
   assignQuests();
   runQuests();
   socialTick();
-  if (simMinutes === 360 || aiAgents.some(a => a.age >= 8 && (!a.godQuests || (a.godQuests[0] && a.godQuests[0].day !== simDay && simMinutes >= 360)))) assignGodQuests();
+  if (simMinutes === 360 || aiAgents.some(a => a.age >= 8 && (!a.godQuests || ((a.gqDay || (a.godQuests[0] && a.godQuests[0].day)) !== simDay && simMinutes >= 360)))) assignGodQuests();
   aiAgents.forEach(godQuestSteer);
   staminaTick();
   prayerTick();
@@ -3505,6 +3562,7 @@ function runAutonomousStep() {
     const fire = stationInZone(a.zone, 'campfire');
     if (night && fire && a.hunger < 60) { moveToward(a, fire.x + 1, fire.y + 1); return; }
     a.wantHunt = false;
+    if (!night && a.hunger < 70 && revelationStep(a)) return;
     if (needStep(a, night)) return;
 
     const nodes = zoneNodes[a.zone] || [];
@@ -3722,6 +3780,13 @@ function runAutonomousStep() {
         const qty = 2 + Math.floor(Math.random() * 3);
         createQuest(a, 'gather', { title: `ช่วยหา ${item} ${qty} ชิ้น (แถว ${z})`, item, qty, zone: z, difficulty: 1 + qty * 0.4 + zoneDist(a.zone, z) * 0.6 });
         return;
+      }
+    }
+    { const rv = revelationOf(a);
+      if (rv && hasMaterials(rv.ra, rv.rb, a)) {
+        if (methodUsable(a, rv.rm)) { experiment(a, rv.rm); return; }
+        const stn = METHODS[rv.rm].station, s = stn && shelters.find(x => x.station === stn);
+        if (s) { a.goal = { zone: s.zone, x: s.x, y: s.y, method: rv.rm, ttl: 16 }; a.bubble = `📜 ไปลองสูตรนิมิตที่${STATION_LABEL[stn]}`; return; }
       }
     }
     const workStations = shelters.filter(s => s.station && STATION_METHODS[s.station]);

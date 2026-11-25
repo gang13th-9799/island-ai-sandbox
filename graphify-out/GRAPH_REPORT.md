@@ -4,164 +4,155 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 520 nodes · 1587 edges · 21 communities (20 shown, 1 thin omitted)
+- 524 nodes · 1612 edges · 20 communities (18 shown, 2 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f7922cc9`
+- Built from commit: `a80587a8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - game.js
-- addLog
-- renderAllUI
 - runAutonomousStep
-- keyByName
+- makeRealmState
 - rel
+- keyByName
+- renderAllUI
+- applyWish
 - buildZoneTerrain
-- pick
-- ecologyTick
+- canUse
 - drawCanvas
-- drawPuppet
-- renderAgentCard
-- objsOf
+- stationInZone
+- getTerrainCanvas
 - drawAnimal
 - drawAgentTag
 - steleCanvas
-- hashStr
-- makeSoul
-- centerOnZone
+- drawHairLayer
+- objWorldTick
 - pupKeys
 - closeSheet
+- steleTarget
 
 ## God Nodes (most connected - your core abstractions)
-1. `runAutonomousStep()` - 98 edges
+1. `runAutonomousStep()` - 101 edges
 2. `addLog()` - 49 edges
 3. `renderAllUI()` - 43 edges
 4. `drawCanvas()` - 39 edges
 5. `st()` - 33 edges
-6. `runQuests()` - 27 edges
-7. `villageOf()` - 27 edges
-8. `gainExp()` - 26 edges
-9. `experiment()` - 25 edges
-10. `pick()` - 25 edges
+6. `experiment()` - 27 edges
+7. `runQuests()` - 27 edges
+8. `villageOf()` - 27 edges
+9. `gainExp()` - 26 edges
+10. `pick()` - 26 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `applyAISolution()` --indirect_call--> `isPrey()`  [INFERRED]
-  game.js → game.js  _Bridges community 2 → community 8_
-- `loadGameState()` --indirect_call--> `ensureAgent()`  [INFERRED]
-  game.js → game.js  _Bridges community 2 → community 7_
-- `addFood()` --calls--> `villageOf()`  [EXTRACTED]
-  game.js → game.js  _Bridges community 1 → community 3_
-- `addAIAgent()` --calls--> `addLog()`  [EXTRACTED]
-  game.js → game.js  _Bridges community 1 → community 7_
-- `animalLog()` --calls--> `addLog()`  [EXTRACTED]
+- `removeDead()` --indirect_call--> `outName()`  [INFERRED]
+  game.js → game.js  _Bridges community 1 → community 5_
+- `runAutonomousStep()` --calls--> `atGoal()`  [EXTRACTED]
+  game.js → game.js  _Bridges community 0 → community 1_
+- `accessibleStations()` --calls--> `canUse()`  [EXTRACTED]
   game.js → game.js  _Bridges community 1 → community 8_
+- `addAIAgent()` --calls--> `addLog()`  [EXTRACTED]
+  game.js → game.js  _Bridges community 1 → community 2_
+- `animalLog()` --calls--> `addLog()`  [EXTRACTED]
+  game.js → game.js  _Bridges community 1 → community 6_
 
 ## Import Cycles
 - None detected.
 
-## Communities (21 total, 1 thin omitted)
+## Communities (20 total, 2 thin omitted)
 
 ### Community 0 - "game.js"
 Cohesion: 0.01
-Nodes (144): aiAgents, aiCrisisProposals, alchemyLogs, ANIM_ART, ANIM_REL, animalLogs, BACK_ITEMS, BASE_ZONES (+136 more)
+Nodes (150): aiAgents, aiCrisisProposals, alchemyLogs, ANIM_ART, ANIM_REL, animalLogs, atGoal(), BACK_ITEMS (+142 more)
 
-### Community 1 - "addLog"
-Cohesion: 0.08
-Nodes (67): addFood(), addLog(), addOwnLog(), addRel(), addTeachLog(), applyWish(), askToUse(), assignGodQuests() (+59 more)
+### Community 1 - "runAutonomousStep"
+Cohesion: 0.10
+Nodes (73): accessibleStations(), addLog(), addOwnLog(), addRel(), addTeachLog(), askToUse(), assignGodQuests(), avail() (+65 more)
 
-### Community 2 - "renderAllUI"
+### Community 2 - "makeRealmState"
 Cohesion: 0.09
-Nodes (39): addAnimals(), answerPrayer(), applyAISolution(), captureRealm(), closeLobby(), crossRealm(), cycleSpeed(), expNeed() (+31 more)
+Nodes (37): addAIAgent(), addAnimals(), answerPrayer(), captureRealm(), closeLobby(), crossRealm(), cycleSpeed(), ensureAgent() (+29 more)
 
-### Community 3 - "runAutonomousStep"
-Cohesion: 0.13
-Nodes (36): accessibleStations(), atGoal(), atStore(), avail(), bagValue(), bestHomeTier(), bestStat(), canTradeFor() (+28 more)
+### Community 3 - "rel"
+Cohesion: 0.10
+Nodes (33): assignJobs(), assignQuests(), bestHomeTier(), byId(), canHelp(), electChief(), score(), hasShelter() (+25 more)
 
 ### Community 4 - "keyByName"
 Cohesion: 0.12
-Nodes (32): buildEquivalents(), canUse(), carriedEff(), consume(), depthOf(), effBonus(), effBonusSlow(), effectsTick() (+24 more)
+Nodes (30): buildEquivalents(), carriedEff(), consume(), depthOf(), designInvention(), effBonus(), effBonusSlow(), effectsTick() (+22 more)
 
-### Community 5 - "rel"
+### Community 5 - "renderAllUI"
+Cohesion: 0.13
+Nodes (29): addFood(), agentLevel(), atStore(), bagCap(), bagCount(), bagValue(), buildHome(), canTradeFor() (+21 more)
+
+### Community 6 - "applyWish"
+Cohesion: 0.10
+Nodes (29): animalLog(), animalPower(), applyAISolution(), applyWish(), carryTraits(), ecologyTick(), evolveOne(), evolveTick() (+21 more)
+
+### Community 7 - "buildZoneTerrain"
 Cohesion: 0.12
-Nodes (28): assignJobs(), assignQuests(), byId(), canHelp(), createQuest(), electChief(), score(), holdFoundingMeeting() (+20 more)
+Nodes (27): applyLayout(), buildIsland(), buildStation(), buildZoneTerrain(), clampC(), closeAgentCard(), crowdTick(), DIFF_STARS() (+19 more)
 
-### Community 6 - "buildZoneTerrain"
-Cohesion: 0.15
-Nodes (26): airTemp(), baseTemp(), buildStation(), buildZoneTerrain(), clampC(), elevOf(), feltTemp(), findValidTile() (+18 more)
-
-### Community 7 - "pick"
-Cohesion: 0.15
-Nodes (19): addAIAgent(), damageHome(), damageStation(), damageStele(), ensureAgent(), freshStats(), generateCrisisProposal(), godChild() (+11 more)
-
-### Community 8 - "ecologyTick"
-Cohesion: 0.16
-Nodes (19): animalLog(), animalPower(), carryTraits(), ecologyTick(), evolveOne(), evolveTick(), extraLoot(), getAdjacentZones() (+11 more)
+### Community 8 - "canUse"
+Cohesion: 0.12
+Nodes (24): armLen(), canUse(), drawAgent(), drawBow(), drawEyeArt(), drawItem(), drawMouthArt(), drawPuppet() (+16 more)
 
 ### Community 9 - "drawCanvas"
-Cohesion: 0.13
-Nodes (18): animalArt(), drawCanvas(), drawInsect(), drawProp(), drawSized(), drawTreeV(), drawWorldObj(), fleeStep() (+10 more)
+Cohesion: 0.11
+Nodes (21): animalArt(), damageStation(), drawCanvas(), drawInsect(), drawProp(), drawSized(), drawTreeV(), drawWorldObj() (+13 more)
 
-### Community 10 - "drawPuppet"
-Cohesion: 0.12
-Nodes (18): armLen(), clothWarmth(), drawAgent(), drawBow(), drawEyeArt(), drawHairLayer(), drawItem(), drawMouthArt() (+10 more)
+### Community 10 - "stationInZone"
+Cohesion: 0.22
+Nodes (16): airTemp(), baseTemp(), clothWarmth(), feltTemp(), fixWeather(), FOOD_ITEM(), isRestShelter(), needsOf() (+8 more)
 
-### Community 11 - "renderAgentCard"
-Cohesion: 0.19
-Nodes (14): buildIsland(), closeAgentCard(), DIFF_STARS(), drawMiniMap(), getZoneAt(), isleNoise(), miniMapTap(), mmZoneImage() (+6 more)
+### Community 11 - "getTerrainCanvas"
+Cohesion: 0.27
+Nodes (10): centerOnZone(), changeZoom(), clampView(), elevOf(), getTerrainCanvas(), getTerrainCanvasFlat(), groundAt(), isoXY() (+2 more)
 
-### Community 12 - "objsOf"
-Cohesion: 0.25
-Nodes (9): applyLayout(), insectsOf(), mkObj(), objsOf(), objWorldTick(), rollLayout(), wobjBase(), wobjPick() (+1 more)
-
-### Community 13 - "drawAnimal"
+### Community 12 - "drawAnimal"
 Cohesion: 0.36
 Nodes (8): drawAnimal(), drawPart(), mutatedSprite(), mutOK(), mutVariant(), shade(), shadeCol(), tinted()
 
-### Community 14 - "drawAgentTag"
+### Community 13 - "drawAgentTag"
 Cohesion: 0.38
 Nodes (7): drawAgentTag(), drawLabel(), drawTalks(), drawThought(), getAgeStage(), screenOf(), statusIcon()
 
-### Community 15 - "steleCanvas"
+### Community 14 - "steleCanvas"
 Cohesion: 0.33
 Nodes (6): carveGlyphs(), drawStele(), steleCanvas(), steleFace(), steleImg(), steleWords()
 
-### Community 16 - "hashStr"
-Cohesion: 0.53
-Nodes (6): findNewRecipes(), hashStr(), hrand(), natureLaw(), react(), world()
+### Community 15 - "drawHairLayer"
+Cohesion: 0.67
+Nodes (3): drawHairLayer(), hairStyleOf(), tintedHair()
 
-### Community 17 - "makeSoul"
-Cohesion: 0.50
-Nodes (4): agentLevel(), chooseKept(), keepCount(), makeSoul()
+### Community 16 - "objWorldTick"
+Cohesion: 0.67
+Nodes (3): mkObj(), objWorldTick(), wobjBase()
 
-### Community 18 - "centerOnZone"
-Cohesion: 0.50
-Nodes (4): centerOnZone(), changeZoom(), clampView(), setZoom()
-
-### Community 19 - "pupKeys"
+### Community 17 - "pupKeys"
 Cohesion: 0.67
 Nodes (3): pr(), pupKeys(), smooth()
 
 ## Knowledge Gaps
-- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `addLog`, `renderAllUI`, `keyByName`, `rel`, `buildZoneTerrain`, `pick`, `ecologyTick`, `drawCanvas`, `objsOf`?**
+- **Why does `runAutonomousStep()` connect `runAutonomousStep` to `game.js`, `makeRealmState`, `rel`, `keyByName`, `renderAllUI`, `applyWish`, `buildZoneTerrain`, `canUse`, `drawCanvas`, `stationInZone`, `objWorldTick`, `steleTarget`?**
   _High betweenness centrality (0.015) - this node is a cross-community bridge._
 - **Should `game.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.012903225806451613 - nodes in this community are weakly interconnected._
-- **Why does `addLog()` connect `addLog` to `game.js`, `renderAllUI`, `runAutonomousStep`, `keyByName`, `rel`, `buildZoneTerrain`, `pick`, `ecologyTick`?**
+  _Cohesion score 0.012422360248447204 - nodes in this community are weakly interconnected._
+- **Why does `addLog()` connect `runAutonomousStep` to `game.js`, `makeRealmState`, `rel`, `keyByName`, `renderAllUI`, `applyWish`, `buildZoneTerrain`, `drawCanvas`, `stationInZone`?**
   _High betweenness centrality (0.003) - this node is a cross-community bridge._
-- **Should `addLog` be split into smaller, more focused modules?**
-  _Cohesion score 0.0845771144278607 - nodes in this community are weakly interconnected._
-- **Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `addLog`, `runAutonomousStep`, `keyByName`, `rel`, `pick`, `ecologyTick`, `drawPuppet`, `renderAgentCard`, `drawAgentTag`, `makeSoul`?**
-  _High betweenness centrality (0.003) - this node is a cross-community bridge._
-- **Should `renderAllUI` be split into smaller, more focused modules?**
-  _Cohesion score 0.08771929824561403 - nodes in this community are weakly interconnected._
 - **Should `runAutonomousStep` be split into smaller, more focused modules?**
-  _Cohesion score 0.1349206349206349 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10007610350076103 - nodes in this community are weakly interconnected._
+- **Why does `renderAllUI()` connect `renderAllUI` to `game.js`, `runAutonomousStep`, `makeRealmState`, `rel`, `keyByName`, `applyWish`, `buildZoneTerrain`, `canUse`, `drawAgentTag`?**
+  _High betweenness centrality (0.003) - this node is a cross-community bridge._
+- **Should `makeRealmState` be split into smaller, more focused modules?**
+  _Cohesion score 0.0945945945945946 - nodes in this community are weakly interconnected._
+- **Should `rel` be split into smaller, more focused modules?**
+  _Cohesion score 0.10037878787878787 - nodes in this community are weakly interconnected._
