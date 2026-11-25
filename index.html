@@ -2335,6 +2335,8 @@ function failQuest(q, giver, h, why) {
 // CROWDING & MIGRATION: more than CROWD_LIMIT residents in a zone feels crowded
 // ==========================================
 function homeCounts() { const c = {}; aiAgents.forEach(a => { c[a.home] = (c[a.home] || 0) + 1; }); return c; }
+// how many people are actually in each sub-map right now (crowding is about who is around you, not the island total)
+function zoneCounts() { const c = {}; aiAgents.forEach(a => { c[a.zone] = (c[a.zone] || 0) + 1; }); return c; }
 function zoneAppeal(z, counts) {
   const foodRes = ZONES[z].res.filter(r => /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(r)).length;
   const preyN = faunaSpecies.filter(isPrey).reduce((t, f) => t + (f.zp[z] || 0), 0);
@@ -2342,31 +2344,31 @@ function zoneAppeal(z, counts) {
   return foodRes * 6 + Math.min(10, preyN) - predN * 4 - (counts[z] || 0) * 1.5 + (stationInZone(z, 'campfire') ? 3 : 0);
 }
 function crowdTick() {
-  const counts = homeCounts();
+  const counts = zoneCounts();
   aiAgents.forEach(a => {
-    if ((counts[a.home] || 0) > CROWD_LIMIT) {
+    if ((counts[a.zone] || 0) > CROWD_LIMIT) {
       a.crowd = (a.crowd || 0) + 1;
-      if (a.age >= 6 && Math.random() < 0.5) a.bubble = `😣 ${a.home} คนแน่นเกินไป อึดอัด`;
+      if (a.age >= 6 && Math.random() < 0.5) a.bubble = `😣 โซน ${a.zone} คนแน่นเกินไป อึดอัด`;
     } else a.crowd = Math.max(0, (a.crowd || 0) - 1);
   });
   const crowdedZones = Object.keys(counts).filter(z => counts[z] > CROWD_LIMIT);
-  crowdedZones.forEach(z => addLog(`😣 [แออัด] ${z} มีคนอาศัยอยู่ ${counts[z]} คน (เกิน ${CROWD_LIMIT}) ทุกคนเริ่มอึดอัด`, '#fda4af'));
+  crowdedZones.forEach(z => addLog(`😣 [แออัด] โซน ${z} มีคนอยู่ ${counts[z]} คน (เกิน ${CROWD_LIMIT}) ทุกคนเริ่มอึดอัด`, '#fda4af'));
   // Decide to migrate: crowded long enough, adults only; families move together
   const movers = aiAgents.filter(a => a.age >= 18 && a.crowd >= 2 && !a.questId);
   movers.forEach(a => {
-    if ((homeCounts()[a.home] || 0) <= CROWD_LIMIT) return;
+    if ((zoneCounts()[a.zone] || 0) <= CROWD_LIMIT) return;
     const v = villageOf(a);
     const isChief = v && v.chiefId === a.id;
     const p = 0.08 * a.crowd * (isChief ? 0.3 : 1) * (v && rel(a, byId(v.chiefId)) >= 40 ? 0.6 : 1);
     if (Math.random() > p) return;
-    const c = homeCounts();
-    const options = Object.keys(ZONES).filter(z => z !== a.home && (c[z] || 0) < CROWD_LIMIT * 0.6);
+    const c = zoneCounts();
+    const options = Object.keys(ZONES).filter(z => z !== a.zone && (c[z] || 0) < CROWD_LIMIT * 0.6 && ZONES[z].geo !== 'ocean');
     if (!options.length) return;
-    const dest = options.sort((x, y) => (zoneAppeal(y, c) - zoneDist(a.home, y) * 2) - (zoneAppeal(x, c) - zoneDist(a.home, x) * 2))[0];
-    const partner = aiAgents.find(o => o !== a && o.age >= 18 && o.home === a.home && o.gender !== a.gender && rel(a, o) >= 50 && rel(o, a) >= 40);
+    const dest = options.sort((x, y) => (zoneAppeal(y, c) - zoneDist(a.zone, y) * 2) - (zoneAppeal(x, c) - zoneDist(a.zone, x) * 2))[0];
+    const partner = aiAgents.find(o => o !== a && o.age >= 18 && o.zone === a.zone && o.gender !== a.gender && rel(a, o) >= 50 && rel(o, a) >= 40);
     const family = [a].concat(partner ? [partner] : []);
     aiAgents.filter(k => k.age < 15 && family.some(f => k.guardian === f.id)).forEach(k => family.push(k));
-    const from = a.home;
+    const from = a.zone;
     family.forEach(m => {
       m.home = dest; m.crowd = 0;
       const mv = villageOf(m);
@@ -4868,7 +4870,7 @@ function drawMiniMap() {
   // labels + residents
   for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) {
     const id = getZoneAt(r, c); if (!id) continue;
-    const res = aiAgents.filter(a => a.home === id).length, x0 = c * cw, y0 = r * ch;
+    const res = aiAgents.filter(a => a.zone === id).length, x0 = c * cw, y0 = r * ch;
     g.font = '700 8.5px Kanit, sans-serif'; g.lineWidth = 2.4; g.strokeStyle = 'rgba(40,30,20,.75)'; g.fillStyle = '#fff';
     g.strokeText(id, x0 + 3, y0 + 9); g.fillText(id, x0 + 3, y0 + 9);
     if (res) {
@@ -4912,7 +4914,7 @@ function renderMiniMap() {
     const cell = document.createElement('div');
     cell.className = 'mm-cell' + (id === currentZoneId ? ' active' : '') + (aiAgents.some(a => a.zone === id) ? ' has-ai' : '');
     cell.style.background = geoColors[z.geo] || '#1e293b';
-    const residents = aiAgents.filter(a => a.home === id).length;
+    const residents = aiAgents.filter(a => a.zone === id).length;
     cell.innerText = residents ? `${id}·${residents}` : id;
     if (residents > CROWD_LIMIT) { cell.style.outline = '2px solid #ff5a6e'; cell.style.boxShadow = '0 0 10px rgba(255,90,110,.8)'; }
     cell.title = `${z.name} · ผู้อาศัย ${residents} คน`;
@@ -6290,7 +6292,7 @@ function buildHut(a) {
   a.bag['กิ่งไม้แห้ง'] -= 3;
   const hs = buildSpot(a.zone, a.x - 1, a.y - 1);
   const hut = { id: 'hut_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `เพิงพักของ${a.name}`, sprite: 'shelter_hut', zone: a.zone, x: hs.x, y: hs.y, station: null, rest: true, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
-  shelters.push(hut); gainExp(a, 'dex', 1);
+  shelters.push(hut); a.home = a.zone; gainExp(a, 'dex', 1);
   addLog(`🛖 [ปัจจัย 4 · ที่อยู่อาศัย] "${a.name}" เอากิ่งไม้มาทำเพิงพักที่ ${ZONES[a.zone].name}`, '#a3e635');
   return hut;
 }
@@ -6326,7 +6328,7 @@ function buildHome(key, a) {
   const sp = near ? { x: prev.x, y: prev.y } : buildSpot(a.zone, a.x - 1, a.y - 1), x = sp.x, y = sp.y;
   const hut = { id: 'home_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), name: `${d.name}ของ${a.name}`, kind: key, sprite: 'home_' + key, zone: a.zone, x, y, station: null, rest: true,
     tier: d.tier, warm: d.warm, hp: d.hp, maxHp: d.hp, owner: a.id, ownerName: a.name, public: true, villageId: villageOf(a) ? villageOf(a).id : null };
-  shelters.push(hut); gainExp(a, 'dex', 1 + d.tier);
+  shelters.push(hut); a.home = a.zone; gainExp(a, 'dex', 1 + d.tier);
   addLog(`🏠 [ปัจจัย 4 · ที่อยู่อาศัย] ${a.name} ${prev ? `ปรับปรุง${prev.name.split('ของ')[0]}เป็น` : 'สร้าง'} "${d.name}" ที่ ${ZONES[a.zone].name}`, '#a3e635');
   return `🏠 สร้าง "${d.name}"`;
 }
