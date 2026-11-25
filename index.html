@@ -422,7 +422,8 @@
     <div class="menu-bar tabs">
       <button class="tab-btn" data-title="🌳 เทคโนโลยี" onclick="switchTab('techtree', this)"><span class="ico">🌳</span>เทค<span class="cnt"><span id="cnt-tech">0</span></span></button>
       <button class="tab-btn" data-title="👥 ประชากร" onclick="switchTab('civ', this)"><span class="ico">🏕️</span>ประชากร<span class="cnt" id="cnt-pop">2</span></button>
-      <button class="tab-btn" data-title="🧪 ทดลอง & สถานี" onclick="switchTab('rnd', this)"><span class="ico">🧪</span>ทดลอง<span class="cnt" id="cnt-rnd">0</span></button>
+      <button class="tab-btn" data-title="🏭 สถานี & เครื่องมือ" onclick="switchTab('rnd', this)"><span class="ico">🏭</span>สถานี<span class="cnt" id="cnt-st">0</span></button>
+      <button class="tab-btn" data-title="🧪 บันทึกการทดลอง" onclick="switchTab('rndlog', this)"><span class="ico">🧪</span>ทดลอง<span class="cnt" id="cnt-rnd">0</span></button>
       <button class="tab-btn" data-title="⚛️ แปรธาตุ" onclick="switchTab('alchemy', this)"><span class="ico">🔮</span>แปรธาตุ<span class="cnt" id="cnt-elem">7</span></button>
       <button class="tab-btn" data-title="📜 กระดานเควส & ความสัมพันธ์" onclick="switchTab('quest', this)"><span class="ico">📜</span>เควส<span class="cnt" id="cnt-quest">0</span></button>
       <button class="tab-btn" data-title="🆘 วิกฤต & สัตว์ป่า" onclick="switchTab('crisis', this)"><span class="ico">🆘</span>วิกฤต<span class="cnt" id="cnt-sol">0</span></button>
@@ -522,7 +523,10 @@
         <h4 style="color:var(--amber-2);">🎒 กระเป๋าส่วนตัว</h4>
         <div class="sec-note">ของในกระเป๋าเป็นของเจ้าของ คนอื่นหยิบไม่ได้ สมาชิกหมู่บ้านต้องส่งเข้าโกดังตาม % ที่ตกลงกัน และคนใจดีจะบริจาคเพิ่มเอง</div>
         <div id="bag-list"></div>
-        <h4 style="color:var(--violet);">🧪 บันทึกการทดลอง</h4>
+      </div>
+
+      <div id="tab-rndlog" class="tab-content">
+        <div class="sec-note">ทุกครั้งที่ AI ลองผสมของ จะถูกจดไว้ที่นี่ ✅ สำเร็จ · ❌ ล้มเหลว (จำไว้เป็นข้อห้าม) · 😅 ทำพลาดเอง (ยังสรุปไม่ได้)</div>
         <div id="rnd-list"></div>
       </div>
 
@@ -4813,6 +4817,7 @@ function renderAllUI() {
   document.getElementById('cnt-tech').innerText = unlockedCount;
   document.getElementById('cnt-pop').innerText = aiAgents.length;
   document.getElementById('cnt-rnd').innerText = rndTrials.length;
+  { const c = document.getElementById('cnt-st'); if (c) c.innerText = shelters.filter(x => x.station && x.station !== 'gate').length; }
   const allFails = new Set();
   aiAgents.forEach(a => Object.entries(a.know).forEach(([s, e]) => { if (!e.out) allFails.add(s); }));
   document.getElementById('cnt-mem').innerText = allFails.size;
