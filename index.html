@@ -552,6 +552,8 @@
 <script src="assets/eyes.js"></script>
 <script src="assets/mouth.js"></script>
 <script src="assets/items.js"></script>
+<script src="assets/stele.js"></script>
+<script src="assets/glyphs.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -2387,13 +2389,14 @@ function captureRealm() {
   return { simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
-    villages, villageSeq, quests, questSeq, souls, logBuffer };
+    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq };
 }
 function restoreRealm(st) {
   ({ simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
-    villages, villageSeq, quests, questSeq, souls, logBuffer } = st);
+    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq } = st);
+  steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
   zoneTerrainGrid = zoneTerrainGrid || {}; zoneNodes = zoneNodes || {}; logBuffer = logBuffer || [];
 }
 
@@ -2929,6 +2932,7 @@ function triggerSeasonalDisaster() {
   const wall = stationsOf('wall').length ? 0.3 : 1.0;
   aiAgents.forEach(a => { a.hp = Math.max(10, Math.round(a.hp - d.hpLoss * wall)); a.bubble = '⚠️ หลบภัยพิบัติ!'; gainExp(a, 'vit', 3); });
   shelters.filter(s => s.station && s.station !== 'wall' && Math.random() < 0.35).forEach(s => damageStation(s, 3 + Math.floor(Math.random() * 10), `โดน${d.name.replace(/^\S+\s/, '')}`));
+  steles.filter(x => !x.holder && Math.random() < 0.2).forEach(x => damageStele(x, 4 + Math.floor(Math.random() * 12)));
   if (season.id === 'spring') { const lucky = pick(aiAgents.filter(a => a.age >= 12)); if (lucky) { put(lucky, 'แร่เหล็กบึง', 2); put(lucky, 'กำมะถันดิบ', 2); } }
 
   const banner = bgTick ? { style: {} } : document.getElementById('disaster-banner');
@@ -3792,6 +3796,13 @@ function runAutonomousStep() {
         if (nb.length) { a.zone = pick(nb); buildZoneTerrain(a.zone); const p = findValidTile(a.zone, false); a.x = p.x; a.y = p.y; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; return; }
       }
     }
+    if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
+      const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14 }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
+    }
+    if (!night && a.age >= 12 && Math.random() < 0.3) {
+      const sg = steleTarget(a);
+      if (sg) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); return; }
+    }
     if (!night && a.age >= 12 && Math.random() < (toolItems.some(t => canUse(a, t) && /axe|pick|sickle|blade/.test(t.type)) ? 0.7 : 0.35)) {
       const tgt = objTarget(a);
       if (tgt) { moveToward(a, Math.round(tgt.x - 0.5), Math.round(tgt.y - 0.5)); return; }
@@ -3815,11 +3826,13 @@ function runAutonomousStep() {
   // Trees, bushes, grass, rocks & ores: pick fruit by hand, everything else needs the right tool
   objWorldTick();
   insectTick();
+  steleTick();
   // Gathering: anyone (12+) standing near a resource picks some up
   aiAgents.forEach(a => {
     if (a.age < 12 || a.sleeping) return;
     a.gatherCd = (a.gatherCd || 0) - 1;
     if (a.gatherCd > 0) return;
+    if (steleAct(a)) { a.gatherCd = 1; return; }
     if (objAct(a)) { a.gatherCd = 1; depositTick(a); return; }
     const t = (zoneNodes[a.zone] || []).find(n => Math.hypot(a.x - n.x, a.y - n.y) <= 7);
     if (!t) return;
@@ -5366,6 +5379,204 @@ function objWorldTick() {
     }
   }
 }
+// ==========================================
+// KNOWLEDGE STELES: ancient tablets on the island (some broken into pieces to collect),
+// written in the pictograph script. AI that learn to read can also carve their own.
+// ==========================================
+const STELE_FACE = { stand: [50, 44, 144, 214], dmg1: [26, 30, 120, 200], dmg2: [26, 30, 120, 200] };
+const GLYPH_MAT = [[/ไผ่|หลิว/, 'ไผ่'], [/แร่|ถ่าน|กำมะถัน|ประสิว|เกลือ|ผลึก|เหล็ก|ทองแดง/, 'แร่'], [/หิน|กรวด|เปลือกหอย|ปะการัง|เขา|เขี้ยว|กรงเล็บ/, 'หิน'], [/ดิน/, 'ดินเหนียว'], [/น้ำ/, 'น้ำ'],
+  [/เถาวัลย์|กก|ต้นจาก|กาบ|ใย|เชือก|ตะไคร่|กล้วย/, 'เส้นใย'], [/ไม้|ขอน|กิ่ง|ต้นสน|มะพร้าว/, 'ไม้'], [/แร่|ถ่าน|กำมะถัน|ประสิว|ทราย|เกลือ|ผลึก|เหล็ก|ทองแดง|แก้ว/, 'แร่'],
+  [/ใบ|สมุนไพร/, 'ใบไม้'], [/หนัง|กระดอง|เปลือกแมง/, 'หนังสัตว์'], [/ไฟ|เถ้า/, 'ไฟ']];
+const GLYPH_METHOD = { knap: 'กะเทาะ', bind: 'มัด', friction: 'เสียดสี', cut: 'ตัด', mix12: 'ผสม', knead11: 'ปั้น', roast: 'ไฟ', kiln: 'เผา', smelt: 'หลอม', synth: 'ผสม' };
+const GLYPH_STATION = { campfire: 'กองไฟ', kiln: 'เตาเผา', workbench: 'โต๊ะช่าง' };
+function glyphOfThing(name, isOut) {
+  const k = keyByName(name), d = k && productDef(k);
+  if (d) {
+    if (d.kind === 'station') return GLYPH_STATION[d.station] || 'มือ';
+    if (d.kind === 'food') return 'อาหาร';
+    if (d.kind === 'tool') return d.tool === 'vessel' || d.tool === 'crucible' ? 'ภาชนะ' : 'เครื่องมือ';
+  }
+  const m = GLYPH_MAT.find(([re]) => re.test(name)); if (m) return m[1];
+  const P = propsOf(name);
+  return P.metal || P.ore ? 'แร่' : P.hard ? 'หิน' : P.wood ? 'ไม้' : P.fiber || P.rope ? 'เส้นใย' : P.clay || P.paste || P.raw ? 'ดินเหนียว' : P.water ? 'น้ำ' : P.hide ? 'หนังสัตว์' : P.food ? 'อาหาร' : isOut ? 'เครื่องมือ' : 'หิน';
+}
+// Thai word order: verb first, then the materials (number after the noun), station, "becomes", result
+function steleWords(r) {
+  const w = [[GLYPH_METHOD[r.m] || 'มือ', 'v']];
+  const qa = r.m === 'mix12' ? 1 : r.m === 'knead11' ? 1 : 0, qb = r.m === 'mix12' ? 2 : r.m === 'knead11' ? 1 : 0;
+  w.push([glyphOfThing(r.a), 'n']); if (qa) w.push(['#' + qa, null]);
+  w.push([glyphOfThing(r.b), 'n']); if (qb) w.push(['#' + qb, null]);
+  const stn = METHODS[r.m] && METHODS[r.m].station; if (stn && GLYPH_STATION[stn] && r.m !== 'kiln') w.push([GLYPH_STATION[stn], 'n']); else if (r.m === 'kiln') w.push(['เตาเผา', 'n']);
+  w.push(['กลายเป็น', null]); w.push([glyphOfThing(outName(r.out), true), 'n']);
+  return w;
+}
+let steles = [], steleSeeded = false, steleSeq = 0;
+function validRecipes() {
+  const names = [...new Set(Object.keys(MAT).concat(Object.values(PRODUCTS).filter(p => p.kind !== 'station').map(p => p.name)))];
+  const out = {};
+  for (let i = 0; i < names.length; i++) for (let j = i; j < names.length; j++) for (const m in METHODS) {
+    let r; try { r = natureLaw(names[i], names[j], m); } catch (e) { continue; }
+    if (!r || !r.ok || r.synthPair || !PRODUCTS[r.key]) continue;
+    (out[r.key] = out[r.key] || []).push({ a: names[i], b: names[j], m, out: r.key });
+  }
+  return out;
+}
+function landSpot(zId) { buildZoneTerrain(zId); const p = findValidTile(zId, false); return { x: p.x + 0.3 + Math.random() * 0.4, y: p.y + 0.3 + Math.random() * 0.4 }; }
+function seedSteles() {
+  steleSeeded = true; steles = steles || [];
+  const all = validRecipes(), keys = Object.keys(all).filter(k => PRODUCTS[k].kind !== 'station' || Math.random() < 0.5);
+  const zones = Object.keys(ZONES).filter(z => !/ocean|sea/.test(ZONES[z].geo || ''));
+  const chosen = keys.sort(() => Math.random() - 0.5).slice(0, 7);
+  chosen.forEach((k, i) => {
+    const rec = pick(all[k]), set = ++steleSeq;
+    const plan = i < 3 ? 1 : i < 5 ? 2 : 3;
+    const art = plan === 1 ? pick(['stand', 'h1', 'h2', 'h3']) : pick(['h1', 'h2', 'h3']);
+    const zs = zones.slice().sort(() => Math.random() - 0.5);
+    if ((i === 0 || i === 3) && ZONES[START_ZONE]) { zs.splice(zs.indexOf(START_ZONE), 1); zs.unshift(START_ZONE); }   // one tablet and one fragment start near the castaways
+    for (let p = 0; p < plan; p++) {
+      const zone = zs[p % zs.length], s = landSpot(zone);
+      steles.push({ id: 'st' + (++steleSeq), set, zone, x: s.x, y: s.y, art, rec, ancient: true, n: plan, idx: plan > 1 ? p : null, hp: 60, max: 60 });
+    }
+  });
+}
+const steleName = s => s.n > 1 ? `เศษศิลาโบราณ ${s.idx + 1}/${s.n}` : s.ancient ? 'ศิลาโบราณ' : `ศิลาของ${s.author}`;
+function steleReadable(s) { return !s.dead && s.n === 1; }
+// AI: walk to a stele worth reading, or a fragment worth picking up
+function steleTarget(a) {
+  let best = null, bd = 30;
+  for (const s of steles) {
+    if (s.zone !== a.zone || s.dead || s.holder || s.vill) continue;
+    if (steleReadable(s) && ((a.readS || {})[s.id] || 0) >= 1) continue;
+    const d = Math.hypot(s.x - a.x, s.y - a.y); if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function homeOf(a) { const v = villageOf(a); return v ? { zone: v.zone, vill: 'v' + v.id, v } : { zone: a.home || a.zone, vill: 'h' + (a.home || a.zone) }; }
+function steleAct(a) {
+  if (a.age < 12) return false;
+  a.readS = a.readS || {};
+  // carried fragments are brought home and laid down by the camp
+  const mine = steles.filter(s => s.holder === a.id);
+  const H = homeOf(a);
+  if (mine.length && a.zone === H.zone) {
+    const store = (H.v && shelters.find(x => x.villageId === H.v.id)) || stationInZone(a.zone, 'campfire') || { x: a.x, y: a.y };
+    mine.forEach((s, i) => { s.holder = null; s.vill = H.vill; s.zone = a.zone; s.x = store.x + 2 + i * 0.9 + Math.random() * 0.5; s.y = store.y + 2.5 + Math.random() * 0.5; });
+    a.bubble = '🧩 เอาเศษศิลามาเก็บที่แคมป์';
+    tryAssemble(mine[0].set);
+    return true;
+  }
+  let near = null, nd = 2.6;
+  for (const s of steles) { if (s.zone !== a.zone || s.dead || s.holder) continue; const d = Math.hypot(s.x - a.x - 0.5, s.y - a.y - 0.5); if (d < nd) { nd = d; near = s; } }
+  if (!near) return false;
+  if (near.n > 1 && !near.vill) {
+    near.holder = a.id; near.zone = null;
+    a.bubble = `🧩 เก็บ${steleName(near)} อ่านได้แค่บางส่วน`;
+    addTeachLog(`🧩 ${a.name} พบ${steleName(near)} มีอักษรภาพจารึกไว้แต่ขาดหายไปบางส่วน`);
+    a.lit = Math.min(1.5, (a.lit || 0) + 0.05); gainExp(a, 'int', 0.5);
+    return true;
+  }
+  if (near.n > 1) return false;
+  // read: speed depends on INT and how well this person already knows the script
+  const p0 = a.readS[near.id] || 0; if (p0 >= 1) return false;
+  const step = 0.08 + st(a, 'int') * 0.012 + Math.min(1, a.lit || 0) * 0.15;
+  const p = a.readS[near.id] = Math.min(1, p0 + step);
+  a.lit = Math.min(1.5, (a.lit || 0) + 0.03 + st(a, 'int') * 0.002);
+  gainExp(a, 'int', 0.6);
+  const r = near.rec, sig = sigOf(r.a, r.b, r.m);
+  a.bubble = `📜 อ่าน${steleName(near)} ${Math.round(p * 100)}%`;
+  if (p0 < 0.5 && p >= 0.5 && !a.know[sig]) a.hunch = { items: [r.a, r.b], m: r.m, ttl: 10 };
+  if (p >= 1 && !a.know[sig]) {
+    a.know[sig] = { a: r.a, b: r.b, m: r.m, out: r.out, from: steleName(near), day: simDay, practice: 0 };
+    trimMemory(a);
+    addTeachLog(`📜 ${a.name} อ่าน${steleName(near)}ออก ได้วิธีทำ "${outName(r.out)}"`);
+    addLog(`📜 [ศิลาความรู้] ${a.name} ถอดความอักษรภาพได้: วิธีทำ ${outName(r.out)}`, '#fcd34d');
+  }
+  return true;
+}
+function tryAssemble(set) {
+  const parts = steles.filter(s => s.set === set && s.n > 1);
+  if (!parts.length || parts.some(s => !s.vill || s.vill !== parts[0].vill)) return;
+  const f = parts[0];
+  steles = steles.filter(s => !parts.includes(s));
+  steles.push({ id: 'st' + (++steleSeq), set, zone: f.zone, x: f.x, y: f.y, art: f.art, rec: f.rec, ancient: true, n: 1, idx: null, hp: 60, max: 60, assembled: true });
+  addLog(`🧩 [ศิลาความรู้] ประกบเศษศิลาโบราณครบ ${parts.length} ชิ้นแล้ว อ่านสูตรได้ทั้งแผ่น`, '#fcd34d');
+}
+function damageStele(s, dmg) {
+  s.hp -= dmg; s.hitT = performance.now() / 1000;
+  if (s.hp > 0) return;
+  if (s.ancient) {           // natural: turns up again somewhere else on the island
+    const zones = Object.keys(ZONES).filter(z => !/ocean|sea/.test(ZONES[z].geo || '')), z = pick(zones), p = landSpot(z);
+    Object.assign(s, { zone: z, x: p.x, y: p.y, hp: s.max, holder: null, vill: null });
+    addLog(`💥 ศิลาโบราณถูกทำลาย แต่มีอีกแผ่นที่จารึกเหมือนกันโผล่ขึ้นที่อื่นบนเกาะ`, '#fca5a5');
+  } else { steles = steles.filter(x => x !== s); addLog(`💥 ${steleName(s)} พังทลายหายไปถาวร`, '#fca5a5'); }
+}
+function steleTick() {
+  if (!steleSeeded) seedSteles();
+  steles.forEach(s => { if (s.holder && !aiAgents.some(a => a.id === s.holder)) { s.holder = null; s.zone = s.lastZone || 'C1'; s.x = s.lastX || 40; s.y = s.lastY || 40; } });
+  steles.forEach(s => { if (s.holder) { const h = aiAgents.find(a => a.id === s.holder); if (h) { s.lastZone = h.zone; s.lastX = h.x; s.lastY = h.y; } } });
+  // literate people carve what they know for those who come later
+  aiAgents.forEach(a => {
+    if (a.age < 15 || (a.lit || 0) < 1 || a.sleeping || isNightTime() || Math.random() > 0.01) return;
+    if (!hasTool('blade', a) || (a.bag['หินกรวด'] || 0) < 2) return;
+    if (steles.filter(s => !s.ancient && s.zone === a.zone).length >= 4) return;
+    const carved = new Set(steles.map(s => sigOf(s.rec.a, s.rec.b, s.rec.m)));
+    const cand = Object.values(a.know).filter(e => e.out && PRODUCTS[e.out] && !carved.has(sigOf(e.a, e.b, e.m)));
+    if (!cand.length) return;
+    const e = cand.sort((p, q) => q.practice - p.practice)[0];
+    a.bag['หินกรวด'] -= 2; useTool('blade', a);
+    const s = { id: 'st' + (++steleSeq), set: steleSeq, zone: a.zone, x: a.x + 1.2, y: a.y + 0.6, art: 'stand', rec: { a: e.a, b: e.b, m: e.m, out: e.out }, ancient: false, author: a.name, n: 1, idx: null, hp: 40, max: 40, made: simDay };
+    steles.push(s); a.readS = a.readS || {}; a.readS[s.id] = 1;
+    gainExp(a, 'dex', 2); gainExp(a, 'int', 1);
+    a.bubble = `🪨 สลักศิลาสูตร ${outName(e.out)}`;
+    addLog(`🪨 [ศิลาความรู้] ${a.name} สลักวิธีทำ "${outName(e.out)}" ลงศิลาไว้ให้รุ่นหลัง`, '#fcd34d');
+  });
+}
+// ---------- drawing ----------
+const STELE_IMG = {}, STELE_CACHE = {};
+function steleImg(key, src) { let im = STELE_IMG[key]; if (!im) { im = STELE_IMG[key] = new Image(); im.src = src; } return im.complete && im.naturalWidth ? im : null; }
+function steleFace(art) { const A = STELE_ART[art]; return STELE_FACE[art] || A.face; }
+function carveGlyphs(g, words, face) {
+  const [x0, y0, x1, y1] = face, fw = x1 - x0, fh = y1 - y0, n = words.length;
+  const wide = fw > fh, rows = wide ? 2 : Math.ceil(n / 3), cols = wide ? Math.ceil(n / 2) : 3;
+  const cw = fw / cols, rh = fh / Math.max(rows, wide ? 2 : 4), sc = Math.min(cw / 60 * 0.92, rh / 66);
+  words.forEach(([k, mk], i) => {
+    const d = window.GLYPHS && GLYPHS[k]; if (!d) return;
+    const r = Math.floor(i / cols), c = i % cols;
+    g.save(); g.translate(x0 + c * cw + (cw - 60 * sc) / 2, y0 + r * rh + (rh - 60 * sc) / 2); g.scale(sc, sc);
+    const p = new Path2D(d + (mk === 'n' ? ' M22 5 L38 5' : mk === 'a' ? ' M26 9 L34 2' : mk === 'd' ? ' M26 2 L34 9' : ''));
+    g.lineWidth = 4.4; g.lineCap = k[0] === '#' ? 'square' : 'round'; g.lineJoin = 'round';
+    g.translate(1, 1.2); g.strokeStyle = 'rgba(242,239,232,.7)'; g.stroke(p); g.translate(-1, -1.2);
+    g.strokeStyle = '#4d4843'; g.stroke(p);
+    if (mk === 'v') { g.fillStyle = '#4d4843'; g.beginPath(); g.arc(30, 5, 3.6, 0, 7); g.fill(); }
+    g.restore();
+  });
+}
+function steleCanvas(s) {
+  const dmg = s.art === 'stand' && s.hp < s.max * 0.66 ? (s.hp < s.max * 0.33 ? 'dmg2' : 'dmg1') : s.art;
+  const key = s.id + ':' + dmg; if (STELE_CACHE[key]) return STELE_CACHE[key];
+  if (!window.STELE_ART || !STELE_ART[dmg]) return null;
+  const A = STELE_ART[dmg], whole = steleImg(dmg, A.src); if (!whole) return null;
+  const full = document.createElement('canvas'); full.width = A.w; full.height = A.h;
+  const g = full.getContext('2d'); g.drawImage(whole, 0, 0); carveGlyphs(g, steleWords(s.rec), steleFace(dmg));
+  let out = full, ox = 0, oy = 0;
+  if (s.n > 1) {                       // a fragment: only its own part of the carving survives
+    const P = A['p' + s.n][s.idx], pim = steleImg(dmg + 'p' + s.n + s.idx, P.src); if (!pim) return null;
+    out = document.createElement('canvas'); out.width = P.w; out.height = P.h;
+    const h = out.getContext('2d'); h.drawImage(pim, 0, 0); h.globalCompositeOperation = 'source-atop';
+    const carv = document.createElement('canvas'); carv.width = A.w; carv.height = A.h; carveGlyphs(carv.getContext('2d'), steleWords(s.rec), steleFace(dmg));
+    h.drawImage(carv, -P.x, -P.y); ox = P.x; oy = P.y;
+  }
+  return (STELE_CACHE[key] = { c: out, ox, oy, W: A.w, H: A.h });
+}
+function drawStele(ctx, s, cx, fy) {
+  const C = steleCanvas(s); if (!C) return;
+  const tall = s.art === 'stand' || s.art.startsWith('dmg');
+  const k = tall ? HUMAN_H * 0.95 / C.H : HUMAN_H * 1.15 / C.W;
+  const w = C.c.width * k, h = C.c.height * k;
+  const x = cx - C.W * k / 2 + C.ox * k, y = fy - C.H * k + C.oy * k + (tall ? C.H * k * 0.06 : 0);
+  ctx.fillStyle = 'rgba(30,50,20,.22)'; ctx.beginPath(); ctx.ellipse(cx, fy, C.W * k * 0.42, C.W * k * 0.1, 0, 0, 7); ctx.fill();
+  ctx.drawImage(C.c, x, y, w, h);
+}
 // built objects (campfire, workbench...) have durability too; when it runs out they are gone for good
 const STATION_HP = { campfire: 15, workbench: 30, kiln: 60, smelter: 80, wall: 150, farm: 40, lab: 120, reactor: 300, storehouse: 100, gate: 999 };
 function stationMaxHp(s) { return s.station ? (STATION_HP[s.station] || 50) : 80; }
@@ -5551,6 +5762,12 @@ function drawCanvas() {
       const [cx, fy] = groundAt(o.x, o.y);
       if (cx < vx0 - 70 || cx > vx1 + 70 || fy < vy0 - 10 || fy > vy1 + 130) return;
       items.push({ y: o.x + o.y, draw: () => drawWorldObj(ctx, o, cx, fy, now) });
+    });
+    steles.forEach(sl => {
+      if (sl.zone !== currentZoneId || sl.holder || sl.dead) return;
+      const [cx, fy] = groundAt(sl.x, sl.y);
+      if (cx < vx0 - 70 || cx > vx1 + 70 || fy < vy0 - 10 || fy > vy1 + 130) return;
+      items.push({ y: sl.x + sl.y, draw: () => { drawStele(ctx, sl, cx, fy); if (showLabels && z >= 2.2) labels.push({ x: cx, y: fy + 3, text: steleName(sl), color: '#3f2f10', bg: 'rgba(255,248,220,.85)', small: true, center: true, below: true }); } });
     });
     const nightNow = isNightTime(), wzNow = zoneWeather(currentZoneId);
     if (wzNow !== 'storm' && wzNow !== 'snow') insectsOf(currentZoneId).forEach(b => {
