@@ -143,14 +143,21 @@ let faunaSpecies = [
   { id: 'f_leopard', sprite: 'leopard', name: 'เสือดาวเกาะ', zones: ['N1', 'S3'], pop: 3, maxPop: 6, reproDays: 6, reproProgress: 0, lootFood: 0,
     lootMat: { 'เนื้อเสือดาว': 2, 'หนังเสือดาวหนา': 1, 'เขี้ยวเสือดาว': 1, 'กรงเล็บเสือดาว': 2 }, predator: true, power: 3, solitary: true },
   { id: 'f_wolf', sprite: 'wolf', name: 'หมาป่าเกาะ', zones: ['N4', 'W3'], pop: 5, maxPop: 10, reproDays: 5, reproProgress: 0, lootFood: 0,
-    lootMat: { 'เนื้อหมาป่า': 1, 'หนังหมาป่า': 1, 'เขี้ยวหมาป่า': 1 }, predator: true, power: 1 }
+    lootMat: { 'เนื้อหมาป่า': 1, 'หนังหมาป่า': 1, 'เขี้ยวหมาป่า': 1 }, predator: true, power: 1 },
+  { id: 'f_monitor', sprite: 'boar', name: 'ตะกวด', zones: ['S3', 'S1', 'C3'], pop: 8, maxPop: 16, reproDays: 3, reproProgress: 0, lootFood: 6, lootMat: { 'หนังตะกวด': 1 } },
+  { id: 'f_turtle', sprite: 'boar', name: 'เต่าทะเล', zones: ['E4', 'S4', 'N3'], pop: 8, maxPop: 16, reproDays: 4, reproProgress: 0, lootFood: 6, lootMat: { 'กระดองเต่า': 1 } },
+  { id: 'f_frog', sprite: 'deer', name: 'กบ', zones: ['W1', 'W3', 'E1', 'E2'], pop: 20, maxPop: 40, reproDays: 1, reproProgress: 0, lootFood: 2, lootMat: { 'หนังกบ': 1 } },
+  { id: 'f_cobra', sprite: 'wolf', name: 'งูเห่า', zones: ['S3', 'S2'], pop: 4, maxPop: 8, reproDays: 5, reproProgress: 0, lootFood: 2,
+    lootMat: { 'เขี้ยวพิษงู': 1, 'หนังงู': 1 }, predator: true, power: 2, solitary: true },
+  { id: 'f_croc', sprite: 'wolf', name: 'จระเข้น้ำเค็ม', zones: ['W3', 'E3'], pop: 3, maxPop: 6, reproDays: 7, reproProgress: 0, lootFood: 10,
+    lootMat: { 'หนังจระเข้หนา': 1, 'ฟันจระเข้': 2 }, predator: true, power: 4, solitary: true }
 ];
 const FAUNA_BASE = JSON.parse(JSON.stringify(faunaSpecies));
 // older saves: add new species and raise caps so the wild feels alive
 function upgradeFauna(list) {
   FAUNA_BASE.forEach(base => {
     let f = list.find(x => x.id === base.id);
-    if (!f) { if (base.predator) return; f = JSON.parse(JSON.stringify(base)); delete f.zp; list.push(f); initFauna(f); return; }
+    if (!f) { f = JSON.parse(JSON.stringify(base)); delete f.zp; list.push(f); initFauna(f); return; }
     f.maxPop = Math.max(f.maxPop, base.maxPop); f.reproDays = Math.min(f.reproDays, base.reproDays);
     if (base.color && !f.color) f.color = base.color; if (base.sizeRel && !f.sizeRel) f.sizeRel = base.sizeRel;
     if (!f.predator && f.pop < base.pop / 2) addAnimals(f, Math.round(base.pop / 2 - f.pop));
@@ -346,6 +353,7 @@ const MAT = {
   'เขากวางแข็ง': { hard: 1, sharpable: 1 },
   'ปีกผีเสื้อ': { fiber: 1, dry: 1, leaf: 0.5 }, 'เหล็กในผึ้ง': { sharp: 1, hard: 0.5 }, 'น้ำผึ้งป่า': { food: 1, sticky: 1 }, 'ก้นหิ่งห้อยเรืองแสง': { glow: 1, food: 0.3 },
   'เหล็กในแมงป่อง': { sharp: 1, hard: 1, poison: 1 }, 'เปลือกแมงป่อง': { hard: 1, hide: 0.5 },
+  'หนังตะกวด': { hide: 1 }, 'กระดองเต่า': { hard: 1, hide: 0.5, vessel: 1 }, 'หนังกบ': { hide: 0.5, sticky: 0.5 }, 'เขี้ยวพิษงู': { sharp: 1, poison: 1 }, 'หนังงู': { hide: 1, fiber: 0.5 }, 'หนังจระเข้หนา': { hide: 1, hard: 1 }, 'ฟันจระเข้': { hard: 1, sharpable: 1, sharp: 1 },
   'แร่ทองแดง': { ore: 1, mineral: 1, elem: 'Cu' }, 'ถ่านหิน': { fuel: 2, mineral: 1, elem: 'C' }, 'แร่ดีบุก': { ore: 1, mineral: 1, elem: 'Sn' },
   'แร่ทอง': { ore: 1, mineral: 1, elem: 'Au' }, 'ผลึกคริสตัล': { hard: 1, mineral: 1, elem: 'Si' }, 'แอปเปิลป่า': { food: 1 }, 'ลูกมะพร้าว': { food: 1, water: 0.5 },
   'หินออบซิเดียน': { hard: 1, mineral: 1, sharpable: 1 }, 'ดินเถ้าภูเขาไฟ': { clay: 1 }, 'ใยปาล์มไหม้': { fiber: 1, dry: 1, fuel: 1 },
@@ -3275,12 +3283,13 @@ function runAutonomousStep() {
     const crowd = aiAgents.filter(o => o.zone === a.zone && o.age >= 15).length;
     if (a.sleeping && a.sleepKind === 'bed') return;      // safe inside a shelter
     if (beast && night && Math.random() < (beast.id === 'f_wolf' ? 0.025 : 0.04) * (1 + trOf(beast, a.zone).fer * 0.3) * Math.min(2, beast.zp[a.zone]) / Math.max(1, crowd) && !stationInZone(a.zone, 'campfire')) {
-      const icon = beast.id === 'f_wolf' ? '🐺' : '🐆';
+      const icon = { f_wolf: '🐺', f_cobra: '🐍', f_croc: '🐊' }[beast.id] || '🐆';
       if (hasTool('bow', a) && a.age >= 15) { a.bubble = `🏹 ยิงธนูไล่${beast.name}!`; gainExp(a, 'agi', 1); gainExp(a, 'str', 0.5); }
       else if (Math.random() < Math.min(0.6, st(a, 'agi') * 0.025)) { a.bubble = `💨 หลบ${beast.name}ทัน!`; gainExp(a, 'agi', 2); }
       else {
         const dmg = (beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3;
         a.hp = Math.max(0, a.hp - dmg);
+        if (beast.id === 'f_cobra') a.poisonH = (a.poisonH || 0) + 8;
         gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
         a.bubble = `${icon} ถูก${beast.name}โจมตี!`; a.sleeping = false; a.wantRest = false;
         addLog(`${icon} [สัตว์ร้ายโจมตี!] "${a.name}" ถูก${beast.name}ขย้ำในโซน ${a.zone} (HP ${a.hp})`, '#ef4444');
@@ -4416,12 +4425,12 @@ const WA = { ready: false, img: {}, tex: {}, wall: {} };
   for (const k in A.walls) WA.wall[k] = load(A.walls[k]);
 })();
 // animals: 0 idle, 1 eat, 2 fight, 3 sleep, 4 walk (art faces right)
-const ANIM_ART = { f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
+const ANIM_ART = { f_monitor: 'monitor', f_turtle: 'turtle', f_frog: 'frog', f_cobra: 'cobra', f_croc: 'croc', f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
 // animal height (head included) in adult-human heights, real-world proportions
 // wildlife that does not fight back runs away from people
-const FLEE_ART = { deer: 1, rabbit: 1, goat: 1, fish: 1, butterfly: 1, firefly: 1 };
+const FLEE_ART = { frog: 1, deer: 1, rabbit: 1, goat: 1, fish: 1, butterfly: 1, firefly: 1 };
 function fleeStep(o, x, y, dt, range, speed, aquatic) {
   o.fx = o.fx || 0; o.fy = o.fy || 0;
   let best = null, bd = range;
@@ -4442,7 +4451,7 @@ function fleeStep(o, x, y, dt, range, speed, aquatic) {
   const m = Math.hypot(o.fx, o.fy); if (m > 9) { o.fx *= 9 / m; o.fy *= 9 / m; }
   return [x + o.fx, y + o.fy];
 }
-const ANIM_REL = { butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
+const ANIM_REL = { monitor: 0.55, cobra: 0.62, turtle: 0.5, frog: 0.5, croc: 0.48, butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
 // mutated look: recolour (keeps shading) + Gemini part art (horns, wings, tails, scales, thick hide, back armor)
 WA.mut = {};
