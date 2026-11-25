@@ -3728,6 +3728,7 @@ function runAutonomousStep() {
 
   // Trees, bushes, grass, rocks & ores: pick fruit by hand, everything else needs the right tool
   objWorldTick();
+  insectTick();
   // Gathering: anyone (12+) standing near a resource picks some up
   aiAgents.forEach(a => {
     if (a.age < 12 || a.sleeping) return;
@@ -4903,7 +4904,7 @@ const ANIM_ART = { f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: '
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
 // animal height (head included) in adult-human heights, real-world proportions
-const ANIM_REL = { deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
+const ANIM_REL = { butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
 // mutated look: recolour (keeps shading) + Gemini part art (horns, wings, tails, scales, thick hide, back armor)
 WA.mut = {};
@@ -5191,6 +5192,64 @@ function drawWorldObj(ctx, o, cx, fy, now) {
   }
 }
 
+// ----- insects: butterflies & bees by day, fireflies at night near water, scorpions on rocky ground -----
+const INSECTS = {
+  butterfly: { tiles: ['grass', 'tall_grass', 'hill_slope'], n: 10, fly: true, day: true, h: 9, sp: 0.5, r: 3 },
+  bee:       { tiles: ['forest', 'grass'], n: 8, fly: true, day: true, h: 7, sp: 0.8, r: 1.6, sting: 3 },
+  firefly:   { tiles: ['river', 'swamp_water', 'mud_flat', 'sand_bank'], near: true, n: 14, fly: true, night: true, h: 8, sp: 0.4, r: 2.2 },
+  scorpion:  { tiles: ['mountain_cliff', 'mountain_peak', 'hill_slope'], n: 5, sp: 0.12, r: 1.2, sting: 6, poison: true }
+};
+const INS_CACHE = {};
+function insectsOf(zId) {
+  const key = (typeof activeRealm !== 'undefined' ? activeRealm : 0) + '|' + zId;
+  if (INS_CACHE[key]) return INS_CACHE[key];
+  buildZoneTerrain(zId);
+  const g = zoneTerrainGrid[zId], r = wobjRng(hashStr('ins' + key)), out = [];
+  for (const k in INSECTS) {
+    const D = INSECTS[k], cand = [];
+    for (let y = 3; y < 77; y += 2) for (let x = 3; x < 77; x += 2) {
+      const t = g[y][x];
+      if (D.near ? (!WATER.includes(t) && [[1,0],[-1,0],[0,1],[0,-1]].some(([a, b]) => D.tiles.includes(g[y + b * 2][x + a * 2]) && WATER.includes(g[y + b * 2][x + a * 2])) || (t === 'mud_flat')) : D.tiles.includes(t)) cand.push([x, y]);
+    }
+    if (cand.length < 4) continue;
+    for (let i = 0; i < D.n; i++) { const [x, y] = cand[Math.floor(r() * cand.length)]; out.push({ k, x: x + r(), y: y + r(), ph: r() * 6.28 }); }
+  }
+  return (INS_CACHE[key] = out);
+}
+function insectTick() {
+  const night = isNightTime();
+  aiAgents.forEach(a => {
+    if (a.sleeping && a.sleepKind === 'bed') return;
+    const here = insectsOf(a.zone);
+    for (const b of here) {
+      const D = INSECTS[b.k]; if (!D.sting || (D.day && night)) continue;
+      if (Math.abs(b.x - a.x) < 2.5 && Math.abs(b.y - a.y) < 2.5 && Math.random() < 0.03) {
+        a.hp = Math.max(1, a.hp - D.sting); gainExp(a, 'vit', 0.5);
+        a.bubble = b.k === 'bee' ? '🐝 โดนผึ้งต่อย!' : '🦂 โดนแมงป่องต่อย ติดพิษ!';
+        if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
+        break;
+      }
+    }
+    if (a.poisonH > 0) { a.poisonH--; a.hp = Math.max(1, a.hp - 1); }
+  });
+}
+function drawInsect(ctx, b, now, night) {
+  const D = INSECTS[b.k], A = window.WORLD_ART && WORLD_ART.animals[b.k]; if (!A) return;
+  if (D.night && !night) return;
+  const sleep = (D.day && night) || (b.k === 'scorpion' && night);
+  if (sleep && D.fly) return;                       // flying insects hide at night
+  const t = now * D.sp + b.ph;
+  const x = b.x + (sleep ? 0 : Math.cos(t) * D.r), y = b.y + (sleep ? 0 : Math.sin(t * 1.3) * D.r * 0.6);
+  const vx = -Math.sin(t) * D.r, face = vx >= 0 ? 1 : -1;
+  const [cx, fy] = groundAt(x + 0.5, y + 0.5);
+  const hov = D.fly ? D.h + Math.sin(now * 3 + b.ph) * 1.5 : 0;
+  let pose = sleep ? 3 : D.fly ? (Math.sin(now * (b.k === 'bee' ? 30 : 14) + b.ph) > 0 ? 4 : 5) : (Math.sin(t * 2) > -0.3 ? (Math.sin(now * 5 + b.ph) > 0 ? 4 : 5) : 0);
+  if (b.k === 'butterfly' && Math.sin(t * 0.37) > 0.75) pose = 1;
+  const P = A[pose], sc = (ANIM_REL[b.k] || 0.5) / (A[0].h / HUMAN_H);
+  ctx.fillStyle = 'rgba(30,40,20,.16)'; ctx.beginPath(); ctx.ellipse(cx, fy, P.w * sc * 0.3, P.w * sc * 0.08, 0, 0, 7); ctx.fill();
+  if (b.k === 'firefly') { const gl = 0.35 + 0.35 * Math.sin(now * 4 + b.ph); const g = ctx.createRadialGradient(cx, fy - hov - 4, 0, cx, fy - hov - 4, 14); g.addColorStop(0, `rgba(220,255,140,${gl})`); g.addColorStop(1, 'rgba(220,255,140,0)'); ctx.fillStyle = g; ctx.fillRect(cx - 14, fy - hov - 18, 28, 28); }
+  drawAnimal(ctx, b.k, pose, cx, fy - hov, face, sc, null, now);
+}
 function drawCanvas() {
   if (bgTick) return;
   const canvas = document.getElementById('mapCanvas'); if (!VIEW.w) resizeView();
@@ -5257,6 +5316,12 @@ function drawCanvas() {
       const [cx, fy] = groundAt(o.x, o.y);
       if (cx < vx0 - 70 || cx > vx1 + 70 || fy < vy0 - 10 || fy > vy1 + 130) return;
       items.push({ y: o.x + o.y, draw: () => drawWorldObj(ctx, o, cx, fy, now) });
+    });
+    const nightNow = isNightTime(), wzNow = zoneWeather(currentZoneId);
+    if (wzNow !== 'storm' && wzNow !== 'snow') insectsOf(currentZoneId).forEach(b => {
+      const [cx, fy] = groundAt(b.x, b.y);
+      if (cx < vx0 - 40 || cx > vx1 + 40 || fy < vy0 - 10 || fy > vy1 + 60) return;
+      items.push({ y: b.x + b.y + (INSECTS[b.k].fly ? 0.6 : 0), draw: () => drawInsect(ctx, b, now, nightNow) });
     });
   }
   faunaSpecies.filter(f => (f.zp[currentZoneId] || 0) > 0).forEach(f => {
@@ -5335,13 +5400,6 @@ function drawCanvas() {
   { const night = isNightTime(), wz = zoneWeather(currentZoneId);
     if (wz !== 'storm' && wz !== 'snow') {
       const [vx0, vy0] = worldOf(0, 0), [vx1, vy1] = worldOf(VIEW.w, VIEW.h);
-      for (let i = 0; i < (night ? 14 : 9); i++) {
-        const t = now * (0.25 + (i % 5) * 0.05) + i * 2.1;
-        const wx = vx0 + ((i * 197.3 + Math.sin(t) * 60 + now * 6) % (vx1 - vx0 + 1) + (vx1 - vx0)) % (vx1 - vx0), wy = vy0 + ((i * 131.7 + Math.cos(t * 1.3) * 40) % (vy1 - vy0) + (vy1 - vy0)) % (vy1 - vy0);
-        if (night) { ctx.fillStyle = `rgba(220,255,140,${0.35 + 0.6 * Math.abs(Math.sin(t * 3))})`; ctx.beginPath(); ctx.arc(wx, wy, 1.6, 0, 7); ctx.fill(); }
-        else if (wz !== 'rain') { const fl = Math.abs(Math.sin(now * 12 + i)); ctx.fillStyle = ['#fbbf24', '#f472b6', '#ffffff', '#a78bfa'][i % 4];
-          ctx.beginPath(); ctx.ellipse(wx - 2 * fl, wy, 2.2 * fl + 0.4, 1.6, 0, 0, 7); ctx.ellipse(wx + 2 * fl, wy, 2.2 * fl + 0.4, 1.6, 0, 0, 7); ctx.fill(); }
-      }
       if (!night) for (let i = 0; i < 3; i++) {
         const span = vx1 - vx0 + 200, px = vx0 - 100 + ((now * (18 + i * 5) + i * 400) % span), py = vy0 + (vy1 - vy0) * (0.15 + i * 0.12) + Math.sin(now + i) * 10;
         ctx.strokeStyle = 'rgba(50,50,70,.55)'; ctx.lineWidth = 1.2; const fl = Math.sin(now * 8 + i) * 2.5;

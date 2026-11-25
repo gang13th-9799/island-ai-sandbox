@@ -31,12 +31,12 @@ for k,r in [('gray2',0.5),('moss2',0.72),('tall2',0.95),('iron2',0.58),('gold2',
   kind('rock_'+k,[f'rock_{k}_{s}.png' for s in ['full','cracked','rubble']],r)
 for c,r in [('fire',0.38),('bench',0.6),('fence',0.62),('barrel',0.55),('crate',0.48),('hay',0.62)]: kind('camp_'+c,[f'c_{c}_{i}.png' for i in range(3)],r)
 AN={}
-LEGS={k:[] for k in ['deer','boar','rabbit','goat','wolf','leopard','fish']}
+LEGS={k:[] for k in ['deer','boar','rabbit','goat','wolf','leopard','fish','butterfly','bee','firefly','scorpion']}
 # per-animal back line, measured by eye on each sheet: armor from rump to shoulder, wings over the front legs
 SPAN={'deer':(0.12,0.58,0.48,0.58),'boar':(0.12,0.66,0.52,0.64),'rabbit':(0.08,0.5,0.3,0.45),'goat':(0.1,0.56,0.45,0.56),
       'wolf':(0.14,0.6,0.48,0.6),'leopard':(0.12,0.62,0.5,0.62),'fish':(0.2,0.7,0.45,0.6)}
 ANRES=4   # animals are stored sharper: the map zooms in a lot
-for n,rel in [('deer',1.1),('boar',0.74),('rabbit',0.84),('goat',0.93),('wolf',0.8),('leopard',0.75),('fish',0.54)]:
+for n,rel in [('deer',1.1),('boar',0.74),('rabbit',0.84),('goat',0.93),('wolf',0.8),('leopard',0.75),('fish',0.54),('butterfly',0.52),('bee',0.5),('firefly',0.5),('scorpion',0.5)]:
   import os
   ims=[Image.open(f'/home/claude/fauna/{n}_{i}.png').convert('RGBA') for i in range(6) if os.path.exists(f'/home/claude/fauna/{n}_{i}.png')]
   if n=='boar': ims=[im.transpose(Image.FLIP_LEFT_RIGHT) for im in ims]      # Gemini drew the boar facing left
