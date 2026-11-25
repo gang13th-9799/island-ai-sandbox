@@ -64,7 +64,7 @@
     box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 4px 0 #160f3a; }
   .gbtn:hover { filter: brightness(1.15); }
   .gbtn.amber { background: linear-gradient(180deg, #ffb53d, #e0851a); color: #2a1300; border-color: #ffd58a; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 4px 0 #8a4a07, var(--glow-amber); }
-  .gbtn.ember { background: linear-gradient(180deg, #ff6a4d, #c83a2b); border-color: #ffb3a1; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 0 #6d1b14; }
+  .gbtn.redbtn { background: linear-gradient(180deg, #ff6a4d, #c83a2b); border-color: #ffb3a1; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 0 #6d1b14; }
   .gbtn.moss { background: linear-gradient(180deg, #34c486, #1d8a5b); border-color: #9ff2c8; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 4px 0 #0e4a30; }
   .gbtn.ghost { background: rgba(28,23,64,.8); box-shadow: none; }
   .round { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; }

@@ -2306,7 +2306,7 @@ function renderLobby() {
       <div style="font-size:11px; color:var(--muted); margin-top:3px;">🌀 เกจอยู่ที่ ${r.def.gate} · วัตถุดิบเฉพาะถิ่น: ${Object.values(r.def.sub).slice(0, 4).join(', ') || 'ดั้งเดิม'}</div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="gbtn ${i === activeRealm ? 'ghost' : 'amber'}" style="flex:1;" onclick="switchRealm(${i})">${i === activeRealm ? '📍 อยู่ที่นี่' : '🌀 เข้าดินแดนนี้'}</button>
-        ${st.aiAgents.length ? `<button class="gbtn ember" onclick="testCollapse(${i})" title="ทดสอบ">☠️ ทดสอบล่มสลาย</button>` : ''}
+        ${st.aiAgents.length ? `<button class="gbtn redbtn" onclick="testCollapse(${i})" title="ทดสอบ">☠️ ทดสอบล่มสลาย</button>` : ''}
       </div></div>`;
   }).join('');
   document.getElementById('lobby-log').innerHTML = realmLogs.slice(0, 15).map(t => `<div class="card" style="padding:5px 9px; font-size:11px;">${t}</div>`).join('') || '<div class="sec-note">ยังไม่มีเหตุการณ์ข้ามดินแดน</div>';
@@ -3231,7 +3231,7 @@ function renderPrayers() {
       <input id="pr-note-${p.id}" placeholder="เหตุผลที่ปฏิเสธ (ไม่บังคับ)" style="width:100%; padding:7px 9px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.25); color:var(--text); margin-bottom:6px;">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
         <button class="gbtn moss" onclick="answerPrayer('${p.id}', true)">✅ อนุมัติ</button>
-        <button class="gbtn ember" onclick="answerPrayer('${p.id}', false)">⛔ ปฏิเสธ</button>
+        <button class="gbtn redbtn" onclick="answerPrayer('${p.id}', false)">⛔ ปฏิเสธ</button>
       </div></div>`).join('') : '<div class="sec-note">ยังไม่มีคำอธิษฐานใหม่ AI ที่มีศรัทธา 10 ขึ้นไปจะอธิษฐานเมื่อขาดแคลนจริงๆ เช่น ไม่มีของกิน ไม่มีสัตว์ให้ล่า หนาวแต่ไม่มีไม้ หรือขาดวัตถุดิบที่ไม่มีบนเกาะ</div>';
   const au = document.getElementById('god-auto'); if (au && document.activeElement !== au) au.value = godAutoLevel() || '';
   const hist = document.getElementById('god-db-list');
