@@ -4212,6 +4212,7 @@ function renderAllUI() {
   document.getElementById('cnt-tech').innerText = unlockedCount;
   document.getElementById('cnt-pop').innerText = aiAgents.length;
   document.getElementById('cnt-rnd').innerText = rndTrials.length;
+  { const c = document.getElementById('cnt-st'); if (c) c.innerText = shelters.filter(x => x.station && x.station !== 'gate').length; }
   const allFails = new Set();
   aiAgents.forEach(a => Object.entries(a.know).forEach(([s, e]) => { if (!e.out) allFails.add(s); }));
   document.getElementById('cnt-mem').innerText = allFails.size;
