@@ -7646,6 +7646,7 @@ function renderAgentPop() {
   const sc = box.scrollTop; box.innerHTML = head + tabs + body; box.scrollTop = sc;
 }
 // ===== Character window: สถานะ / สวมใส่ / กระเป๋า / ความรู้ (built so a god can later possess or play a character) =====
+function uiIcon(g, k, sz, fb) { const u = window.UI_ART && UI_ART[g] && UI_ART[g][k]; return u ? `<img src="${u}" style="width:${sz}px;height:${sz}px;vertical-align:middle">` : fb; }
 function statIcon(k, sz) { const u = window.UI_ART && UI_ART.stats && UI_ART.stats[k]; return u ? `<img src="${u}" style="width:${sz}px;height:${sz}px;vertical-align:middle">` : STATS[k].icon; }
 let CW = { tab: 'stat', sel: null, cat: 'all', q: '', rc: null, who: null };
 function openCW(tab) { if (CW.who !== cardAgentId) { CW = { tab, sel: null, cat: 'all', q: '', rc: null, who: cardAgentId }; } CW.tab = tab; CW.sel = null; document.getElementById('cw').classList.add('open'); renderCW(); }
@@ -7748,7 +7749,7 @@ function renderCW() {
   const sc = document.querySelector('.cw-body') ? document.querySelector('.cw-body').scrollTop : 0;
   win.innerHTML = `<div class="cw-head"><canvas id="cw-av" width="80" height="92"></canvas><div class="tt"><div class="nm">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${v && v.chiefId === a.id ? ' 👑' : ''}</div>
       <div class="sb"><span class="lv">Lv ${lvl}</span>${stage.label} ${Math.floor(a.age)} ปี · ${a.role || 'ยังไม่มีอาชีพ'}${v ? ' · ' + v.name : ' · อิสระ'}</div></div><button class="cw-x" onclick="closeCW()">✕</button></div>
-    <div class="cw-tabs">${TABS.map(([k, ic, lb, c]) => `<button class="${CW.tab === k ? 'on' : ''}" onclick="CW.tab='${k}';CW.sel=null;renderCW()">${ic} ${lb}${c !== '' ? `<span class="c">${c}</span>` : ''}</button>`).join('')}</div>
+    <div class="cw-tabs">${TABS.map(([k, ic, lb, c]) => `<button class="${CW.tab === k ? 'on' : ''}" onclick="CW.tab='${k}';CW.sel=null;renderCW()">${uiIcon('tabs', k, 24, ic)} ${lb}${c !== '' ? `<span class="c">${c}</span>` : ''}</button>`).join('')}</div>
     <div class="cw-body">${body}</div><div class="cw-foot">${foot}</div>`;
   const nb = document.querySelector('.cw-body'); if (nb) nb.scrollTop = sc;
   const draw = (id, w, h, fy, H) => { const cv = document.getElementById(id); if (!cv || !PUP.ready) return; const c = cv.getContext('2d'); c.clearRect(0, 0, w, h); const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, w / 2, fy, H, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); };
@@ -7789,7 +7790,7 @@ ${(() => {   // quests this person asked for, or is helping with
         return `<div class="gq">${q.giverId === a.id ? '🙏' : '🛠️'} ${q.title}${prog}<div class="d" style="margin-left:18px;font-size:11px">${who} · ตอบแทน ${rewardText(q.agreed || q.offer)} · เหลือ ${hrs} ชม.</div>${last}</div>`;
       }).join('')}</div>`;
     })()}
-    <div class="ac-btns four"><button class="gbtn moss" onclick="openCW('stat')">📊 สถานะ</button><button class="gbtn moss" onclick="openCW('equip')">🛡️ สวมใส่</button><button class="gbtn moss" onclick="openCW('bag')">🎒 <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn moss" onclick="openCW('know')">📖 <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>`;
+    <div class="ac-btns four"><button class="gbtn moss" onclick="openCW('stat')">${uiIcon('tabs', 'stat', 20, '📊')} สถานะ</button><button class="gbtn moss" onclick="openCW('equip')">${uiIcon('tabs', 'equip', 20, '🛡️')} สวมใส่</button><button class="gbtn moss" onclick="openCW('bag')">${uiIcon('tabs', 'bag', 20, '🎒')} <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn moss" onclick="openCW('know')">${uiIcon('tabs', 'know', 20, '📖')} <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
   if (PUP.ready) { const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, 42, 90, 80, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); }
 }
