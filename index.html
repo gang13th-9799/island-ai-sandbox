@@ -1136,7 +1136,11 @@ const PRODUCTS = {
   bamboo_tube:  { name: 'กระบอกไม้ไผ่', kind: 'tool', tool: 'vessel', dur: 10, props: { wood: 1 } },
   fence_posts:  { name: 'เสาไม้รั้ว', kind: 'item', props: { wood: 1, fuel: 1, fence: 1 } },
   ranch_pen:    { name: 'คอกสัตว์และแปลงเกษตร', kind: 'station', station: 'farm' },
-  hide_bag:     { name: 'ย่ามหนังสัตว์', kind: 'item', props: { hide: 1 } },
+  hide_bag:     { name: 'ย่ามหนังสัตว์', kind: 'item', props: { hide: 0.5, carry: 10 } },
+  // carrying gear (more room in the bag) and camping gear (sleep well away from home)
+  vine_net:     { name: 'ถุงตาข่ายเชือก', kind: 'item', props: { fiber: 1, carry: 4 } },
+  sleep_mat:    { name: 'เสื่อใบไม้สาน', kind: 'item', props: { leaf: 0.5, camp: 1 } },
+  travel_tent:  { name: 'เต็นท์หนังพกพา', kind: 'item', props: { hide: 0.5, camp: 2 } },
   cooked_food:  { name: 'อาหารปรุงสุก', kind: 'food', food: 7 },
   herbal_medicine: { name: 'ยาต้มสมุนไพร', kind: 'item', props: { herb: 1, medicine: 1 } },
   charcoal:     { name: 'ถ่านไม้', kind: 'item', props: { fuel: 2, elem: 'C' } },
@@ -1159,7 +1163,7 @@ const PRODUCTS = {
   reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' },
   // bamboo: the island's basic plant, good for many things
   split_bamboo:  { name: 'ไม้ไผ่ผ่าซีก', kind: 'item', props: { wood: 1, bamboo: 1, split: 1, fuel: 0.5 } },
-  bamboo_basket: { name: 'ตะกร้าไม้ไผ่สาน', kind: 'item', props: { wood: 1, basket: 1 } },
+  bamboo_basket: { name: 'ตะกร้าไม้ไผ่สาน', kind: 'item', props: { wood: 1, basket: 1, carry: 6 } },
   storage_box:   { name: 'กล่องเก็บของ', kind: 'station', station: 'chest' },
   storage_yard:  { name: 'ลานเก็บวัตถุดิบ', kind: 'station', station: 'yard' },
   warehouse:     { name: 'โกดังเก็บของ', kind: 'station', station: 'warehouse' },
@@ -1233,6 +1237,9 @@ function natureLaw(a, b, m) {
       if (A.hard || B.hard) return near('ทุบแล้วแค่แตกละเอียด ไม่ได้อะไร');
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
+      if (either(P => P.hide >= 1, P => P.bamboo || (P.wood && !P.fence)) ) return ok('travel_tent');
+      if (A.leaf >= 1 && B.leaf >= 1) return ok('sleep_mat');
+      if (A.rope && B.rope) return ok('vine_net');
       if (either(N('split_bamboo'), P => P.fiber && !P.rope && !P.bamboo)) return ok('bamboo_basket');
       if (either(N('bamboo_basket'), is('rope'))) return ok('storage_box');
       if (either(N('fence_posts'), N('bamboo_basket'))) return ok('storage_yard');
@@ -1524,7 +1531,29 @@ let villageSeq = 0;
 function villageOf(a) { return a && a.villageId ? villages.find(v => v.id === a.villageId) || null : null; }
 function isMember(a) { return !!villageOf(a); }
 function bagCount(a) { return Object.values(a.bag || {}).reduce((x, y) => x + Math.max(0, y), 0); }
-function bagCap(a) { const be = carriedEff(a, 'bag'); return 8 + (be ? be.n : 0) + st(a, 'str') * 2 + ((a.bag || {})[BAG_NAME] > 0 ? 10 : 0) + ((a.bag || {})['ตะกร้าไม้ไผ่สาน'] > 0 ? 6 : 0); }
+function carryBonus(a) { let n = 0; for (const nm in (a.bag || {})) if (a.bag[nm] > 0) { const c = propsOf(nm).carry; if (c) n += c; } return n; }
+function bagCap(a) { const be = carriedEff(a, 'bag'); return 8 + (be ? be.n : 0) + st(a, 'str') * 2 + carryBonus(a); }
+// what kind of camp a person can make wherever they are: 'tent' (warm, dry, safe-ish) > 'mat' (off the cold ground)
+function campGear(a) { let best = 0; for (const nm in (a.bag || {})) if (a.bag[nm] > 0) best = Math.max(best, propsOf(nm).camp || 0); return best >= 2 ? 'tent' : best >= 1 ? 'mat' : null; }
+// ===== Research priorities: what people try to invent first (after the four requisites) =====
+// 0) the four requisites  1) basic tools  2) carrying gear (bigger bag)  3) camping gear (sleep away from home on other maps)
+const RESEARCH_TIERS = [
+  { label: 'ปัจจัย 4', keys: ['leaf_hut', 'campfire', 'cooked_food'] },
+  { label: 'เครื่องมือพื้นฐาน', keys: ['stone_blade', 'rope', 'stone_axe', 'stone_pick', 'stone_hammer', 'stone_sickle', 'bamboo_tube'] },
+  { label: 'อุปกรณ์ขนของ', keys: ['vine_net', 'bamboo_basket', 'hide_bag'] },
+  { label: 'อุปกรณ์ตั้งแคมป์', keys: ['sleep_mat', 'travel_tent'] }
+];
+function researchPrio(k) { for (let i = 0; i < RESEARCH_TIERS.length; i++) if (RESEARCH_TIERS[i].keys.includes(k)) return i; return 9; }
+function knownOuts(a) { return new Set(Object.values(a.know || {}).filter(e => e.out).map(e => e.out)); }
+// the first tier that still has something this person doesn't know how to make
+function researchTarget(a) {
+  const known = knownOuts(a);
+  for (let i = 0; i < RESEARCH_TIERS.length; i++) {
+    const keys = RESEARCH_TIERS[i].keys.filter(k => !known.has(k) && PRODUCTS[k]);
+    if (keys.length) return { tier: i, label: RESEARCH_TIERS[i].label, keys };
+  }
+  return null;
+}
 function isToolName(n) { return productDef(keyByName(n))?.kind === 'tool'; }
 // Village storehouse is NOT free: members must be at the storehouse and trade items of equal value
 function itemValue(n, v) {
@@ -1565,8 +1594,8 @@ function avail(agent, n) {
 // 4 stages (0→25→50→75→100%); each stage needs 5–10 temple quests. Helping teaches recipes and gives faith.
 // Around it is a sacred zone: inside, cold, starvation, poison, stings, heat and night beasts can't hurt anyone.
 const TEMPLE_TEACH = [
-  ['stone_blade', 'stone_axe', 'rope', 'leaf_hut', 'campfire', 'bamboo_basket', 'storage_box'],
-  ['stone_pick', 'stone_sickle', 'stone_hammer', 'split_bamboo', 'bamboo_hut', 'storage_yard', 'bow'],
+  ['stone_blade', 'stone_axe', 'rope', 'leaf_hut', 'campfire', 'vine_net', 'bamboo_basket', 'sleep_mat', 'storage_box'],
+  ['stone_pick', 'stone_sickle', 'stone_hammer', 'split_bamboo', 'bamboo_hut', 'hide_bag', 'travel_tent', 'storage_yard', 'bow'],
   ['fence_posts', 'workbench', 'wood_house', 'warehouse', 'clay_paste', 'ranch_pen'],
   ['raw_brick', 'fired_brick', 'kiln', 'stone_house', 'clay_pot', 'raw_tile']
 ];
@@ -1579,8 +1608,8 @@ const TEMPLE_MATS = [
 const TEMPLE_STAGE_TH = ['พังทลาย', 'เริ่มซ่อมแซม', 'ซ่อมไปมากแล้ว', 'ใกล้สมบูรณ์', 'สมบูรณ์'];
 function templeOf() { return shelters.find(x => x.station === 'temple') || null; }
 function templePct(t) { t = t || templeOf(); if (!t) return 0; return t.tStage >= 4 ? 100 : Math.min(99, Math.round(t.tStage * 25 + (t.tDone / Math.max(1, t.tNeed)) * 25)); }
-function auraR(t) { return 4 + templePct(t) * 0.16; }            // 4 tiles when ruined → 20 tiles when whole
-function inAura(a) { const t = templeOf(); return !!(t && a && a.zone === t.zone && Math.hypot(a.x - t.x - 1, a.y - t.y - 1) <= auraR(t)); }
+function auraR(t) { return 5 + templePct(t) * 0.15; }            // 5 tiles when ruined → 20 tiles when whole
+function inAura(a) { const t = templeOf(); return !!(t && a && a.zone === t.zone && Math.hypot(a.x - t.x - 2, a.y - t.y - 2) <= auraR(t)); }
 function templeTick() {
   const t = templeOf(); if (!t || t.tStage >= 4) return;
   t.tQ = t.tQ || []; t.tSeq = t.tSeq || 0;
@@ -1838,7 +1867,19 @@ function pushTrial(t) { rndTrials.unshift(Object.assign({ day: simDay }, t)); if
 function experiment(agent, forcedMethod) {
   let methods = (forcedMethod ? [forcedMethod] : Object.keys(METHODS)).filter(m => methodUsable(agent, m));
   if (!methods.length) methods = Object.keys(METHODS).filter(m => methodUsable(agent, m));
-  let items = [...new Set(storeKeys(agent).concat(Object.keys(agent.bag || {}), toolItems.filter(t => t.owner === agent.id).map(t => t.name)))].filter(n => avail(agent, n) > 0);
+  let items = [...new Set(storeKeys(agent).concat(Object.keys(agent.bag || {}), toolItems.filter(t => t.owner === agent.id).map(t => t.name)))].filter(n => avail(agent, n) > 0 && !((propsOf(n).carry || propsOf(n).camp) && avail(agent, n) < 2));
+  // Research focus: think about the most needed kind of thing first (tools → carrying → camping)
+  const focus = !forcedMethod && Math.random() < Math.min(0.8, 0.35 + st(agent, 'int') * 0.03) ? researchTarget(agent) : null;
+  let focusR = null;
+  if (focus) {
+    const all = revRecipes(), rs = focus.keys.flatMap(k => all[k] || []).filter(r => methods.includes(r.m) || methodUsable(agent, r.m));
+    const ready = rs.filter(r => methods.includes(r.m) && hasMaterials(r.a, r.b, agent));
+    if (ready.length) focusR = pick(ready);
+    else if (rs.length && !agent.wantItem) {
+      const r = pick(rs), miss = [r.a, r.b].find(n => avail(agent, n) < (r.a === r.b ? 2 : 1));
+      if (miss && Object.values(ZONES).some(z => (z.res || []).includes(miss))) { agent.wantItem = miss; agent.bubble = `💭 อยากคิด${focus.label} ต้องหา${miss}มาลอง`; }
+    }
+  }
   if (methods.length === 1 && methods[0] === 'synth') {
     const el = items.filter(n => propsOf(n).elem || propsOf(n).steel);
     if (el.length >= 2) items = el;
@@ -1874,6 +1915,10 @@ function experiment(agent, forcedMethod) {
     const rv = tries === 0 ? revelationOf(agent) : null;
     const useRv = rv && methods.includes(rv.rm) && hasMaterials(rv.ra, rv.rb, agent);
     if (useRv) { a = rv.ra; b = rv.rb; m = rv.rm; agent.bubble = `📜 ลองตามนิมิตของพระเจ้า`; }
+    else if (focusR && tries < 6) {          // a good guess: right method + one right material (sometimes both)
+      m = focusR.m; a = focusR.a; b = Math.random() < 0.45 + st(agent, 'int') * 0.02 ? focusR.b : pick(weighted);
+      if (tries === 0) agent.bubble = `🔬 คิดหา${RESEARCH_TIERS[researchPrio(focusR.out)]?.label || 'ของใหม่'}`;
+    }
     else if (dejaList.length && tries === 0 && Math.random() < 0.5) { const e = pick(dejaList); a = e.a; b = e.b; m = e.m; agent.bubble = '🌀 รู้สึกคุ้นๆ เหมือนเคยทำ'; }
     else if (equivList.length && tries === 0 && Math.random() < 0.7) {
       triedEquiv = pick(equivList); a = triedEquiv.a; b = triedEquiv.b; m = triedEquiv.m;
@@ -1985,11 +2030,12 @@ function craftKnown(agent, entry) {
 
 function computeNeeds(forAgent) {
   const needs = [];
+  if (forAgent) RESEARCH_TIERS.forEach(t => t.keys.forEach(k => { const d = PRODUCTS[k]; if (d && d.kind === 'item' && (d.props.carry || d.props.camp) && avail(forAgent, d.name) < 1) needs.push(k); }));
   if (!forAgent || (forAgent.food || 0) < 10) needs.push('cooked_food');
   if (aiAgents.some(a => a.hp < maxHp(a) * 0.5) && avail(forAgent, 'ยาต้มสมุนไพร') < 2) needs.push('herbal_medicine');
   if (forAgent) { const t = bestHomeTier(forAgent); Object.entries(PRODUCTS).filter(([, d]) => d.kind === 'home' && d.tier > t).sort((p, q) => p[1].tier - q[1].tier).slice(0, 2).forEach(([k]) => needs.push(k)); }
   Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
-  ['blade', 'vessel', 'axe', 'bow', 'crucible'].forEach(t => {
+  ['blade', 'axe', 'pick', 'hammer', 'sickle', 'vessel', 'bow', 'crucible'].forEach(t => {
     if (!hasTool(t, forAgent)) Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.tool === t) needs.push(k); });
   });
   if (stationsOf('smelter').length && avail(forAgent, 'ถ่านไม้') < 2) needs.push('charcoal');
@@ -3730,6 +3776,8 @@ function bodyHunger(a, season, reactorMult, hrs) {
     a.hunger = Math.max(0, a.hunger - eat * 22);
     a.hp = Math.min(maxHp(a), a.hp + 4);
     a.bubble = `🔄 เอาของแลกอาหารที่โกดัง${v.name}`;
+  } else if (a.hunger > 75 && inAura(a)) {           // the temple never lets anyone starve: blessed fruit for the desperate
+    a.hunger = 75; if (Math.random() < 0.3) a.bubble = '🙏 เทพประทานผลไม้ทิพย์ พอประทังชีวิต';
   } else if (a.hunger >= 85 && !inAura(a)) {
     a.hp = Math.max(0, a.hp - Math.max(3, 7 - Math.floor(st(a, 'vit') / 5)) * hrs);
     gainExp(a, 'vit', hrs);
@@ -3758,16 +3806,16 @@ function bodyStamina(a, hrs) {
     return false;
   }
   if (a.sleeping) {
-    const rate = a.sleepKind === 'bed' ? 15 : a.sleepKind === 'fire' ? 10 : 6;
+    const rate = { bed: 15, tent: 13, fire: 10, mat: 9 }[a.sleepKind] || 6;
     a.stamina = Math.min(100, a.stamina + rate * hrs);
-    a.hp = Math.min(maxHp(a), a.hp + (a.sleepKind === 'bed' ? 3 : 1) * hrs);
+    a.hp = Math.min(maxHp(a), a.hp + (a.sleepKind === 'bed' ? 3 : a.sleepKind === 'tent' ? 2 : 1) * hrs);
     a.hunger = Math.max(0, a.hunger - 2 * hrs);              // metabolism slows (hunger tick adds it back)
     const wake = (a.stamina >= 100 && !lateNight) || (a.stamina >= 70 && morning) || a.hunger >= 85;
     if (wake) {
       a.sleeping = false; a.sleepAt = null; if (a.sleepKind === 'bed' && a.stamina >= 95) godQuestEvent(a, 'rest');
-      a.bubble = a.sleepKind === 'bed' ? '🌅 ตื่นนอน สดชื่น!' : a.sleepKind === 'fire' ? '🌅 ตื่นข้างกองไฟ' : '🥱 ตื่นมาปวดหลัง นอนกับพื้น';
+      a.bubble = a.sleepKind === 'bed' ? '🌅 ตื่นนอน สดชื่น!' : a.sleepKind === 'tent' ? '🌅 ตื่นในเต็นท์ เก็บของเดินทางต่อ' : a.sleepKind === 'mat' ? '🌅 ตื่นบนเสื่อ' : a.sleepKind === 'fire' ? '🌅 ตื่นข้างกองไฟ' : '🥱 ตื่นมาปวดหลัง นอนกับพื้น';
       if (a.sleepKind === 'ground') gainExp(a, 'vit', 0.5);
-    } else a.bubble = a.sleepKind === 'bed' ? '😴 นอนหลับในที่พัก' : a.sleepKind === 'fire' ? '😴 นอนข้างกองไฟ' : '😪 นอนกับพื้น';
+    } else a.bubble = SLEEP_LABEL(a);
     return false;
   }
   a.stamina = Math.max(0, a.stamina - staminaDrain(a) * hrs);
@@ -3782,15 +3830,21 @@ function bodyStamina(a, hrs) {
   if (!tired) { a.wantRest = false; a.restWait = 0; return false; }
   return true;
 }
+function SLEEP_LABEL(a) { return { bed: '😴 นอนหลับในที่พัก', tent: '⛺ นอนในเต็นท์', mat: '😴 นอนบนเสื่อ', fire: '😴 นอนข้างกองไฟ' }[a.sleepKind] || '😪 นอนกับพื้น'; }
 function restMove(a, strides) {
   a.wantRest = true; a.restWait = (a.restWait || 0) + 1;
   if (a.goal && a.goal.gate) return;                  // finish a realm crossing first
-  const spot = restSpotIn(a.zone, a);
+  let spot = restSpotIn(a.zone, a);
+  const gear = campGear(a);
+  if (gear === 'tent' && spot && spot.kind !== 'bed' && Math.hypot(a.x - spot.x, a.y - spot.y) > 10) spot = null;   // just pitch the tent here
   if (spot && Math.hypot(a.x - spot.x, a.y - spot.y) > 3 && a.restWait <= 4) { a.goal = null; a.session = null; a.gatherT = null; for (let k = 0; k < strides; k++) moveToward(a, spot.x, spot.y); a.bubble = spot.kind === 'bed' ? `🥱 เหนื่อยแล้ว กลับไปพักที่${spot.s.name.split(' (')[0]}` : '🥱 เหนื่อยแล้ว ไปนอนข้างกองไฟ'; return; }
   // arrived (or nowhere to go): sleep
   a.sleeping = true; a.goal = null; a.session = null; a.gatherT = null;
   const near = spot && Math.hypot(a.x - spot.x, a.y - spot.y) <= 3;
   a.sleepKind = near ? spot.kind : 'ground'; a.sleepAt = near && spot.kind === 'bed' ? spot.s.name : null; a.restWait = 0;
+  if (a.sleepKind !== 'bed' && gear === 'tent') a.sleepKind = 'tent';
+  else if (a.sleepKind === 'ground' && gear === 'mat') a.sleepKind = 'mat';
+  if (gear && a.sleepKind !== 'bed') gainExp(a, 'vit', 0.1);
   if (near) { a.x = spot.x + Math.floor(Math.random() * 3) - 1; a.y = spot.y + Math.floor(Math.random() * 2); }
 }
 
@@ -3850,15 +3904,19 @@ function feltTemp(a) {
   const indoors = a.sleeping && a.sleepKind === 'bed';
   const fire = stationInZone(a.zone, 'campfire');
   const nearFire = fire && Math.hypot(a.x - fire.x, a.y - fire.y) <= 8;
-  t += OUTFIT_WARMTH[pupOutfit(a)] || 0;
-  { const w = carriedEff(a, 'warm'); if (w) t += w.n; }
+  { let ow = OUTFIT_WARMTH[pupOutfit(a)] || 0; const w = carriedEff(a, 'warm'); if (w) ow += w.n; t += t < 22 ? ow : ow * 0.3; }   // clothes matter most in the cold
   const wz = WEATHER[zoneWeather(a.zone)];
   const hs = indoors && shelters.find(x => x.name === a.sleepAt);
-  if (indoors) t += (hs && hs.warm != null ? hs.warm : 12) + wz.wet * 3;         // walls keep the rain and wind off (better homes are warmer)
+  // shelters, tents and fires bring the temperature TOWARD comfort (~24°C): they warm the cold, they don't cook the hot
+  const toward = (v, add) => v < 24 ? Math.min(Math.max(v, 26), v + add) : v - Math.min(4, (v - 24) * 0.3);
+  const tent = a.sleeping && a.sleepKind === 'tent';
+  if (indoors) t = toward(t, (hs && hs.warm != null ? hs.warm : 12) + wz.wet * 3);   // walls keep the rain and wind off (better homes are warmer)
+  else if (tent) t = toward(t, 7 + wz.wet * 3);   // walls of hide keep rain and wind off
   else t -= wz.wet * 3;                      // soaked
-  if (nearFire) t += 12;
-  if (a.sleeping && aiAgents.filter(o => o !== a && o.sleeping && o.zone === a.zone && Math.hypot(o.x - a.x, o.y - a.y) <= 3).length >= 2) t += 3;   // huddling
+  if (nearFire && t < 26) t = Math.min(28, t + 12);
+  if (t < 20 && a.sleeping && aiAgents.filter(o => o !== a && o.sleeping && o.zone === a.zone && Math.hypot(o.x - a.x, o.y - a.y) <= 3).length >= 2) t += 3;   // huddling
   if (a.sleeping && a.sleepKind === 'ground') t -= 2;
+  if (a.sleeping && a.sleepKind === 'mat' && t < 24) t += 1;
   if (a.age < 12) t -= 2; if (a.age >= 55) t -= 2;
   return Math.round(t);
 }
@@ -3938,6 +3996,7 @@ function pickRevelation(a) {
       let w = 1 + (MAT[r.a] && MAT[r.b] ? 2 : 0) + (methodUsable(a, r.m) ? 2 : 0);
       if (d.kind === 'home' && !hasShelter(a)) w += 4;
       if (d.station === 'campfire') w += 3;
+      const rp = researchPrio(k); if (rp < 9) w += 6 - rp * 1.5;
       for (let i = 0; i < w; i++) pool.push(r);
     });
   }
@@ -4664,7 +4723,8 @@ function agentWork(a, needs) {
 
     if (Math.random() < (a.role.includes('ช่าง') ? 0.8 : 0.55)) {
       const myNeeds = computeNeeds(a);
-      for (const key of myNeeds.slice().sort(() => Math.random() - 0.5)) {
+      const np = k => { const d = productDef(k) || {}; return d.kind === 'home' || d.kind === 'food' || d.station === 'campfire' || k === 'herbal_medicine' ? 0 : researchPrio(k); };
+      for (const key of myNeeds.map(k => [k, np(k) + Math.random() * 3]).sort((p, q) => p[1] - q[1]).map(x => x[0])) {
         const e = planFor(a, key);
         if (!e) continue;
         if (methodUsable(a, e.m)) { if (craftKnown(a, e)) return; }
@@ -5177,7 +5237,7 @@ function renderAllUI() {
           <div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.stamina ?? 100)}%; background:${(a.stamina ?? 100) < 25 ? '#ef4444' : '#38bdf8'};"></div></div>
           <span>🌡️ ${a.felt ?? '-'}°C ${(a.warmth ?? 100) < 50 ? '🥶' : ''}</span>
           <span>✨ ${a.faith || 0}</span>
-          <span>${a.sleeping ? (a.sleepKind === 'bed' ? '🛖 นอนในที่พัก' : a.sleepKind === 'fire' ? '🔥 นอนข้างกองไฟ' : '😪 นอนกับพื้น') : a.wantRest ? '🥱 กำลังไปพัก' : '🏃 ตื่นอยู่'}</span>
+          <span>${a.sleeping ? ({ bed: '🛖 นอนในที่พัก', tent: '⛺ นอนในเต็นท์', mat: '🧺 นอนบนเสื่อ', fire: '🔥 นอนข้างกองไฟ' }[a.sleepKind] || '😪 นอนกับพื้น') : a.wantRest ? '🥱 กำลังไปพัก' : '🏃 ตื่นอยู่'}</span>
         </div>
         ${(() => {
           const others = aiAgents.filter(o => o !== a).map(o => [o, rel(a, o)]);
@@ -5850,7 +5910,7 @@ const WT = 16;                                   // world pixels per tile
 const VIEW = { zoom: 2.4, cx: 40 * WT, cy: 40 * WT, follow: null, w: 0, h: 0, dpr: 1, last: 0 };
 const NATURE = { ocean: '#4a9fd1', shallow_sea: '#74c6e6', river_deep: '#4fa8d8', river: '#6cc0e8', swamp_water: '#5aa596', sand_bank: '#efdca6', mud_flat: '#b08a5e', grass: '#9bd472',
   tall_grass: '#84c75f', forest: '#6aad55', hill_slope: '#bdb291', mountain_cliff: '#a59e94', mountain_peak: '#d6cfc4' };
-const RES_ICON = [[/ใบไม้สด/, '🍃'], [/ไผ่/, '🎋'], [/มะพร้าว|ต้นจาก/, '🌴'], [/กล้วย/, '🍌'], [/ไม้เนื้อแข็ง/, '🌳'], [/ขอนไม้|กิ่ง/, '🪵'], [/ปลา/, '🐟'], [/กุ้ง/, '🦐'],
+const RES_ICON = [[/เต็นท์/, '⛺'], [/เสื่อ/, '🧶'], [/ตาข่าย/, '🕸️'], [/ใบไม้สด/, '🍃'], [/ไผ่/, '🎋'], [/มะพร้าว|ต้นจาก/, '🌴'], [/กล้วย/, '🍌'], [/ไม้เนื้อแข็ง/, '🌳'], [/ขอนไม้|กิ่ง/, '🪵'], [/ปลา/, '🐟'], [/กุ้ง/, '🦐'],
   [/ปู/, '🦀'], [/ปะการัง/, '🪸'], [/หอย/, '🐚'], [/น้ำจืด/, '💧'], [/กก/, '🌾'], [/มะละกอ/, '🥭'], [/เบอร์รี่/, '🫐'], [/เห็ด/, '🍄'], [/สมุนไพร/, '🌿'],
   [/สาหร่าย/, '🌱'], [/เถาวัลย์/, '🍃'], [/ผึ้ง/, '🐝'], [/รังนก/, '🪺'], [/มด/, '🐜'], [/เกลือ/, '🧂'], [/ทราย/, '⏳'], [/แร่|เหล็ก/, '⛏️'],
   [/กำมะถัน/, '🟡'], [/ประสิว/, '⚪'], [/ดิน/, '🟤'], [/ยาง/, '🟠'], [/หิน/, '🪨']];
@@ -6769,6 +6829,7 @@ function beastCheck(a, night, hrs) {
   const beast = faunaSpecies.find(f => f.predator && (f.zp[a.zone] || 0) > 0);
   const crowd = aiAgents.filter(o => o.zone === a.zone && o.age >= 15).length;
   if (a.sleeping && a.sleepKind === 'bed') return;      // safe inside a shelter
+  if (a.sleeping && a.sleepKind === 'tent' && Math.random() < 0.6) return;   // a closed tent puts most beasts off
   if (carriedEff(a, 'light') && Math.random() < 0.7) return;   // beasts keep away from the light
   if (beast && night && Math.random() < hrs * (beast.id === 'f_wolf' ? 0.025 : 0.04) * (1 + trOf(beast, a.zone).fer * 0.3) * Math.min(2, beast.zp[a.zone]) / Math.max(1, crowd) && !stationInZone(a.zone, 'campfire')) {
     const icon = { f_wolf: '🐺', f_cobra: '🐍', f_croc: '🐊' }[beast.id] || '🐆';
@@ -6799,7 +6860,7 @@ function fleeFrom(a) {
 }
 // swatting / catching insects within 2 tiles (an action)
 function insectAct(a, night, chance) {
-  if (a.sleeping && a.sleepKind === 'bed') return;
+  if (a.sleeping && (a.sleepKind === 'bed' || a.sleepKind === 'tent')) return;
   const here = insectsOf(a.zone);
   // insects are wildlife too: AI swat / hunt them for their parts (bare hands work, a blade is better)
   if (a.age >= 10 && !a.sleeping && Math.random() < chance) {
@@ -6828,7 +6889,7 @@ function insectAct(a, night, chance) {
 // stings and poison over time
 function insectBody(a, night, hrs) {
   if (inAura(a)) { if (a.poisonH > 0) a.poisonH = Math.max(0, a.poisonH - 6 * hrs); return; }   // no stings, poison fades fast
-  if (a.sleeping && a.sleepKind === 'bed') { if (a.poisonH > 0) { a.poisonH = Math.max(0, a.poisonH - hrs); a.hp = Math.max(1, a.hp - hrs); } return; }
+  if (a.sleeping && (a.sleepKind === 'bed' || a.sleepKind === 'tent')) { if (a.poisonH > 0) { a.poisonH = Math.max(0, a.poisonH - hrs); a.hp = Math.max(1, a.hp - hrs); } return; }
   const here = insectsOf(a.zone);
   for (const b of here) {
     if (b.dead) continue;
@@ -6935,7 +6996,7 @@ function drawCanvas() {
     else if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
   { const T = templeOf(); if (T && T.zone === currentZoneId) items.push({ y: -1e9, draw: () => {      // sacred zone on the ground
-      const R = auraR(T), pts = []; for (let i = 0; i < 48; i++) { const an = i / 48 * 6.283; pts.push(groundAt(T.x + 1 + Math.cos(an) * R, T.y + 1 + Math.sin(an) * R)); }
+      const R = auraR(T), pts = []; for (let i = 0; i < 48; i++) { const an = i / 48 * 6.283; pts.push(groundAt(T.x + 2 + Math.cos(an) * R, T.y + 2 + Math.sin(an) * R)); }
       const pul = 0.5 + 0.5 * Math.sin(performance.now() / 900);
       ctx.save(); ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
       ctx.fillStyle = `rgba(255,226,140,${0.07 + 0.04 * pul})`; ctx.fill();
@@ -7269,8 +7330,20 @@ function drawAgent(ctx, a, now, labels) {
   groundShadow(ctx, fx, feetY, H * 0.17, H * 0.05, 0.26);
   if (VIEW.follow === a.id) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.28, H * 0.09, 0, 0, 7); ctx.stroke(); }
   const anim = pupActivity(a, a._moving, a._fast);
+  if (a.sleeping && a.sleepKind === 'mat') {          // woven leaf mat under the sleeper
+    ctx.fillStyle = '#9a8a4a'; ctx.strokeStyle = '#5c4a22'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.48, H * 0.12, 0, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(92,74,34,.5)'; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(fx + i * H * 0.12, feetY - H * 0.08); ctx.lineTo(fx + i * H * 0.12, feetY + H * 0.08); ctx.stroke(); }
+  }
   const ok = PUP.ready && drawPuppet(ctx, a, fx, feetY, H, anim, now);
   if (!ok) drawStickFigure(ctx, a, fx, feetY, H);
+  if (a.sleeping && a.sleepKind === 'tent') {         // little hide tent pitched over the sleeper
+    const w = H * 0.62, h = H * 0.6;
+    ctx.fillStyle = '#a0703f'; ctx.strokeStyle = '#4a2e16'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(fx - w, feetY + H * 0.04); ctx.lineTo(fx, feetY - h); ctx.lineTo(fx + w, feetY + H * 0.04); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c08a52'; ctx.beginPath(); ctx.moveTo(fx, feetY - h); ctx.lineTo(fx + w, feetY + H * 0.04); ctx.lineTo(fx + w * 0.55, feetY + H * 0.04); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2a1a0c'; ctx.beginPath(); ctx.moveTo(fx - w * 0.28, feetY + H * 0.04); ctx.lineTo(fx - w * 0.05, feetY - h * 0.55); ctx.lineTo(fx + w * 0.18, feetY + H * 0.04); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#6b4a2a'; ctx.beginPath(); ctx.moveTo(fx - w * 0.15, feetY - h - 4); ctx.lineTo(fx + w * 0.15, feetY - h + 6); ctx.moveTo(fx + w * 0.15, feetY - h - 4); ctx.lineTo(fx - w * 0.15, feetY - h + 6); ctx.stroke();
+  }
   if (a.sleeping) { const t = now * 0.8 + (a._ry || 0); ctx.fillStyle = 'rgba(70,90,160,.85)'; ctx.font = `bold ${WT * 0.55}px sans-serif`;
     [0, 1, 2].forEach(i => { const ph = (t + i * 0.33) % 1; ctx.globalAlpha = 1 - ph; ctx.fillText(i % 2 ? 'Z' : 'z', fx - WT * 0.6 + ph * WT * 0.6 + i * 3, feetY - WT * 1.2 - ph * WT * 1.2); }); ctx.globalAlpha = 1; }
   if (showLabels) labels.push({ x: fx, y: feetY, agent: a });
@@ -7400,7 +7473,7 @@ function renderAgentCard() {
       <span>🍖</span><div class="bar-wrap"><div class="bar-hg" style="width:${hg}%;background:#f5a524"></div></div><span>${hg}%</span>
       <span>⚡</span><div class="bar-wrap"><div class="bar-hp" style="width:${sta}%;background:${sta < 25 ? '#ef4444' : '#38bdf8'}"></div></div><span>${sta}%</span>
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
-      <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? (a.sleepKind === 'bed' ? 'นอนในที่พัก' : a.sleepKind === 'fire' ? 'นอนข้างกองไฟ' : 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
+      <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? ({ bed: 'นอนในที่พัก', tent: 'นอนในเต็นท์', mat: 'นอนบนเสื่อ', fire: 'นอนข้างกองไฟ' }[a.sleepKind] || 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
     <div class="ac-sub">📜 อักษรเทพ ${Math.round(readCap(a) * 100)}% ${readCap(a) >= 1 ? '· อ่านศิลาเข้าใจทั้งหมด' : '· ช่วยซ่อมวิหารเพื่อเรียนอักษรเทพ'}${(a.lit || 0) >= 1 ? ' · ✍️ สลักศิลาได้' : ''}</div>
     ${(a.buffs || []).length ? `<div class="ac-sub">🧪 ${(a.buffs || []).map(b => `${b.stat.toUpperCase()} +${b.n} (${b.from}, เหลือ ${Math.max(0, Math.round((b.until - nowH()) / 24 * 10) / 10)} วัน)`).join(' · ')}</div>` : ''}
@@ -7518,10 +7591,38 @@ function agentsCatchUp() {
   }
 }
 // one free moment for one person: decide, walk, act. How long it takes decides when they think again.
+// ===== Love of life: starving, freezing or overheating with no help nearby → run back to the temple's sacred zone =====
+function refugeDanger(a) {
+  const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
+  const bagFood = a.bag && Object.keys(a.bag).some(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel);
+  if ((a.food || 0) <= 0 && !bagFood && a.hunger >= 65 && (a.hunger >= 85 || !(zoneNodes[a.zone] || []).some(n => FOODRX.test(n.name)))) return 'หิว';
+  if ((a.warmth ?? 100) < 35 && (!restSpotIn(a.zone, a) || a.warmth < 15)) return 'หนาว';
+  if ((a.felt ?? 25) > 40) return 'ร้อน';
+  if (a.hp < maxHp(a) * 0.3 && (a.poisonH > 0 || a.coldHurt || a.hunger >= 85)) return 'บาดเจ็บ';
+  return null;
+}
+function refugeStep(a) {
+  if (a.age < 12) return false;
+  const t = templeOf();
+  if (!t) { a.refuge = null; return false; }
+  if (inAura(a)) {                                     // safe: stay near the temple until the body has recovered
+    if (a.refuge && (a.warmth ?? 100) >= 70 && (a.felt ?? 25) <= 38 && (a.hunger <= 75 || (a.food || 0) > 0)) { a.refuge = null; a.bubble = '🙏 ปลอดภัยแล้ว ขอบคุณเทพ'; }
+    return false;
+  }
+  const why = refugeDanger(a);
+  if (!why && !a.refuge) return false;
+  if (!why && a.refuge) { a.refuge = null; if (a.goal && a.goal.refuge) a.goal = null; return false; }
+  if (a.sleeping) { if (a.sleepKind !== 'ground' && why !== 'หิว') return false; a.sleeping = false; a.sleepAt = null; }
+  a.refuge = why; a.wantRest = false; a.coldSeek = false; a.session = null; a.gatherT = null; a._hunt = null;
+  if (!a.goal || !a.goal.refuge) a.goal = { zone: t.zone, x: t.x + 2, y: t.y + 5, ttl: 90, refuge: true };
+  a.bubble = `🏃 ${why}เกินไป! รีบกลับไปเขตวิหารเทพ`;
+  return true;
+}
 function agentStep(a, night, season, now) {
   const z0 = a.zone, x0 = a.x, y0 = a.y;
   buildZoneTerrain(a.zone);
-  if (!a.sleeping && a.age >= 12) { if (a.wantRest) restMove(a, 2); else coldMove(a, 2); }
+  if (refugeStep(a)) { /* in danger: everything else waits until they reach the temple */ }
+  else if (!a.sleeping && a.age >= 12) { if (a.wantRest) restMove(a, 2); else coldMove(a, 2); }
   agentMove(a, night);
   agentGather(a, season);
   if (wantsHunt(a)) agentHunt(a);
