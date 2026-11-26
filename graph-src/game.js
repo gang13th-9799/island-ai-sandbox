@@ -1056,6 +1056,21 @@ function templeDone(a, t, q) {
 // art for the 4 restoration looks (assets/temple.js sets window.TEMPLE_ART = {s1..s4:{src,w,h}}); until then a stand-in
 const TEMPLE_IMG = {};
 function templeArtIdx(t) { const p = templePct(t); return p >= 100 ? 4 : p >= 75 ? 3 : p >= 50 ? 2 : 1; }
+// which plant art a resource spot uses: [sprite, state, scale]
+function nodeProp(n) {
+  const nm = n.name;
+  if (n.sprite === 'res_bamboo') return ['bamboo_clump', 0, 1];
+  if (/กล้วย/.test(nm)) return ['banana', 0, 0.55];
+  if (/ต้นจาก/.test(nm)) return ['nipa', 0, 1];
+  if (/มะพร้าว/.test(nm)) return ['palm', 1, 1];
+  if (/สน/.test(nm)) return ['pine', 0, 1];
+  if (/ขอนไม้/.test(nm)) return ['driftwood', 0, 1];
+  if (/กิ่งไม้แห้ง/.test(nm)) return ['dead_tree', 0, 1];
+  if (/ยางไม้/.test(nm)) return ['resin_tree', 0, 1];
+  if (/เกรียม|ไหม้/.test(nm)) return ['burnt_tree', 0, 1];
+  if (/หลิว|แช่แข็ง/.test(nm)) return ['frozen_willow', 0, 1];
+  return ['oak', 0, 1];
+}
 // soft contact shadow tucked under an object's base (no hard disc sticking out in front, which reads as floating)
 function groundShadow(ctx, cx, fy, rx, ry, a = 0.2) {
   if (rx <= 0) return;
@@ -2825,7 +2840,7 @@ function buildZoneTerrain(zId) {
   const nodes = [];
   z.res.forEach(rName => {
     const isWaterRes = /ปลา|กุ้ง|ปะการัง|หอยมือเสือ/.test(rName);
-    const sp = isWaterRes ? 'fish' : (rName.includes('ไผ่') ? 'res_bamboo' : (/ไม้|กล้วย|มะพร้าว|ต้นจาก|ต้นสน|กิ่งสน/.test(rName) ? 'res_tree' : /ต้นกก/.test(rName) ? 'res_reed' : 'res_rock'));
+    const sp = isWaterRes ? 'fish' : (rName.includes('ไผ่') ? 'res_bamboo' : (/ไม้|กล้วย|มะพร้าว|ต้นจาก|ต้นสน|กิ่งสน|ปาล์ม|หลิว/.test(rName) ? 'res_tree' : /ต้นกก/.test(rName) ? 'res_reed' : 'res_rock'));
     if (/กล้วย/.test(rName)) {                         // banana plants grow in clumps: 2 clumps of 3-4 within 2-3 tiles
       for (let c = 0; c < 2; c++) {
         const ctr = findValidTile(zId, false), n = 3 + (Math.random() < 0.5 ? 1 : 0), used = new Set();
@@ -5371,7 +5386,8 @@ function drawSized(ctx, key, cx, footY, recolor, rel) {
 // WORLD OBJECTS: trees, bushes, grass, rocks & ores you can harvest with the right tool (art: assets/world.js)
 // natural ones respawn somewhere else in the same zone; durability for both tools and objects
 // ==========================================
-if (window.WORLD_ART && window.BANANA_ART) WORLD_ART.sprites.banana = BANANA_ART;   // wild banana plant: full / harvested / stump
+if (window.WORLD_ART && window.BANANA_ART) WORLD_ART.sprites.banana = BANANA_ART;
+if (window.WORLD_ART && window.TREE_ART) Object.assign(WORLD_ART.sprites, TREE_ART);   // bamboo clump, driftwood, dead tree, nipa, resin tree, burnt tree, frozen willow   // wild banana plant: full / harvested / stump
 const WA = { ready: false, img: {}, tex: {}, wall: {} };
 (function loadWorldArt() {
   const A = window.WORLD_ART; if (!A) return;
@@ -6272,7 +6288,8 @@ function drawCanvas() {
     if (tall) {
       const hidden = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < n.x + n.y && Math.abs(a._feet[0] - cx) < HUMAN_H * 1.1 && a._feet[1] < fy && a._feet[1] > fy - HUMAN_H * 2.6);
       if (hidden) ctx.globalAlpha = 0.45;
-      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /กล้วย/.test(n.name) ? 'banana' : /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว/.test(n.name) ? 1 : 0, cx, fy, /กล้วย/.test(n.name) ? 0.55 : /ต้นจาก/.test(n.name) ? 0.6 : 1, (n.x + n.y) % 2 === 0))   // a banana plant is a big herb, not a tree
+      const [pk, ps, pz] = nodeProp(n);
+      if (!drawProp(ctx, pk, ps, cx, fy, pz, (n.x + n.y) % 2 === 0))   // a banana plant is a big herb, not a tree
         drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
       ctx.globalAlpha = 1;
     }
