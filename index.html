@@ -6123,13 +6123,13 @@ function pupHeldItem(a, kind) {
     // same swing as the axe: sickle for plants, pick (or hammer) for stone, axe for wood
     const type = reaping && hasTool('sickle', a) ? 'sickle' : mining ? (hasTool('pick', a) ? 'pick' : hasTool('hammer', a) ? 'hammer' : 'axe') : 'axe';
     const t = usableToolTier(a, type);
-    if (t && t.tier >= 2) return 'axe';
+    if (t && t.tier >= 2) return ITEM_HELD_IMG[t.key] ? 'art:' + t.key : 'axe';   // copper / iron tools have their own art now
     const k = { sickle: 'stone_sickle', pick: 'stone_pick', hammer: 'stone_hammer', axe: 'stone_axe' }[type];
     return ITEM_HELD_IMG[k] ? 'art:' + k : 'axe';
   }
   if (kind === 'sword') {
     const t = usableToolTier(a, 'blade');
-    if (t && t.tier >= 3) return 'sword';
+    if (t && t.tier >= 3) return ITEM_HELD_IMG[t.key] ? 'art:' + t.key : 'sword';
     const k = t ? 'stone_blade' : 'digging_stick';
     return ITEM_HELD_IMG[k] ? 'art:' + k : 'sword';
   }
