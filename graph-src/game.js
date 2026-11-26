@@ -7646,6 +7646,7 @@ function renderAgentPop() {
   const sc = box.scrollTop; box.innerHTML = head + tabs + body; box.scrollTop = sc;
 }
 // ===== Character window: สถานะ / สวมใส่ / กระเป๋า / ความรู้ (built so a god can later possess or play a character) =====
+function statIcon(k, sz) { const u = window.UI_ART && UI_ART.stats && UI_ART.stats[k]; return u ? `<img src="${u}" style="width:${sz}px;height:${sz}px;vertical-align:middle">` : STATS[k].icon; }
 let CW = { tab: 'stat', sel: null, cat: 'all', q: '', rc: null, who: null };
 function openCW(tab) { if (CW.who !== cardAgentId) { CW = { tab, sel: null, cat: 'all', q: '', rc: null, who: cardAgentId }; } CW.tab = tab; CW.sel = null; document.getElementById('cw').classList.add('open'); renderCW(); }
 function closeCW() { document.getElementById('cw').classList.remove('open'); }
@@ -7681,7 +7682,7 @@ function renderCW() {
     const vit = `<div class="cw-vit">${bar('❤️', 'HP', hp, hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171', `${Math.round(a.hp)}/${maxHp(a)}`)}${bar('🍖', 'อิ่ม', full, full < 25 ? '#ef4444' : '#f5a524', Math.round(full) + '%')}${bar('💧', 'น้ำ', water, water < 25 ? '#ef4444' : '#38bdf8', Math.round(water) + '%')}${bar('⚡', 'แรง', sta, sta < 25 ? '#ef4444' : '#a78bfa', Math.round(sta) + '%')}${bar('🌡️', 'ความอุ่น', warm, warm < 50 ? '#60a5fa' : '#fb923c', (a.felt ?? '-') + '°')}</div>`;
     const rows = STAT_KEYS.map(k => {
       const base = a.stats ? a.stats[k] : 1, tot = st(a, k), bonus = tot - base, need = expNeed(base), xp = a.sexp ? a.sexp[k] : 0, tg = talentGrade(a.talent ? a.talent[k] : 1);
-      return `<div class="cw-stat ${CW.sel === 's:' + k ? 'sel' : ''}" onclick="cwSet('sel','s:${k}')"><span class="i">${STATS[k].icon}</span><span class="k">${STATS[k].short}</span>
+      return `<div class="cw-stat ${CW.sel === 's:' + k ? 'sel' : ''}" onclick="cwSet('sel','s:${k}')"><span class="i">${statIcon(k, 26)}</span><span class="k">${STATS[k].short}</span>
         <span class="t">${STATS[k].name}<span class="xp"><i style="width:${base >= STAT_MAX ? 100 : Math.round(xp / need * 100)}%"></i></span></span>
         <span class="v">${base}${bonus ? `<span class="p">+${bonus}</span>` : ''}</span><span class="g ${tg}" title="พรสวรรค์">${tg}</span></div>`;
     }).join('');
@@ -7690,7 +7691,7 @@ function renderCW() {
     body = `${vit}<div class="cw-cols"><div><div class="cw-sec"><span>ค่าสถานะ</span><span>ตัวเลขเขียว = จากของ/บัฟ · ตัวอักษร = พรสวรรค์</span></div>${rows}
       <div class="ac-sub" style="margin-top:8px">ค่าสถานะโตขึ้นเองจากการลงมือทำ: ใช้แรง = STR · วิ่ง/หลบ = AGI · ทนลำบาก = VIT · ทดลอง/เรียน = INT · ประดิษฐ์ = DEX · พูดคุย/สอน = CHA</div></div>
       <div><div class="cw-sec"><span>ค่าที่คำนวณได้</span></div><div class="cw-tiles">${tiles}</div></div></div>`;
-    if (CW.sel && CW.sel.startsWith('s:')) { const k = CW.sel.slice(2), base = a.stats ? a.stats[k] : 1; foot = `${STATS[k].icon} <b>${STATS[k].short} · ${STATS[k].name}</b> — +1 = ${STAT_RULES[k]} · EXP ${Math.floor(a.sexp ? a.sexp[k] : 0)}/${expNeed(base)} ถึงเลเวลถัดไป`; }
+    if (CW.sel && CW.sel.startsWith('s:')) { const k = CW.sel.slice(2), base = a.stats ? a.stats[k] : 1; foot = `${statIcon(k, 18)} <b>${STATS[k].short} · ${STATS[k].name}</b> — +1 = ${STAT_RULES[k]} · EXP ${Math.floor(a.sexp ? a.sexp[k] : 0)}/${expNeed(base)} ถึงเลเวลถัดไป`; }
     else if (CW.sel && CW.sel.startsWith('d:')) { const r = D[+CW.sel.slice(2)]; if (r) foot = `${r[0]} <b>${r[1]}</b> ${r[2]} — ${r[3]}`; }
     else foot = 'แตะค่าสถานะหรือช่องค่าต่างๆ เพื่อดูว่าคำนวณมาจากอะไร';
   } else if (CW.tab === 'equip') {

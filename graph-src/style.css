@@ -346,7 +346,7 @@
   @media (max-width: 600px) { .cw-cols { grid-template-columns: 1fr; } .cw-win { height: 94vh; } }
   .cw-sec { font-size: 11.5px; font-weight: 800; color: #8a6a3a; margin: 2px 0 6px; display: flex; justify-content: space-between; align-items: center; }
   /* stats */
-  .cw-stat { display: grid; grid-template-columns: 26px 36px 1fr auto auto; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px dashed #e6d2aa; cursor: pointer; border-radius: 8px; }
+  .cw-stat { display: grid; grid-template-columns: 30px 36px 1fr auto auto; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px dashed #e6d2aa; cursor: pointer; border-radius: 8px; }
   .cw-stat:hover, .cw-stat.sel { background: #fff0cf; }
   .cw-stat .i { font-size: 18px; text-align: center; }
   .cw-stat .k { font-weight: 900; font-size: 14px; }
