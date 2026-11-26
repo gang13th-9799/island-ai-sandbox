@@ -462,7 +462,7 @@ function derivedStats(a) {
 }
 function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // VIT +1 = HP +2, STR +1 = HP +1
 // attack: STR +1 = ATK +2, plus the best weapon carried; defence: VIT +1 = DEF +1, plus armour
-function atkOf(a) { const t = ['bow', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
+function atkOf(a) { const t = ['bow', 'spear', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
 function defOf(a) { const ar = carriedEff(a, 'armor'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0); }
 function dodgeOf(a) { return Math.min(0.4, st(a, 'agi') * 0.01); }      // AGI +1 = dodge +1% (max 40%)
 function hurt(a, dmg, floor = 0, by) { if (by) a._lastHurt = { by, t: nowH() }; if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
@@ -590,6 +590,15 @@ const PRODUCTS = {
   copper_axe:   { name: 'ขวานทองแดง', kind: 'tool', tool: 'axe', dur: 120, pow: 2, tier: 2, props: { hard: 1, metal: 1 } },
   copper_pick:  { name: 'อีเต้อทองแดง', kind: 'tool', tool: 'pick', dur: 120, pow: 2, tier: 2, props: { hard: 1, metal: 1 } },
   iron_axe:     { name: 'ขวานเหล็ก', kind: 'tool', tool: 'axe', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
+  // more metal tools and weapons
+  copper_sickle: { name: 'เคียวทองแดง', kind: 'tool', tool: 'sickle', dur: 120, pow: 2, tier: 2, props: { hard: 1, sharp: 1, metal: 1 } },
+  iron_sickle:   { name: 'เคียวเหล็ก', kind: 'tool', tool: 'sickle', dur: 250, pow: 3, tier: 3, props: { hard: 1, sharp: 1, metal: 1 } },
+  copper_hammer: { name: 'ค้อนทองแดง', kind: 'tool', tool: 'hammer', dur: 120, pow: 2, tier: 2, props: { hard: 1, metal: 1 } },
+  iron_hammer:   { name: 'ค้อนเหล็ก', kind: 'tool', tool: 'hammer', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
+  stone_spear:   { name: 'หอกหิน', kind: 'tool', tool: 'spear', dur: 40, pow: 1, tier: 1, props: { wood: 1, sharp: 1 } },
+  copper_spear:  { name: 'หอกทองแดง', kind: 'tool', tool: 'spear', dur: 120, pow: 2, tier: 2, props: { sharp: 1, metal: 1 } },
+  iron_spear:    { name: 'หอกเหล็ก', kind: 'tool', tool: 'spear', dur: 250, pow: 3, tier: 3, props: { sharp: 1, metal: 1 } },
+  iron_sword:    { name: 'ดาบเหล็ก', kind: 'tool', tool: 'blade', dur: 300, pow: 4, tier: 4, props: { hard: 1, sharp: 1, metal: 1 } },
   iron_pick:    { name: 'อีเต้อเหล็ก', kind: 'tool', tool: 'pick', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
   reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' },
   // bamboo: the island's basic plant, good for many things
@@ -690,6 +699,14 @@ function natureLaw(a, b, m) {
       if (either(is('leaf'), P => P.wood && P.dry && !P.bamboo)) return ok('leaf_hut');
       if (A.fence && B.fence) return ok('wood_house');
       if (either(N('split_bamboo'), is('rope'))) return ok('bamboo_hut');
+      // metal heads on the right handle: bamboo pole = spear, split bamboo = sickle, a post = hammer; ingot + knife = sword
+      if (either(N('iron_ingot'), N('iron_tools'))) return ok('iron_sword');
+      if (either(N('copper_ingot'), N('split_bamboo'))) return ok('copper_sickle');
+      if (either(N('iron_ingot'), N('split_bamboo'))) return ok('iron_sickle');
+      if (either(N('copper_ingot'), N('fence_posts'))) return ok('copper_hammer');
+      if (either(N('iron_ingot'), N('fence_posts'))) return ok('iron_hammer');
+      if (either(N('copper_ingot'), is('bamboo'))) return ok('copper_spear');
+      if (either(N('iron_ingot'), is('bamboo'))) return ok('iron_spear');
       if (either(N('copper_ingot'), is('wood'))) return ok('copper_pick');
       if (either(N('copper_ingot'), is('rope'))) return ok('copper_axe');
       if (either(N('iron_ingot'), is('wood'))) return ok('iron_pick');
@@ -697,6 +714,7 @@ function natureLaw(a, b, m) {
       if (either(N('stone_blade'), is('rope'))) return ok('stone_sickle');
       if (either(N('fence_posts'), is('rope'))) return ok('ranch_pen');
       if (either(is('rope'), is('bamboo'))) return ok('bow');
+      if (either(N('stone_blade'), is('bamboo'))) return ok('stone_spear');      // a sharp stone lashed to a bamboo pole
       if (either(N('stone_blade'), is('wood'))) return ok('stone_axe');
       if (either(P => P.hard && P.mineral && !P.sharp && !P.metal, is('wood'))) return ok('stone_pick');
       if (either(P => P.hard && P.mineral && !P.sharp && !P.metal, is('rope'))) return ok('stone_hammer');
@@ -1520,7 +1538,7 @@ function computeNeeds(forAgent) {
   if (forAgent && forAgent.bridgeFor && nowH() - forAgent.bridgeFor.t < 72) ['stone_bridge', 'wood_bridge', 'plank_bridge', 'rope_bridge'].forEach(k => needs.unshift(k));
   else if (forAgent) forAgent.bridgeFor = null;
   Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && d.station !== 'storehouse' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
-  ['blade', 'axe', 'pick', 'hammer', 'sickle', 'vessel', 'bow', 'crucible'].forEach(t => {
+  ['blade', 'axe', 'pick', 'hammer', 'sickle', 'spear', 'vessel', 'bow', 'crucible'].forEach(t => {
     if (!hasTool(t, forAgent)) Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.tool === t) needs.push(k); });
   });
   if (stationsOf('smelter').length && avail(forAgent, 'ถ่านไม้') < 2) needs.push('charcoal');
@@ -5416,7 +5434,7 @@ function pupActivity(a, moving, fast) {
   const b = a.bubble || '';
   if (a.sleeping && !moving) return 'sleep';
   if (moving) return fast || b.startsWith('💨') || b.startsWith('⚠️') || b.includes('โจมตี') ? 'run' : 'walk';
-  if (b.startsWith('🏹')) return hasTool('bow', a) ? 'bow' : hasTool('blade', a) ? 'slash' : 'gather';
+  if (b.startsWith('🏹')) return hasTool('bow', a) ? 'bow' : hasTool('spear', a) || hasTool('blade', a) ? 'slash' : 'gather';
   if (b.startsWith('🗡️')) return hasTool('blade', a) ? 'slash' : 'gather';
   if (b.startsWith('🩸') || b.includes('โจมตี') || b.startsWith('💢')) return 'slash';
   if (b.startsWith('🛠️') || b.startsWith('🔬') || b.startsWith('🔁') || b.startsWith('😓') || b.startsWith('😅')) return 'craft';
@@ -5485,7 +5503,9 @@ function pupHeldItem(a, kind) {
     return ITEM_HELD_IMG[k] ? 'art:' + k : 'axe';
   }
   if (kind === 'sword') {
-    const t = usableToolTier(a, 'blade');
+    const sp = usableToolTier(a, 'spear'), bl = usableToolTier(a, 'blade'), best = [sp, bl].filter(x => x && ITEM_HELD_IMG[x.key]).sort((p, q) => q.tier - p.tier)[0];
+    if (best && (best.tier >= 2 || best === sp)) return 'art:' + best.key;   // spears and metal blades have their own art
+    const t = bl;
     if (t && t.tier >= 3) return ITEM_HELD_IMG[t.key] ? 'art:' + t.key : 'sword';
     const k = t ? 'stone_blade' : 'digging_stick';
     return ITEM_HELD_IMG[k] ? 'art:' + k : 'sword';
