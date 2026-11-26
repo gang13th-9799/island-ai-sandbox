@@ -4950,7 +4950,7 @@ const MAT_ART = { 'ใบไม้สด': 'leaf_fresh', 'ใบตองสด'
 const MAT_ICON_IMG = {};
 (function () { const M = window.MAT_ICONS; if (!M || !window.ITEM_ART) return; let i = 0; for (const n in M) { const k = 'mat_' + (i++); ITEM_ART[k] = { icon: M[n] }; MAT_ART[n] = k; } })();
 function matIconImg(n) { const k = MAT_ART[n]; if (!k || !window.ITEM_ART || !ITEM_ART[k]) return null; let im = MAT_ICON_IMG[k]; if (!im) { im = MAT_ICON_IMG[k] = new Image(); im.src = ITEM_ART[k].icon; } return im.complete && im.naturalWidth ? im : null; }
-function itemArtKey(name) { const k = keyByName(name) || MAT_ART[name]; return k && window.ITEM_ART && ITEM_ART[k] ? k : null; }
+function itemArtKey(name) { if (!window.ITEM_ART) return null; const k = keyByName(name); if (k && ITEM_ART[k]) return k; const m = MAT_ART[name]; return m && ITEM_ART[m] ? m : null; }
 function itemIconHTML(name, sz = 18) { const k = itemArtKey(name); return k ? `<img src="${ITEM_ART[k].icon}" alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;vertical-align:-4px;margin-right:2px;">` : ''; }
 function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t => { if (t.holder !== a.id) return; const d = productDef(keyByName(t.name)); if (d && (!best || (d.tier || 1) > (best.tier || 1))) best = { tier: d.tier || 1, key: keyByName(t.name) }; }); return best; }
 // what the puppet actually holds for a pose: art for stone-age tools, code drawing for metal ones
