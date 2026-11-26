@@ -465,7 +465,7 @@ function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // V
 function atkOf(a) { const t = ['bow', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
 function defOf(a) { const ar = carriedEff(a, 'armor'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0); }
 function dodgeOf(a) { return Math.min(0.4, st(a, 'agi') * 0.01); }      // AGI +1 = dodge +1% (max 40%)
-function hurt(a, dmg, floor = 0) { if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
+function hurt(a, dmg, floor = 0, by) { if (by) a._lastHurt = { by, t: nowH() }; if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
 function agentLevel(a) { return STAT_KEYS.reduce((s, k) => s + st(a, k), 0) - STAT_KEYS.length + 1; }
 function recipeCap(a) { return 4 + st(a, 'int') * 2; }
 function failCap(a) { return 30 + st(a, 'int') * 15; }
@@ -2375,14 +2375,14 @@ function captureRealm() {
   return { simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
-    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, bridges, START_ZONE, riverZones: ISLE.riverZones };
+    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, bridges, graves, START_ZONE, riverZones: ISLE.riverZones };
 }
 function restoreRealm(st) {
   ({ simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
-    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, bridges } = st);
-  bridges = bridges || []; for (const k in BRIDGE_SET) delete BRIDGE_SET[k]; for (const k in REACH) delete REACH[k];
+    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, bridges, graves } = st);
+  bridges = bridges || []; graves = graves || []; for (const k in BRIDGE_SET) delete BRIDGE_SET[k]; for (const k in REACH) delete REACH[k];
   if (st.START_ZONE) START_ZONE = st.START_ZONE; else START_ZONE = 'E1'; { const z = ZONES[START_ZONE]; if (z && z.res) HOME_BASICS.forEach(n => { if (!z.res.includes(n)) z.res.push(n); }); }
   if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
@@ -2748,6 +2748,7 @@ function testCollapse(i) {
 // REINCARNATION: the dead may choose rebirth, carrying a little knowledge.
 // Past-life memories are a secret only the soul knows; telling anyone means permanent death by the gods.
 // ==========================================
+let graves = [];  // everyone who died in this realm: details of the death and what their soul chose
 let souls = [];   // waiting to be reborn: [{pastLives:[...], pastKnow:{sig:entry}, kept:[entries], talentEcho}]
 function keepCount(level) { return Math.max(1, Math.ceil(level / 10)); }   // Lv1-10 → 1, Lv11-20 → 2, ...
 function chooseKept(a, n) {
@@ -2770,7 +2771,24 @@ function makeSoul(dead) {
   const life = { name: dead.name, gen: dead.gen, age: dead.age, level, diedDay: simDay, role: dead.role, village: villageOf(dead)?.name || null, kept: kept.map(e => outName(e.out)) };
   return { pastLives: (dead.pastLives || []).concat([life]), pastKnow, kept, homeRealm: dead.homeRealm ?? null };
 }
+// a death record for the 🪦 graves list
+function makeGrave(d, causeLine) {
+  const T = templeOf(), v = villageOf(d), m = d.mate && (byId(d.mate) || null);
+  const why = d.dryHurt || (d.thirst || 0) >= 100 ? 'ขาดน้ำ' : d.coldHurt ? 'หนาวตาย' : d.smitten ? 'ถูกพระเจ้าลงทัณฑ์' : /สิ้นอายุขัย/.test(causeLine) ? 'สิ้นอายุขัย'
+    : d._lastHurt && nowH() - d._lastHurt.t <= 2 ? `ถูก${d._lastHurt.by}ทำร้าย` : d.hunger >= 100 ? 'อดอาหาร' : d.poisonH > 0 ? 'พิษ' : /ภัยพิบัติ/.test(causeLine) ? 'ภัยพิบัติ' : 'บาดเจ็บหนัก';
+  const kids = aiAgents.filter(o => o.parents && o.parents.includes && o.parents.includes(d.id)).length;
+  return {
+    id: 'g' + Date.now().toString(36) + Math.floor(Math.random() * 1e5), name: d.name, gender: d.gender, age: Math.floor(d.age), gen: d.gen, day: simDay,
+    time: String(Math.floor((simMinutes + (RT_ON() ? rtMin : 0)) / 60) % 24).padStart(2, '0') + ':00', zone: d.zone, why, line: causeLine,
+    level: agentLevel(d), stats: Object.fromEntries(STAT_KEYS.map(k => [k, st(d, k)])), role: d.role || '', village: v ? v.name : null,
+    mate: m ? m.name : null, kids, know: Object.values(d.know || {}).filter(e => e.out).length, faith: d.faith || 0, lastWords: (d.bubble || '').slice(0, 60),
+    hunger: Math.round(d.hunger || 0), thirst: Math.round(d.thirst || 0), warmth: Math.round(d.warmth ?? 100),
+    pastLives: (d.pastLives || []).map(l => l.name), atTemple: T && d.zone === T.zone, fate: 'rest', rebornAs: null, rebornDay: null
+  };
+}
 function giveSoul(baby, soul) {
+  { const all = [graves].concat((typeof realms !== 'undefined' ? realms : []).map(r => r.state && r.state.graves).filter(Boolean));
+    for (const list of all) { const g = soul.graveId && list.find(x => x.id === soul.graveId); if (g) { g.rebornAs = baby.name; g.rebornDay = simDay; break; } } }
   baby.pastLives = soul.pastLives;
   baby.pastKnow = soul.pastKnow;
   if (soul.homeRealm !== null && soul.homeRealm !== undefined) baby.homeRealm = soul.homeRealm;
@@ -2796,10 +2814,12 @@ function secretTick() {
 
 function removeDead(deadList, causeText) {
   deadList.forEach(dead => {
+    const grave = makeGrave(dead, causeText(dead));
     if (!dead.noRebirth && soulDecides(dead)) {
-      souls.push(makeSoul(dead));
+      const soul = makeSoul(dead); soul.graveId = grave.id; souls.push(soul); grave.fate = 'reborn';
       addLog(`🕊️ วิญญาณของ ${dead.name} เลือกที่จะกลับมาเกิดใหม่บนเกาะ`, '#c4b5fd');
-    } else if (!dead.smitten) addLog(`🌌 วิญญาณของ ${dead.name} เลือกพักผ่อนตลอดไป`, '#94a3b8');
+    } else { grave.fate = dead.smitten ? 'smitten' : 'rest'; if (!dead.smitten) addLog(`🌌 วิญญาณของ ${dead.name} เลือกพักผ่อนตลอดไป`, '#94a3b8'); }
+    graves.unshift(grave); if (graves.length > 200) graves.length = 200;
     addLog(causeText(dead), dead.hp <= 0 ? '#ef4444' : '#94a3b8');
     villages.forEach(v => { v.members = v.members.filter(id => id !== dead.id); });
     aiAgents.forEach(o => { if (rel(o, dead) >= 30) { o.bubble = `😢 คิดถึง${dead.name}`; o.hunger = Math.min(100, o.hunger + 10); } if (o.rel) delete o.rel[dead.id]; });
@@ -4126,6 +4146,33 @@ function exportGodDB() {
   const blob = new Blob([JSON.stringify(godArchive, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'god-database.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+// ---------- 🪦 graves ----------
+let GRAVE_OPEN = new Set();
+function graveToggle(id) { GRAVE_OPEN.has(id) ? GRAVE_OPEN.delete(id) : GRAVE_OPEN.add(id); renderGraves(); }
+function renderGraves() {
+  const el = document.getElementById('grave-list'); if (!el) return;
+  const waiting = souls.length;
+  const head = `<div class="sec-note">🪦 ผู้ที่จากไปในดินแดนนี้ ${graves.length} คน · 🕊️ วิญญาณรอเกิดใหม่ ${waiting} ดวง · แตะชื่อเพื่อดูรายละเอียด</div>`;
+  if (!graves.length) { el.innerHTML = head + '<div class="sec-note">ยังไม่มีใครเสียชีวิต</div>'; return; }
+  const fate = g => g.fate === 'reborn' ? (g.rebornAs ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🔮 เกิดใหม่เป็น ${g.rebornAs}${g.rebornDay ? ` (วันที่ ${g.rebornDay})` : ''}</span>` : '<span class="tag" style="background:#ede9fe;color:#6d28d9">🕊️ รอเกิดใหม่</span>')
+    : g.fate === 'smitten' ? '<span class="tag" style="background:#fee2e2;color:#b91c1c">⚡ ดับสูญ (ถูกลงทัณฑ์)</span>' : '<span class="tag" style="background:#e5e7eb;color:#374151">🌌 พักผ่อนตลอดไป</span>';
+  const WHY_ICON = { 'ขาดน้ำ': '🏜️', 'หนาวตาย': '🥶', 'อดอาหาร': '🍖', 'สิ้นอายุขัย': '🕯️', 'พิษ': '☠️', 'ภัยพิบัติ': '🌪️', 'ถูกพระเจ้าลงทัณฑ์': '⚡' };
+  el.innerHTML = head + graves.map(g => {
+    const open = GRAVE_OPEN.has(g.id);
+    const icon = WHY_ICON[g.why] || (/^ถูก/.test(g.why) ? '🩸' : '💀');
+    return `<div class="card" style="margin-bottom:6px; cursor:pointer" onclick="graveToggle('${g.id}')">
+      <div class="card-title"><span>🪦 ${g.gender === 'หญิง' ? '👩' : '👨'} <b>${g.name}</b> · ${g.age} ปี</span><span style="font-size:11px">วันที่ ${g.day} ${g.time}</span></div>
+      <div style="font-size:12px">${icon} ${g.why} · ที่ ${g.zone}${g.atTemple ? ' (โซนวิหาร)' : ''} ${fate(g)}</div>
+      ${open ? `<div style="font-size:11.5px; margin-top:6px; line-height:1.55; color:#e7d8bd">
+        📜 ${g.line}<br>
+        🧍 รุ่น ${g.gen} · Lv ${g.level} · ${g.role || 'ไม่มีอาชีพ'}${g.village ? ' · ' + g.village : ''}${g.mate ? ' · คู่ครอง ' + g.mate : ''}${g.kids ? ' · ลูก ' + g.kids + ' คน' : ''}<br>
+        📊 ${STAT_KEYS.map(k => `${k.toUpperCase()} ${g.stats[k]}`).join(' · ')}<br>
+        🧠 รู้สูตร ${g.know} อย่าง · ✨ ศรัทธา ${g.faith} · ตอนตาย: อิ่ม ${100 - g.hunger}% · น้ำ ${100 - g.thirst}% · ความอุ่น ${g.warmth}%<br>
+        ${g.lastWords ? `💬 คำสุดท้าย: "${g.lastWords}"<br>` : ''}${g.pastLives.length ? `🔁 ชาติก่อน: ${g.pastLives.join(' → ')}` : ''}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
 function renderPrayers() {
   const box = document.getElementById('prayer-list'); if (!box) return;
   const pend = prayers.filter(p => p.status === 'pending');
@@ -4340,7 +4387,7 @@ function agentHunt(hunter) {
         // The predator hunts back
         const tt = trOf(target, tz);
         let dmg = (target.id === 'f_wolf' ? 10 + Math.floor(Math.random() * 15) : 18 + Math.floor(Math.random() * 18)) + tt.str * 3 + tt.fer * 2;
-        const got = hurt(hunter, dmg); dmg = got;
+        const got = hurt(hunter, dmg, 0, target.name); dmg = got;
         gainExp(hunter, 'vit', 3);
         hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
         addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${Math.round(hunter.hp)})`, '#ef4444');
@@ -4480,7 +4527,7 @@ function runAutonomousStep() {
       aiAgents.push(newAgent({
         name: childName, gender: g, gen: nextGen, age: 0, hunger: 10,
         talent: inheritTalent(dad, mom), zone: mom.zone, home: mom.home, x: mom.x, y: mom.y,
-        bubble: '👶 เกิดมายังไม่รู้อะไรเลย', guardian: mom.id, know: {}
+        bubble: '👶 เกิดมายังไม่รู้อะไรเลย', guardian: mom.id, parents: [dad.id, mom.id], know: {}
       }));
       { const bb = aiAgents[aiAgents.length - 1];
         if (souls.length && Math.random() < 0.8) giveSoul(bb, souls.shift());
@@ -4813,6 +4860,7 @@ function renderAllUI() {
   const unlockedCount = Object.keys(techDiscovered).length;
   document.getElementById('cnt-tech').innerText = unlockedCount;
   document.getElementById('cnt-pop').innerText = aiAgents.length;
+  { const g = document.getElementById('cnt-grave'); if (g) { g.innerText = graves.length; g.style.display = graves.length ? '' : 'none'; } }
   document.getElementById('cnt-rnd').innerText = rndTrials.length;
   { const c = document.getElementById('cnt-st'); if (c) c.innerText = shelters.filter(x => x.station && x.station !== 'gate').length; }
   const allFails = new Set();
@@ -6569,7 +6617,7 @@ function beastCheck(a, night, hrs) {
     if (hasTool('bow', a) && a.age >= 15) { a.bubble = `🏹 ยิงธนูไล่${beast.name}!`; gainExp(a, 'agi', 1); gainExp(a, 'str', 0.5); }
     else if (Math.random() < Math.min(0.6, st(a, 'agi') * 0.025)) { a.bubble = `💨 หลบ${beast.name}ทัน!`; gainExp(a, 'agi', 2); fleeFrom(a); }
     else {
-      const dmg = hurt(a, (beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3);
+      const dmg = hurt(a, (beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3, 0, beast.name);
       if (beast.id === 'f_cobra') a.poisonH = (a.poisonH || 0) + 8;
       gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
       a.bubble = `${icon} ถูก${beast.name}โจมตี!`; a.sleeping = false; a.wantRest = false; fleeFrom(a);
