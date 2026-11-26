@@ -6463,6 +6463,7 @@ function drawCanvas() {
       }
       d = { h: A.ay };
     } else d = drawSized(ctx, key, cx, fy);
+    if (s.station === 'storehouse' || STASH_CAP[s.station]) { const hw = Math.max(24, d.h * 0.6); s._hit = { x: cx - hw, y: fy - d.h, w: hw * 2, h: d.h + 6 }; }   // tap to look inside
     if (s.station === 'temple') labels.push({ x: cx, y: fy - d.h - 2, text: `🏛️ วิหารเทพ ${templePct(s)}%`, color: '#7c4a03', bg: 'rgba(255,240,200,.95)' });
     else if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
@@ -6875,6 +6876,9 @@ function mapTap(e) {
   const hit = aiAgents.filter(a => a.zone === currentZoneId && a._hit && wx >= a._hit.x && wx <= a._hit.x + a._hit.w && wy >= a._hit.y && wy <= a._hit.y + a._hit.h)
     .sort((p, q) => (q._rx + q._ry) - (p._rx + p._ry))[0];
   if (hit) { openAgentCard(hit.id); return; }
+  const store = shelters.filter(s => s.zone === currentZoneId && s._hit && wx >= s._hit.x && wx <= s._hit.x + s._hit.w && wy >= s._hit.y && wy <= s._hit.y + s._hit.h)
+    .sort((p, q) => (q.x + q.y) - (p.x + p.y))[0];
+  if (store) { closeAgentCard(); openStorePop(store); return; }
   closeAgentCard();
   const [tx, ty] = tileOf(wx, wy); const lx = Math.max(0, Math.min(79, Math.floor(tx))), ly = Math.max(0, Math.min(79, Math.floor(ty)));
   const node = (zoneNodes[currentZoneId] || []).find(n => Math.abs(n.x - lx) <= 1 && Math.abs(n.y - ly) <= 1);
@@ -6900,8 +6904,39 @@ function itemDesc(n) {
   const pr = Object.keys(propsOf(n) || {}).filter(x => PROP_TH[x]).map(x => PROP_TH[x]);
   return (d ? 'ของที่ทำขึ้น' : 'วัตถุดิบ') + (pr.length ? ' · ' + pr.join(', ') : '');
 }
-function openAgentPop(tab) { AP.tab = tab; AP.sel = null; if (AP.who !== cardAgentId) { AP.open = new Set(); AP.who = cardAgentId; } document.getElementById('agent-pop').classList.add('open'); renderAgentPop(); }
-function closeAgentPop() { document.getElementById('agent-pop').classList.remove('open'); }
+function openAgentPop(tab) { AP.store = false; AP.tab = tab; AP.sel = null; if (AP.who !== cardAgentId) { AP.open = new Set(); AP.who = cardAgentId; } document.getElementById('agent-pop').classList.add('open'); renderAgentPop(); }
+// ---------- storage popup (village storehouse, chest, yard, warehouse) ----------
+let SP = { id: null, sel: null };
+function openStorePop(s) { SP.id = s.name; SP.sel = null; AP.store = true; document.getElementById('agent-pop').classList.add('open'); renderStorePop(); }
+function spSel(n) { SP.sel = SP.sel === n ? null : n; renderStorePop(); }
+function renderStorePop() {
+  const s = shelters.find(x => x.name === SP.id); const box = document.getElementById('ap-box');
+  if (!s) { closeAgentPop(); return; }
+  const v = s.station === 'storehouse' && villages.find(x => x.id === s.villageId);
+  const store = (v ? v.store : s.store) || {};
+  const items = Object.entries(store).filter(([, n]) => n > 0).sort((p, q) => q[1] - p[1]);
+  const used = items.reduce((t, [, n]) => t + n, 0), cap = v ? null : STASH_CAP[s.station];
+  const cells = items.map(([n, c]) => `<div class="slot ${SP.sel === n ? 'sel' : ''}" onclick="spSel('${n.replace(/'/g, "\\'")}')" title="${n}">${itemIcon(n, 30)}<span class="n">${c}</span></div>`).join('')
+    + (cap ? Array.from({ length: Math.max(0, Math.min(cap - used, 24 - items.length)) }, () => '<div class="slot free"></div>').join('') : '');
+  const title = s.name.split(' (')[0];
+  let about;
+  if (v) {
+    const mem = villageMembers(v);
+    about = `🏘️ คลังกลางของ <b>${v.name}</b> · หัวหน้า ${v.chiefName || '-'} · สมาชิก ${mem.length} คน<br>
+      🍖 อาหารกองกลาง <b>${Math.round(v.food || 0)}</b> · ภาษีเข้าคลัง ${Math.round((v.tax || 0) * 100)}%<br>
+      <span style="color:#8a6a3a">สมาชิกเอาของมาฝาก (เก็บภาษีจากของที่หาได้) และต้องเดินมาที่โกดังเพื่อ<b>แลกของมูลค่าเท่ากัน</b> หรือแลกอาหารตอนหิว คนนอกหมู่บ้านใช้ไม่ได้</span>`;
+  } else {
+    about = `${s.owner ? `👤 เจ้าของ ${s.ownerName} ${s.public ? '🔓 ใช้ร่วมกันได้' : '🔒 ส่วนตัว'}` : '🔓 ของส่วนรวม'} · จุได้ ${cap} ชิ้น<br>
+      <span style="color:#8a6a3a">ฝากของที่ล้นกระเป๋าไว้ คนที่มีสิทธิ์ยืนห่างไม่เกิน 2 ช่องหยิบไปใช้ทำของได้</span>`;
+  }
+  const info = SP.sel && store[SP.sel] > 0 ? `${itemIcon(SP.sel, 20)} <b>${SP.sel}</b> ×${store[SP.sel]}<br><span style="color:#8a6a3a">${itemDesc(SP.sel)}</span>` : '<span style="color:#a0845a">แตะที่ช่องเพื่อดูรายละเอียดของ</span>';
+  box.innerHTML = `<div class="ap-head"><span class="t">📦 ${title}</span><button class="gbtn ghost round close" onclick="closeAgentPop()">✕</button></div>
+    <div class="item-info" style="margin-bottom:8px">${about}</div>
+    <div class="ap-sec">📦 ของในคลัง ${used}${cap ? '/' + cap : ''} ชิ้น</div>
+    <div class="bag-grid">${cells}</div>${items.length ? '' : '<div class="ac-sub">ยังว่างอยู่</div>'}
+    <div class="item-info">${info}</div>`;
+}
+function closeAgentPop() { AP.store = false; document.getElementById('agent-pop').classList.remove('open'); }
 function apSel(n) { AP.sel = AP.sel === n ? null : n; renderAgentPop(); }
 function apToggle(sig) { AP.open.has(sig) ? AP.open.delete(sig) : AP.open.add(sig); renderAgentPop(); }
 function renderAgentPop() {
@@ -6985,7 +7020,7 @@ function renderLoop(ts) {
   if (!renderLoop.last || ts - renderLoop.last > 32) { renderLoop.last = ts; try { drawCanvas(); } catch (err) { console.error(err); } }
   if (!renderLoop.mmT || ts - renderLoop.mmT > 120) { renderLoop.mmT = ts; try { drawMiniMap(); } catch (err) { console.error(err); } }
   if (!renderLoop.cardT || ts - renderLoop.cardT > 500) { renderLoop.cardT = ts; if (cardAgentId) renderAgentCard();
-    if ((renderLoop.popN = (renderLoop.popN || 0) + 1) % 3 === 0 && document.getElementById('agent-pop').classList.contains('open')) renderAgentPop();
+    if ((renderLoop.popN = (renderLoop.popN || 0) + 1) % 3 === 0 && document.getElementById('agent-pop').classList.contains('open')) { if (AP.store) renderStorePop(); else renderAgentPop(); }
     const open = typeof godRequests !== 'undefined' && godRequests.some(q => q.status !== 'done');
     const gd = document.getElementById('god-dot'); if (gd) gd.classList.toggle('on', open);
     const gc = document.getElementById('cnt-god'); if (gc) gc.style.display = open ? '' : 'none'; }
