@@ -608,6 +608,7 @@
 <script src="assets/mats.js"></script>
 <script src="assets/banana.js"></script>
 <script src="assets/trees.js"></script>
+<script src="assets/camp.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -7336,7 +7337,11 @@ function drawAgent(ctx, a, now, labels) {
   }
   const ok = PUP.ready && drawPuppet(ctx, a, fx, feetY, H, anim, now);
   if (!ok) drawStickFigure(ctx, a, fx, feetY, H);
-  if (a.sleeping && a.sleepKind === 'tent') {         // little hide tent pitched over the sleeper
+  const tentImg = window.CAMP_ART && (window._tentImg || (window._tentImg = Object.assign(new Image(), { src: CAMP_ART.tent })));
+  if (a.sleeping && a.sleepKind === 'tent' && tentImg && tentImg.complete && tentImg.naturalWidth) {   // Gemini tent art over the sleeper
+    const w = H * 1.35, h = w * CAMP_ART.tentH / CAMP_ART.tentW;
+    ctx.drawImage(tentImg, fx - w / 2, feetY + H * 0.1 - h, w, h);
+  } else if (a.sleeping && a.sleepKind === 'tent') {         // fallback: code-drawn hide tent
     const w = H * 0.62, h = H * 0.6;
     ctx.fillStyle = '#a0703f'; ctx.strokeStyle = '#4a2e16'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(fx - w, feetY + H * 0.04); ctx.lineTo(fx, feetY - h); ctx.lineTo(fx + w, feetY + H * 0.04); ctx.closePath(); ctx.fill(); ctx.stroke();
