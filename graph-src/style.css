@@ -361,6 +361,10 @@
   .ac-gq { margin: 4px 0; padding: 6px 8px; border-radius: 10px; background: #fff6dc; border: 1px solid #f1d58f; font-size: 11px; }
   .ac-gq .gq { margin-top: 3px; } .ac-gq .gq.done { color: #15803d; } .ac-gq .d { color: #b45309; font-size: 10px; } .ac-gq .p { float: right; color: #6b5a3e; }
   .ac-stats { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+  .ac-derived { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; font-size: 11px; background: #fbf3e1; border-radius: 10px; padding: 6px 9px; margin: 2px 0 6px; max-height: 165px; overflow-y: auto; }
+  .ac-derived .v { font-weight: 700; text-align: right; font-family: var(--head); }
+  .ac-derived .n { color: #9a7b4f; grid-column: 1 / -1; font-size: 10px; margin: -2px 0 2px 20px; }
+  .ac-more { border: 0; background: #f6e9cc; border-radius: 999px; padding: 2px 9px; font-size: 10.5px; font-family: var(--head); cursor: pointer; }
   .ac-stats .st { padding: 2px 7px; border-radius: 999px; background: #f6e9cc; font-size: 10.5px; font-family: var(--head); }
   .disaster-banner { top: 136px !important; }
   @media (max-width: 560px) {
