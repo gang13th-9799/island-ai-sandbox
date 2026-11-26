@@ -5831,7 +5831,6 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   const shKey = (anim === 'idle' || anim === 'walk' || anim === 'run' || anim === 'slash') && !bowInfo && p.two == null ? shieldKey(a) : null;
   if (shKey && anim === 'idle') drawShield(ctx, withBase(Mb), Mb.inverse().multiply(M.foF), rig, shKey, 'back');    // standing: hangs behind the arm, inside showing
   ['upF', 'foF', 'thF', 'shF'].forEach(k => drawP(k, M[k]));
-  if (shKey && (anim === 'walk' || anim === 'run')) drawShield(ctx, withBase(Mb), Mb.inverse().multiply(M.foF), rig, shKey, 'front');   // walking: swings with the arm, face out
   if (bowInfo) drawBow(ctx, withBase(Mb), bowInfo, s, 'limb');
   ['thN', 'shN'].forEach(k => drawP(k, M[k]));
   if (rig.skirt) drawP('pelvis', Mb);
@@ -5853,6 +5852,7 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   const fxh = hcx + hr * 0.28, fyh = hcy + hr * 0.12, fr = hr * 0.62;
   if (!artEyes) FACE.eyes(ctx, fxh, fyh, fr, mood); if (!artMouth) FACE.mouth(ctx, fxh, fyh, fr, mood);
   if (item === 'bow') drawBow(ctx, withBase(Mb), bowInfo, s, 'string');
+  if (shKey && (anim === 'walk' || anim === 'run')) drawShield(ctx, withBase(Mb), Mb.inverse().multiply(M.foF), rig, shKey, 'front');   // walking: carried in front, covering the body
   if (shKey && anim === 'slash') drawShield(ctx, withBase(Mb), Mb.inverse().multiply(M.foF), rig, shKey, 'front', true);   // fighting: shield raised, face toward the enemy
   if (item && item !== 'bow') drawItem(ctx, withBase(base), base.inverse().multiply(M.foN), rig, item, p);
   drawP('upN', M.upN);
@@ -5871,7 +5871,7 @@ function drawShield(ctx, mBody, foInBody, rig, key, side, guard) {
   if (!im.complete || !im.naturalWidth) return;
   const f = foInBody.transformPoint({ x: rig.joints.fistF[0], y: rig.joints.fistF[1] });
   const h = rig.height * (SHIELD_SIZE[key] || 0.36), w = h * E.ar;
-  const up = guard ? h * 0.22 : 0, fw = guard ? -h * 0.22 : 0;   // fighting: raised and pulled in to guard the body
+  const up = guard ? h * 0.04 : 0, fw = guard ? -h * 0.08 : 0;   // fighting: raised and pulled in to guard the body
   ctx.setTransform(mBody); ctx.drawImage(im, f.x + fw - w * 0.5, f.y - up - h * 0.5, w, h);
 }
 function drawItem(ctx, mBase, foInBase, rig, kind, p) {
