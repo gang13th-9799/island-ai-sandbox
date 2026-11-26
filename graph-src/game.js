@@ -1584,7 +1584,7 @@ function createQuest(giver, type, data) {
   const q = Object.assign({
     id: ++questSeq, type, giverId: giver.id, giverName: giver.name, status: 'open',
     difficulty, urgency, offer, agreed: null, helperId: null, helperName: null, progress: 0,
-    createdH: nowH(), deadlineH: nowH() + (type === 'build' ? 72 : type === 'gather' ? 48 : 24), talk: [], refused: []
+    createdH: nowH(), deadlineH: nowH() + 24 + (type === 'build' ? 72 : type === 'gather' ? 48 : 24), talk: [], refused: []
   }, data, { difficulty });
   quests.unshift(q);
   if (quests.length > 40) quests = quests.filter(x => x.status === 'open' || x.status === 'accepted').concat(quests.filter(x => x.status !== 'open' && x.status !== 'accepted').slice(0, 25));
@@ -1685,7 +1685,7 @@ function assignQuests() {
       const chance = 0.05 + h.kind * 0.08 + rel(h, giver) / 400 + (h.zone === giver.zone ? 0.08 : 0) + rewardValue(q.offer) * 0.01;
       if (Math.random() > chance) continue;
       if (!nearTo(h, giver)) {                       // interested: walk over first (the deal is made face to face)
-        h.qVisit = q.id; q.visitor = h.id; q.visitUntil = nowH() + 8; questGoalTo(h, giver);
+        h.qVisit = q.id; q.visitor = h.id; q.visitUntil = nowH() + 24; questGoalTo(h, giver);
         h.bubble = `🚶 เดินไปคุยเรื่องเควสกับ ${giver.name}`; break;
       }
       if (negotiate(h, giver, q)) {
