@@ -560,6 +560,7 @@ const PRODUCTS = {
   storage_box:   { name: 'กล่องเก็บของ', kind: 'station', station: 'chest' },
   storage_yard:  { name: 'ลานเก็บวัตถุดิบ', kind: 'station', station: 'yard' },
   warehouse:     { name: 'โกดังเก็บของ', kind: 'station', station: 'warehouse' },
+  village_store: { name: 'โกดังกลางหมู่บ้าน', kind: 'station', station: 'storehouse' },
   raw_tile:      { name: 'กระเบื้องดิบ', kind: 'item', props: { raw: 1, tile: 1 } },
   roof_tile:     { name: 'กระเบื้องดินเผา', kind: 'item', props: { hard: 1, tile: 1 } },
   // homes: places to sleep, from a lean-to up to a tiled brick house (better = warmer and sturdier)
@@ -638,6 +639,7 @@ function natureLaw(a, b, m) {
       if (either(N('bamboo_basket'), is('rope'))) return ok('storage_box');
       if (either(N('fence_posts'), N('bamboo_basket'))) return ok('storage_yard');
       if (either(N('fence_posts'), N('storage_box'))) return ok('warehouse');
+      if (either(N('fence_posts'), is('leaf'))) return ok('village_store');   // a thatched granary on posts
       if (A.fiber && B.fiber && !A.rope && !B.rope) return ok('rope');
       if (either(is('leaf'), P => P.wood && P.dry && !P.bamboo)) return ok('leaf_hut');
       if (A.fence && B.fence) return ok('wood_house');
@@ -959,7 +961,7 @@ function itemValue(n, v) {
   if (v && (v.store[n] || 0) <= 1) val *= 1.5;
   return Math.round(val * 10) / 10;
 }
-function atStore(agent) { const v = villageOf(agent); if (!v || agent.zone !== v.zone) return false; const st = shelters.find(x => x.villageId === v.id); return !st || structDist(agent, st) <= 2; }
+function atStore(agent) { const v = villageOf(agent); if (!v || agent.zone !== v.zone) return false; const st = villageStore(v); return !!st && structDist(agent, st) <= 2; }
 function bagValue(agent, except) {
   return Object.entries(agent.bag || {}).filter(([n]) => n !== except && n !== BAG_NAME).reduce((t, [n, q]) => t + itemValue(n) * q, 0);
 }
@@ -992,7 +994,7 @@ function avail(agent, n) {
 // Around it is a sacred zone: inside, cold, starvation, poison, stings, heat and night beasts can't hurt anyone.
 const TEMPLE_TEACH = [
   ['stone_blade', 'stone_axe', 'rope', 'leaf_hut', 'campfire', 'vine_net', 'bamboo_basket', 'sleep_mat', 'storage_box'],
-  ['stone_pick', 'stone_sickle', 'stone_hammer', 'split_bamboo', 'bamboo_tube', 'boiled_water', 'bamboo_hut', 'hide_bag', 'travel_tent', 'storage_yard', 'bow'],
+  ['stone_pick', 'stone_sickle', 'stone_hammer', 'split_bamboo', 'bamboo_tube', 'boiled_water', 'bamboo_hut', 'hide_bag', 'travel_tent', 'storage_yard', 'village_store', 'bow'],
   ['fence_posts', 'workbench', 'wood_house', 'warehouse', 'clay_paste', 'ranch_pen'],
   ['raw_brick', 'fired_brick', 'kiln', 'stone_house', 'clay_pot', 'raw_tile']
 ];
@@ -1165,7 +1167,7 @@ function take(agent, n) {
   if (v && canTradeFor(agent, n) && payFor(agent, v, itemValue(n, v), n, n)) { v.store[n]--; return 'trade'; }
   return null;
 }
-function toStore(v, n, q) { if (v && q > 0) v.store[n] = (v.store[n] || 0) + q; }
+function toStore(v, n, q) { if (v && q > 0 && villageStore(v)) v.store[n] = (v.store[n] || 0) + q; }
 // Put items in an agent's bag; overflow goes to their village storehouse (or is left behind)
 function put(agent, n, q) {
   if (!agent) return;
@@ -1179,13 +1181,13 @@ function put(agent, n, q) {
 function shareRatio(a) { const v = villageOf(a); return v ? v.tax : 0; }
 function gainItems(a, n, q) {
   const v = villageOf(a);
-  const tax = v ? Math.round(q * v.tax) : 0;
+  const tax = v && villageStore(v) ? Math.round(q * v.tax) : 0;
   toStore(v, n, tax);
   if (q - tax > 0) put(a, n, q - tax);
 }
 function addFood(a, amt) {
   const v = villageOf(a);
-  const tax = v ? Math.round(amt * v.tax) : 0;
+  const tax = v && villageStore(v) ? Math.round(amt * v.tax) : 0;
   if (v) v.food += tax;
   a.food = (a.food || 0) + (amt - tax);
 }
@@ -1217,7 +1219,17 @@ function knowersOf(key) { return aiAgents.filter(a => Object.values(a.know).some
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function clampC(v) { return Math.max(6, Math.min(72, v)); }
 
+function villageStore(v) { return v ? shelters.find(x => x.station === 'storehouse' && x.villageId === v.id) || null : null; }
 function buildStation(type, agent, ownerOverride) {
+  if (type === 'storehouse') {                        // the village's shared storehouse: built by its own people, in the village
+    const v = villageOf(agent);
+    if (!v || villageStore(v) || agent.zone !== v.zone) return false;
+    buildZoneTerrain(v.zone);
+    const bs = buildSpot(v.zone, agent.x + 1, agent.y - 1);
+    shelters.push({ name: `โกดัง${v.name} (${v.zone})`, sprite: 'st_store', zone: v.zone, x: bs.x, y: bs.y, station: 'storehouse', villageId: v.id, builder: agent.name, owner: null, ownerName: v.name, public: false, permits: [] });
+    addLog(`🏚️ [โกดังกลาง] ชาวบ้าน${v.name}สร้างโกดังกลางหมู่บ้านเสร็จแล้ว (${agent.name} ลงมือ) ตั้งแต่นี้ฝากของ เก็บภาษี และแลกของกันได้`, '#fde68a');
+    return true;
+  }
   const owner = ownerOverride || agent;
   const cap = { campfire: 5, wall: 1, reactor: 1, lab: 2 }[type] || 3;
   const exists = stationsOf(type).length >= cap || stationsOf(type).some(s => s.owner === owner.id) || (type === 'campfire' && stationInZone(agent.zone, 'campfire'));
@@ -1437,7 +1449,8 @@ function computeNeeds(forAgent) {
   if (!forAgent || (forAgent.food || 0) < 10) needs.push('cooked_food');
   if (aiAgents.some(a => a.hp < maxHp(a) * 0.5) && avail(forAgent, 'ยาต้มสมุนไพร') < 2) needs.push('herbal_medicine');
   if (forAgent) { const t = bestHomeTier(forAgent); Object.entries(PRODUCTS).filter(([, d]) => d.kind === 'home' && d.tier > t).sort((p, q) => p[1].tier - q[1].tier).slice(0, 2).forEach(([k]) => needs.push(k)); }
-  Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
+  if (forAgent && villageOf(forAgent) && !villageStore(villageOf(forAgent))) needs.unshift('village_store');
+  Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && d.station !== 'storehouse' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
   ['blade', 'axe', 'pick', 'hammer', 'sickle', 'vessel', 'bow', 'crucible'].forEach(t => {
     if (!hasTool(t, forAgent)) Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.tool === t) needs.push(k); });
   });
@@ -2045,7 +2058,7 @@ function holdFoundingMeeting() {
     addRel(a, chief, 4);
     aiAgents.filter(k => k.age < 15 && k.guardian === a.id && !isMember(k)).forEach(k => { k.villageId = v.id; v.members.push(k.id); });
   });
-  placeStorehouse(v, v.zone);
+  addLog(`🏚️ [${v.name}] ยังไม่มีโกดังกลาง ชาวบ้านต้องช่วยกันสร้างเอง (ความรู้ได้จากการช่วยซ่อมวิหาร)`, '#fde68a');
   if (!government) government = { name: 'สภาหมู่บ้าน', era: '', laws: [] };
   addLog(`🏛️ [ก่อตั้งหมู่บ้าน] "${name}" ที่ ${v.zone} · หัวหน้า ${chief.name} · ส่งเข้าคลัง ${Math.round(agreed * 100)}% · สมาชิก ${joiners.length} คน${leavers.length ? ` · ไม่เข้าร่วม: ${leavers.map(a => a.name).join(', ')}` : ''}`, '#e9d5ff');
   assignJobs(v);
@@ -3976,7 +3989,7 @@ function agentMove(a, night) {
       }
     }
     const myV = villageOf(a);
-    if (myV && a.hunger >= 55 && !(a.food > 0) && myV.food > 0 && a.zone !== myV.zone && bagValue(a) >= 2) {
+    if (myV && villageStore(myV) && a.hunger >= 55 && !(a.food > 0) && myV.food > 0 && a.zone !== myV.zone && bagValue(a) >= 2) {
       const store = shelters.find(s => s.villageId === myV.id) || { x: 40, y: 40 };
       a.goal = { zone: myV.zone, x: store.x, y: store.y, ttl: 12, quest: true };
       a.bubble = `🚶 ไปแลกอาหารที่โกดัง${myV.name}`;
@@ -4196,7 +4209,7 @@ function agentWork(a, needs) {
     if (a.wantItem && avail(a, a.wantItem) < 1) {
       const item = a.wantItem, v = villageOf(a);
       a.wantItem = null;
-      if (v && (v.store[item] || 0) > 0 && bagValue(a, item) >= itemValue(item, v)) {
+      if (v && villageStore(v) && (v.store[item] || 0) > 0 && bagValue(a, item) >= itemValue(item, v)) {
         if (!atStore(a)) {
           const store = shelters.find(x => x.villageId === v.id) || { x: 40, y: 40 };
           a.goal = { zone: v.zone, x: store.x, y: store.y, ttl: 14, quest: true };
@@ -6450,6 +6463,12 @@ function drawCanvas() {
       if (dmi) { const dh = hh * HA.dmg.h / HA.h * (HA.w / HA.dmg.w) * (HA.dmg.w / HA.w); const dw = hh * HA.dmg.w / HA.h; ctx.drawImage(dmi, cx - dw / 2 + sx, fy - (hh * HA.dmg.h / HA.h) * 0.97, dw, hh * HA.dmg.h / HA.h); }
       else { if (hurt) ctx.filter = 'brightness(.78) saturate(.8)'; ctx.drawImage(him, cx - hw / 2 + sx, fy - hh * 0.97, hw, hh); ctx.filter = 'none'; }
       d = { h: hh * 0.97 };
+    } else if (STORE_KEY[s.station] && window.STORE_ART && storeImg(STORE_KEY[s.station])) {   // Gemini storage art
+      const k = STORE_KEY[s.station], A = STORE_ART[k], sz = STORE_SIZE[k], im = storeImg(k);
+      const w = sz.w ? HUMAN_H * sz.w : HUMAN_H * sz.h * A.w / A.h, h = w * A.h / A.w;
+      const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
+      ctx.drawImage(im, cx - w / 2 + sx, fy + h * sz.dy - h, w, h);
+      d = { h: h * (1 - sz.dy) };
     } else if (art && window.WORLD_ART) {
       const mh = stationMaxHp(s), hp = s.hp == null ? mh : s.hp, stI = hp < mh * 0.5 ? 1 : 0, A = WORLD_ART.sprites[art];
       let sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
@@ -6905,6 +6924,10 @@ function itemDesc(n) {
   return (d ? 'ของที่ทำขึ้น' : 'วัตถุดิบ') + (pr.length ? ' · ' + pr.join(', ') : '');
 }
 function openAgentPop(tab) { AP.store = false; AP.tab = tab; AP.sel = null; if (AP.who !== cardAgentId) { AP.open = new Set(); AP.who = cardAgentId; } document.getElementById('agent-pop').classList.add('open'); renderAgentPop(); }
+const STORE_KEY = { storehouse: 'storehouse', chest: 'chest', yard: 'yard', warehouse: 'warehouse' };
+const STORE_SIZE = { storehouse: { h: 2.5, dy: 0.04 }, chest: { h: 0.62, dy: 0.08 }, yard: { w: 2.8, dy: 0.22 }, warehouse: { h: 2.0, dy: 0.06 } };   // in human heights
+const STORE_IMG = {};
+function storeImg(k) { const A = window.STORE_ART && STORE_ART[k]; if (!A) return null; const im = STORE_IMG[k] || (STORE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
 // ---------- storage popup (village storehouse, chest, yard, warehouse) ----------
 let SP = { id: null, sel: null };
 function openStorePop(s) { SP.id = s.name; SP.sel = null; AP.store = true; document.getElementById('agent-pop').classList.add('open'); renderStorePop(); }
