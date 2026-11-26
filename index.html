@@ -1249,10 +1249,13 @@ const PRODUCTS = {
   iron_sword:    { name: 'ดาบเหล็ก', kind: 'tool', tool: 'sword', dur: 300, pow: 4, tier: 3, props: { hard: 1, sharp: 1, metal: 1 } },
   // fishing and trapping
   fishing_rod:   { name: 'เบ็ดตกปลาไม้ไผ่', kind: 'tool', tool: 'rod', dur: 40, pow: 1, tier: 1, props: { wood: 1 } },
-  fish_trap:     { name: 'ลอบดักปลา', kind: 'station', station: 'fishtrap' },
-  animal_trap:   { name: 'กับดักสัตว์', kind: 'station', station: 'snare' },
-  wood_cage:     { name: 'กรงดักสัตว์ไม้เนื้อแข็ง', kind: 'station', station: 'cage' },        // big square cage: deer, boar...
-  iron_cage:     { name: 'กรงดักสัตว์เหล็ก', kind: 'station', station: 'cage_iron' },       // strong enough for predators too
+  // traps are carried in the bag, then set where the prey is; the big cages take 4 bag slots, wear out and are fixed at a workbench
+  fish_trap:     { name: 'ลอบดักปลา', kind: 'trap', station: 'fishtrap', props: { slots: 1 }, desc: 'กับดักเล็ก: วางในน้ำตื้น ดักปลา กุ้ง ปู · กินที่กระเป๋า 1 ช่อง' },
+  animal_trap:   { name: 'กับดักสัตว์', kind: 'trap', station: 'snare', props: { slots: 1 }, desc: 'กับดักเล็ก: จับได้แต่สัตว์ตัวเล็ก · กินที่กระเป๋า 1 ช่อง' },
+  wood_cage:     { name: 'กรงดักสัตว์ไม้เนื้อแข็ง', kind: 'trap', station: 'cage', uses: 20, props: { slots: 4 }, desc: 'กับดักใหญ่: จับสัตว์กินพืช ใช้ได้ 20 ครั้ง · กินที่กระเป๋า 4 ช่อง · สร้าง/ซ่อมที่โต๊ะช่าง' },
+  wood_cage_broken: { name: 'กรงดักสัตว์ไม้ชำรุด', kind: 'item', fixTo: 'wood_cage', props: { slots: 4, broken: 1 }, desc: 'กรงไม้ที่ใช้จนพัง เอาไปซ่อมที่โต๊ะช่างด้วยไม้ · กินที่กระเป๋า 4 ช่อง' },        // big square cage: deer, boar...
+  iron_cage:     { name: 'กรงดักสัตว์เหล็ก', kind: 'trap', station: 'cage_iron', uses: 30, props: { slots: 4 }, desc: 'กับดักใหญ่: จับได้ทุกชนิด รวมสัตว์นักล่า ใช้ได้ 30 ครั้ง · กินที่กระเป๋า 4 ช่อง · สร้าง/ซ่อมที่โต๊ะช่าง' },
+  iron_cage_broken: { name: 'กรงดักสัตว์เหล็กชำรุด', kind: 'item', fixTo: 'iron_cage', props: { slots: 4, broken: 1 }, desc: 'กรงเหล็กที่ใช้จนพัง เอาไปซ่อมที่โต๊ะช่างด้วยแท่งเหล็ก · กินที่กระเป๋า 4 ช่อง' },       // strong enough for predators too
   iron_pick:    { name: 'อีเต้อเหล็ก', kind: 'tool', tool: 'pick', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
   reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' },
   // bamboo: the island's basic plant, good for many things
@@ -1290,12 +1293,13 @@ const METHODS = {
   cut:      { name: 'ตัดและแกะขึ้นรูป', station: null, tool: 'blade' },
   mix12:    { name: 'อัตราส่วน 1:2 คนผสมเหลว', station: null, tool: 'vessel' },
   knead11:  { name: 'อัตราส่วน 1:1 นวดอัดขึ้นรูป', station: 'workbench', tool: null },
+  assemble: { name: 'ประกอบชิ้นงานบนโต๊ะช่าง', station: 'workbench', tool: null },
   roast:    { name: 'ย่าง/เผาบนกองไฟ', station: 'campfire', tool: null },
   kiln:     { name: 'เผาไฟแรงในเตาปิด', station: 'kiln', tool: null },
   smelt:    { name: 'หลอมในเบ้าที่เตาถลุง', station: 'smelter', tool: 'crucible' },
   synth:    { name: 'สังเคราะห์ธาตุ', station: 'lab', tool: null }
 };
-const STATION_METHODS = { workbench: ['knead11'], campfire: ['roast'], kiln: ['kiln'], smelter: ['smelt'], lab: ['synth'] };
+const STATION_METHODS = { workbench: ['knead11', 'assemble'], campfire: ['roast'], kiln: ['kiln'], smelter: ['smelt'], lab: ['synth'] };
 
 function productDef(key) { return PRODUCTS[key] || dynamicProducts[key] || null; }
 function keyByName(name) {
@@ -1358,8 +1362,6 @@ function natureLaw(a, b, m) {
       if (either(N('copper_ingot'), N('wood_sword'))) return ok('copper_sword');       // copper sheathing on a wooden sword
       if (either(N('split_bamboo'), N('bamboo_basket'))) return ok('fish_trap');      // a funnel basket that fish swim into
       if (either(is('forked'), N('vine_net'))) return ok('animal_trap');              // a net snare on a forked stick
-      if (either(N('fence_posts'), is('forked'))) return ok('wood_cage');              // hardwood posts lashed into a drop-door cage
-      if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');            // iron bars
       if (either(N('copper_ingot'), N('split_bamboo'))) return ok('copper_sickle');
       if (either(N('iron_ingot'), N('split_bamboo'))) return ok('iron_sickle');
       if (either(N('copper_ingot'), N('fence_posts'))) return ok('copper_hammer');
@@ -1399,6 +1401,12 @@ function natureLaw(a, b, m) {
       if (A.wood && B.wood && !A.bamboo && !B.bamboo && !A.fence && !B.fence) return ok('fence_posts');
       if (A.hide && B.hide) return ok('hide_bag');
       return fail('ตัดแล้วได้แค่เศษชิ้นเล็กๆ');
+    case 'assemble':                                     // big cages are built and mended on a workbench
+      if (either(N('wood_cage_broken'), P => (P.wood || P.fence || P.rope) && !P.broken)) return ok('wood_cage');
+      if (either(N('iron_cage_broken'), N('iron_ingot'))) return ok('iron_cage');
+      if (either(N('fence_posts'), is('forked'))) return ok('wood_cage');             // hardwood posts lashed into a guillotine-door cage
+      if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');           // iron bars
+      return fail('ประกอบแล้วไม่เข้ากัน ไม่ได้อะไร');
     case 'knead11':
     case 'mix12':
       if (either(is('clay'), is('water'))) {
@@ -1656,7 +1664,11 @@ let villages = [];   // [{id, name, chiefId, chiefName, tax, members:[ids], zone
 let villageSeq = 0;
 function villageOf(a) { return a && a.villageId ? villages.find(v => v.id === a.villageId) || null : null; }
 function isMember(a) { return !!villageOf(a); }
-function bagCount(a) { return Object.values(a.bag || {}).reduce((x, y) => x + Math.max(0, y), 0); }
+const SLOT_CACHE = {};
+function slotsOf(n) { let v = SLOT_CACHE[n]; if (v === undefined) { const k = keyByName(n), d = k && productDef(k); v = SLOT_CACHE[n] = (d && d.props && d.props.slots) || 1; } return v; }
+function bagCount(a) { let t = 0; for (const n in (a.bag || {})) if (a.bag[n] > 0) t += a.bag[n] * slotsOf(n); return t; }
+// traps and broken cages are gear, not goods: never traded away, donated or thrown into experiments
+function isGear(n) { const d = productDef(keyByName(n)); return !!d && (d.kind === 'trap' || !!(d.props && d.props.broken)); }
 function carryBonus(a) { let n = 0; for (const nm in (a.bag || {})) if (a.bag[nm] > 0) { const c = propsOf(nm).carry; if (c) n += c; } return n; }
 function bagCap(a) { const be = carriedEff(a, 'bag'); return 8 + (be ? be.n : 0) + st(a, 'str') * 2 + carryBonus(a); }
 // what kind of camp a person can make wherever they are: 'tent' (warm, dry, safe-ish) > 'mat' (off the cold ground)
@@ -1690,14 +1702,14 @@ function itemValue(n, v) {
 }
 function atStore(agent) { const v = villageOf(agent); if (!v || agent.zone !== v.zone) return false; const st = villageStore(v); return !!st && structDist(agent, st) <= 2; }
 function bagValue(agent, except) {
-  return Object.entries(agent.bag || {}).filter(([n]) => n !== except && n !== BAG_NAME).reduce((t, [n, q]) => t + itemValue(n) * q, 0);
+  return Object.entries(agent.bag || {}).filter(([n]) => n !== except && n !== BAG_NAME && !isGear(n)).reduce((t, [n, q]) => t + itemValue(n) * q, 0);
 }
 function canTradeFor(agent, n) { const v = villageOf(agent); return atStore(agent) && (v.store[n] || 0) > 0 && bagValue(agent, n) >= itemValue(n, v); }
 // Pay `cost` with bag items (most plentiful first) into the storehouse
 function payFor(agent, v, cost, except, what) {
   if (bagValue(agent, except) < cost) return false;
   let paid = 0; const gave = [];
-  const goods = Object.entries(agent.bag).filter(([n]) => n !== except && n !== BAG_NAME).sort((x, y) => y[1] - x[1]);
+  const goods = Object.entries(agent.bag).filter(([n]) => n !== except && n !== BAG_NAME && !isGear(n)).sort((x, y) => y[1] - x[1]);
   for (const [n] of goods) {
     while (paid < cost && agent.bag[n] > 0) {
       agent.bag[n]--; v.store[n] = (v.store[n] || 0) + 1; paid += itemValue(n); gave.push(n);
@@ -1736,32 +1748,93 @@ function templeOf() { return shelters.find(x => x.station === 'temple') || null;
 function templePct(t) { t = t || templeOf(); if (!t) return 0; return t.tStage >= 4 ? 100 : Math.min(99, Math.round(t.tStage * 25 + (t.tDone / Math.max(1, t.tNeed)) * 25)); }
 function auraR(t) { return 5 + templePct(t) * 0.15; }            // 5 tiles when ruined → 20 tiles when whole
 function inAura(a) { const t = templeOf(); return !!(t && a && a.zone === t.zone && Math.hypot(a.x - t.x - 2, a.y - t.y - 2) <= auraR(t)); }
-// traps work on their own: a fish trap fills with fish, a snare catches small game; the owner walks over (≤2 tiles) to empty it
+// traps work on their own: a fish trap fills with fish, a snare catches small game, cages catch big game.
+// Traps are carried in the bag and set by their owner; the owner walks over (≤2 tiles) to collect. No animal keeping yet:
+// a caught animal is killed on the spot for meat and materials. Cages wear out (wood 20 / iron 30 catches) and break.
 const TRAP_ST = ['fishtrap', 'snare', 'cage', 'cage_iron'];
+function preySize(f) { const art = animalArt(f); return art && ANIM_REL[art] ? ANIM_REL[art] : (f.sizeRel || 0.6); }
+function isFishy(f) { return animalArt(f) === 'fish' || /ปลา|กุ้ง|ปู/.test(f.name); }
+// who a trap can hold: snare = small animals only · wood cage = plant-eaters · iron cage = anything
+function trapPrey(st, zone) {
+  return faunaSpecies.filter(f => (f.zp[zone] || 0) > 1 && !isFishy(f) && animalArt(f) && (
+    st === 'snare' ? !f.predator && preySize(f) <= 0.7 :
+    st === 'cage' ? !f.predator :
+    st === 'cage_iron'));
+}
 function trapTick() {
-  shelters.filter(s => TRAP_ST.includes(s.station)).forEach(s => {
-    s.catch = s.catch || 0; if (s.catch >= 3) return;
-    if (s.station === 'fishtrap') { const fish = (ZONES[s.zone].res || []).find(r => /ปลา|กุ้ง|ปู/.test(r)); if (fish && Math.random() < 0.18) { s.catch++; s.catchName = fish; } }
-    else if (s.station === 'cage' || s.station === 'cage_iron') {
-      if (s.catch >= 1) return;                        // one big animal at a time
-      const big = f => { const art = animalArt(f); return (art && ANIM_REL[art] ? ANIM_REL[art] : (f.sizeRel || 0.6)) > 0.7; };
-      const prey = faunaSpecies.find(f => (f.zp[s.zone] || 0) > 1 && animalArt(f) && animalArt(f) !== 'fish' && (big(f) || f.predator) && (!f.predator || s.station === 'cage_iron'));
-      if (prey && Math.random() < (s.station === 'cage_iron' ? 0.07 : 0.05)) { s.catch = 1; s.catchName = prey.name; s.catchId = prey.id; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); }
-    }
-    else { const small = f => { const art = animalArt(f); return (art && ANIM_REL[art] ? ANIM_REL[art] : (f.sizeRel || 0.6)) <= 0.7; };   // snares only hold small game
-      const prey = faunaSpecies.find(f => !f.predator && (f.zp[s.zone] || 0) > 1 && !/ปลา|กุ้ง|ปู/.test(f.name) && animalArt(f) !== 'fish' && small(f)); if (prey && Math.random() < 0.08) { s.catch++; s.catchName = prey.name; s.catchId = prey.id; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); } }
+  aiAgents.forEach(a => {                                // anyone carrying a trap sets it once they're up and about
+    if (a.sleeping || a.age < 12 || !a.bag || Math.random() > 0.35) return;
+    for (const n in a.bag) { const k = keyByName(n); if (a.bag[n] > 0 && PRODUCTS[k] && PRODUCTS[k].kind === 'trap' && setTrap(a, k)) break; }
   });
+  if (!isNightTime()) shelters.filter(s => TRAP_ST.includes(s.station) && (s.catch || 0) > 0).forEach(t => {
+    const o = byId(t.owner); if (!o || o.sleeping || o.age < 12 || o.hp < maxHp(o) * 0.3) return;
+    if (o.zone === t.zone && structDist(o, t) <= 2) { collectTrap(o, t); if (o.goal && o.goal.trap) o.goal = null; return; }
+    if (!o.goal && (o.zone === t.zone || zoneDist(o.zone, t.zone) <= 1)) { const p = approachOf(t, o); o.goal = { zone: t.zone, x: p.x, y: p.y, ttl: 20, trap: true }; o.bubble = `🪤 ไปดู${t.name.split(' (')[0]}`; }
+  });
+  shelters.filter(s => TRAP_ST.includes(s.station)).forEach(s => {
+    s.catch = s.catch || 0;
+    if ((s.station === 'cage' || s.station === 'cage_iron') && !s.maxUses) s.uses = s.maxUses = s.station === 'cage' ? 20 : 30;   // cages set before wear existed
+    if (s.catch >= 3) return;
+    if (s.station === 'fishtrap') { const fish = (ZONES[s.zone].res || []).find(r => /ปลา|กุ้ง|ปู/.test(r)); if (fish && Math.random() < 0.18) { s.catch++; s.catchName = fish; } return; }
+    if (s.station !== 'snare' && s.catch >= 1) return;                       // a cage holds one animal at a time
+    const list = trapPrey(s.station, s.zone); if (!list.length) return;
+    const big = list.filter(f => preySize(f) > 0.7), prey = s.station === 'snare' ? pick(list) : pick(big.length && Math.random() < 0.75 ? big : list);
+    if (Math.random() < ({ snare: 0.08, cage: 0.05, cage_iron: 0.07 })[s.station]) { s.catch++; s.catchName = prey.name; s.catchId = prey.id; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); }
+  });
+}
+// set a carried trap near where its prey lives (fish traps go in shallow water)
+function setTrap(a, key) {
+  const d = PRODUCTS[key], st = d.station;
+  if (shelters.some(x => x.station === st && x.owner === a.id)) return false;                       // one of each kind set at a time
+  if (st !== 'fishtrap' && !trapPrey(st, a.zone).length) return false;
+  buildZoneTerrain(a.zone);
+  let bs;
+  if (st === 'fishtrap') {
+    if (!(ZONES[a.zone].res || []).some(r => /ปลา|กุ้ง|ปู/.test(r))) return false;
+    const g = zoneTerrainGrid[a.zone];
+    for (let r = 1; r <= 8 && !bs; r++) for (let dy = -r; dy <= r && !bs; dy++) for (let dx = -r; dx <= r; dx++) { const tx = Math.round(a.x) + dx, ty = Math.round(a.y) + dy; if (g[ty] && SHALLOW.includes(g[ty][tx])) { bs = { x: tx, y: ty }; break; } }
+    if (!bs) return false;
+  } else bs = buildSpot(a.zone, a.x + 1, a.y - 1);
+  a.bag[d.name]--; if (a.bag[d.name] <= 0) delete a.bag[d.name];
+  const t = { name: `${d.name} (${a.zone})`, sprite: STATION_SPRITE[st], zone: a.zone, x: bs.x, y: bs.y, station: st, builder: a.name, owner: a.id, ownerName: a.name, public: false, permits: [], catch: 0 };
+  if (d.uses) { t.uses = d.uses; t.maxUses = d.uses; }
+  shelters.push(t);
+  a.bubble = `🪤 วาง${d.name}`; addLog(`🪤 [วางกับดัก] ${a.name} วาง${d.name}ที่ ${a.zone}${d.uses ? ` (ใช้ได้อีก ${t.uses} ครั้ง)` : ''}`, '#fbbf24');
+  return true;
 }
 function trapStep(a, night) {
   if (night || a.age < 12) return false;
+  if (a.bag) for (const n in a.bag) { const k = keyByName(n); if (a.bag[n] > 0 && PRODUCTS[k] && PRODUCTS[k].kind === 'trap' && setTrap(a, k)) return true; }
   const t = shelters.find(s => TRAP_ST.includes(s.station) && s.owner === a.id && s.zone === a.zone && (s.catch || 0) > 0);
   if (!t) return false;
   if (structDist(a, t) > 2) { const p = approachOf(t, a); for (let k = 0; k < 2; k++) moveToward(a, p.x, p.y); a.bubble = `🪤 ไปเก็บของจาก${t.name.split(' (')[0]}`; return true; }
+  collectTrap(a, t); return true;
+}
+function collectTrap(a, t) {
   if (t.station === 'fishtrap') { gainItems(a, t.catchName || 'ปลา', t.catch); a.bubble = `🪤 ได้${t.catchName} ${t.catch} ตัวจากลอบ`; }
-  else if (t.station === 'cage' || t.station === 'cage_iron') { const f = faunaSpecies.find(x => x.id === t.catchId); const n = f && f.predator ? 15 : 22; a.food = (a.food || 0) + n; a.bubble = `🪤 กรงจับ${t.catchName}ได้ (อาหาร +${n})`; addLog(`🪤 [กรงดักสัตว์] ${a.name} ได้${t.catchName}จากกรง`, '#fbbf24'); gainExp(a, 'str', 0.5); }
-  else { a.food = (a.food || 0) + 6 * t.catch; a.bubble = `🪤 กับดักจับ${t.catchName}ได้ ${t.catch} ตัว (อาหาร +${6 * t.catch})`; addLog(`🪤 [กับดัก] ${a.name} เก็บ${t.catchName} ${t.catch} ตัวจากกับดัก`, '#fbbf24'); }
+  else {                                                 // no animal keeping yet: kill it for meat and materials
+    const f = faunaSpecies.find(x => x.id === t.catchId) || faunaSpecies.find(x => x.name === t.catchName), n = t.catch, got = [];
+    const food = ((f && f.lootFood) || (f && f.predator ? 4 : 3)) * n; addFood(a, food);
+    if (f && f.lootMat) for (const [m, q] of Object.entries(f.lootMat)) { gainItems(a, m, q * n); got.push(`${m}×${q * n}`); }
+    const what = t.station === 'snare' ? 'กับดัก' : 'กรง';
+    a.bubble = `🔪 ชำแหละ${t.catchName}จาก${what} (อาหาร +${food}${got.length ? ' · ' + got.join(', ') : ''})`;
+    addLog(`🪤 [${what}ดักสัตว์] ${a.name} ได้${t.catchName}${n > 1 ? ` ${n} ตัว` : ''} ชำแหละได้อาหาร +${food}${got.length ? ' · ' + got.join(', ') : ''}`, '#fbbf24');
+    gainExp(a, 'str', 0.4); gainExp(a, 'dex', 0.3);
+    if (t.maxUses) {
+      t.uses = Math.max(0, (t.uses == null ? t.maxUses : t.uses) - 1);
+      if (t.uses <= 0) {                                 // worn out: pack the broken cage up to mend it at a workbench
+        const bk = t.station === 'cage_iron' ? 'iron_cage_broken' : 'wood_cage_broken', fix = PRODUCTS[bk].fixTo, mat = fix === 'iron_cage' ? 'เหล็กแท่ง' : 'กิ่งง่ามไม้แข็ง';
+        shelters.splice(shelters.indexOf(t), 1);
+        put(a, PRODUCTS[bk].name, 1);
+        const matName = (PRODUCTS.iron_ingot && fix === 'iron_cage') ? PRODUCTS.iron_ingot.name : mat;
+        const sig = sigOf(PRODUCTS[bk].name, matName, 'assemble');
+        if (!a.know[sig]) a.know[sig] = { a: PRODUCTS[bk].name, b: matName, m: 'assemble', out: fix, from: 'self', day: simDay, practice: 1 };
+        a.bubble = `🪤 ${PRODUCTS[fix].name}พังแล้ว เก็บไปซ่อมที่โต๊ะช่าง`;
+        addLog(`🪤 [กรงพัง] ${PRODUCTS[fix].name}ของ ${a.name} ใช้ครบ ${t.maxUses} ครั้งแล้ว ต้องเอาไปซ่อมที่โต๊ะช่าง (ใช้${matName})`, '#fb923c');
+      }
+    }
+  }
   t.catch = 0; gainExp(a, 'int', 0.3);
-  return true;
 }
 function templeTick() {
   const t = templeOf(); if (!t || t.tStage >= 4) return;
@@ -1997,7 +2070,7 @@ function put(agent, n, q) {
   if (!agent) return;
   agent.bag = agent.bag || {};
   const room = Math.max(0, bagCap(agent) - bagCount(agent));
-  const k = Math.min(room, q);
+  const k = Math.min(Math.floor(room / slotsOf(n)), q);
   if (k > 0) agent.bag[n] = (agent.bag[n] || 0) + k;
   if (q - k > 0) toStore(villageOf(agent), n, q - k);
 }
@@ -2020,7 +2093,7 @@ function depositTick(a) {
   const v = villageOf(a);
   if (!v || !a.bag || a.age < 12) return;
   if (bagCount(a) < bagCap(a) * 0.7 || Math.random() > a.kind) return;
-  const [n, q] = Object.entries(a.bag).filter(([k]) => k !== BAG_NAME).sort((x, y) => y[1] - x[1])[0] || [];
+  const [n, q] = Object.entries(a.bag).filter(([k]) => k !== BAG_NAME && !isGear(k)).sort((x, y) => y[1] - x[1])[0] || [];
   if (!n) return;
   const give = Math.ceil(q / 2);
   a.bag[n] -= give; if (!a.bag[n]) delete a.bag[n];
@@ -2081,6 +2154,7 @@ function produce(key, agent) {
     return buildStation(def.station, agent, agent.buildFor ? byId(agent.buildFor) : null) ? `🏗️ สร้าง "${def.name}" ที่โซน ${agent.zone}` : `มี "${def.name}" ของตัวเองอยู่แล้ว/เกาะเต็มแล้ว (วัสดุถูกใช้ไปเปล่าๆ)`;
   }
   if (def.kind === 'home') return buildHome(key, agent);
+  if (def.kind === 'trap') { put(agent, def.name, 1); return `🪤 ได้ "${def.name}" ใส่กระเป๋า (กินที่ ${slotsOf(def.name)} ช่อง${def.uses ? ` · ใช้ได้ ${def.uses} ครั้ง` : ''})`; }
   if (def.kind === 'bridge') { const b = placeBridge(agent, key); if (b) return `🌉 สร้าง "${def.name}" กว้าง ${b.width} ช่อง ที่โซน ${agent.zone}`; put(agent, def.name, 1); return `🌉 ได้ชุด "${def.name}" (ยังไม่มีจุดข้ามน้ำที่เหมาะ เก็บไว้ก่อน)`; }
   if (def.kind === 'food') { addFood(agent, def.food); return `🍲 ได้ "${def.name}" อาหาร +${def.food}`; }
   if (def.kind === 'tool') { newTool(def.name, agent); return `🔧 ได้ "${def.name}" เป็นของตัวเอง`; }
@@ -2114,7 +2188,7 @@ function pushTrial(t) { rndTrials.unshift(Object.assign({ day: simDay }, t)); if
 function experiment(agent, forcedMethod) {
   let methods = (forcedMethod ? [forcedMethod] : Object.keys(METHODS)).filter(m => methodUsable(agent, m));
   if (!methods.length) methods = Object.keys(METHODS).filter(m => methodUsable(agent, m));
-  let items = [...new Set(storeKeys(agent).concat(Object.keys(agent.bag || {}), toolItems.filter(t => t.owner === agent.id).map(t => t.name)))].filter(n => avail(agent, n) > 0 && !((propsOf(n).carry || propsOf(n).camp) && avail(agent, n) < 2));
+  let items = [...new Set(storeKeys(agent).concat(Object.keys(agent.bag || {}), toolItems.filter(t => t.owner === agent.id).map(t => t.name)))].filter(n => avail(agent, n) > 0 && !isGear(n) && !((propsOf(n).carry || propsOf(n).camp) && avail(agent, n) < 2));
   // Research focus: think about the most needed kind of thing first (tools → carrying → camping)
   const focus = !forcedMethod && Math.random() < Math.min(0.8, 0.35 + st(agent, 'int') * 0.03) ? researchTarget(agent) : null;
   let focusR = null;
@@ -2256,6 +2330,7 @@ function trimMemory(agent) {
 }
 
 function craftKnown(agent, entry) {
+  if ((entry.out === 'wood_cage' || entry.out === 'iron_cage') && entry.m !== 'assemble') entry.m = 'assemble';
   if (!methodUsable(agent, entry.m) || !hasMaterials(entry.a, entry.b, agent)) return false;
   const M = METHODS[entry.m];
   consume(entry.a, entry.b, agent);
@@ -2269,6 +2344,7 @@ function craftKnown(agent, entry) {
     godQuestEvent(agent, 'craft'); godQuestEvent(agent, 'recipe', entry.out);
     pushTrial({ title: `ผลิต: ${outName(entry.out)}`, detail: `${entry.a} + ${entry.b} · ${M.name}`, success: true, note: `🛠️ ${note} (ฝึกแล้ว ${entry.practice} ครั้ง)`, actor: agent.name, craft: true });
   } else {
+    [entry.a, entry.b].forEach(n => { if (isGear(n)) agent.bag[n] = (agent.bag[n] || 0) + 1; });   // a botched repair wastes the material, not the broken cage
     agent.bubble = '😓 ทำพลาด เสียวัตถุดิบ';
     pushTrial({ title: `ผลิต: ${outName(entry.out)}`, detail: `${entry.a} + ${entry.b} · ${M.name}`, success: false, note: `😓 ฝีมือยังไม่ถึง ทำพลาด (✋ DEX ${st(agent, 'dex')} · รู้วิธีแต่ยังไม่ชำนาญ)`, actor: agent.name, craft: true });
   }
@@ -2290,6 +2366,11 @@ function computeNeeds(forAgent) {
     if (!hasTool(t, forAgent)) Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.tool === t) needs.push(k); });
   });
   if (stationsOf('smelter').length && avail(forAgent, 'ถ่านไม้') < 2) needs.push('charcoal');
+  if (forAgent) {                                        // traps: mend a broken cage first, then keep one of each trap you know how to make
+    for (const n in (forAgent.bag || {})) { const d = productDef(keyByName(n)); if (forAgent.bag[n] > 0 && d && d.fixTo) needs.unshift(d.fixTo); }
+    const known = knownOuts(forAgent);
+    Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'trap' && known.has(k) && !avail(forAgent, d.name) && !shelters.some(x => x.station === d.station && x.owner === forAgent.id) && !needs.includes(k)) needs.push(k); });
+  }
   // Keep a small stock of every useful thing the island already knows how to make
   Object.keys(discoveredProducts).forEach(k => {
     const d = productDef(k);
@@ -2302,7 +2383,8 @@ function computeNeeds(forAgent) {
 function planFor(agent, key, depth = 0, seen = new Set()) {
   if (depth > 4 || seen.has(key)) return null;
   seen.add(key);
-  const entries = Object.values(agent.know).filter(e => e.out === key);
+  const entries = Object.values(agent.know).filter(e => e.out === key).sort((x, y) => (isGear(y.a) || isGear(y.b) ? 1 : 0) - (isGear(x.a) || isGear(x.b) ? 1 : 0));   // mend a broken one before building new
+  entries.forEach(e => { if ((key === 'wood_cage' || key === 'iron_cage') && e.m !== 'assemble') e.m = 'assemble'; });
   for (const e of entries) {
     const M = METHODS[e.m];
     if (M.station && !stationsOf(M.station).length) {
@@ -4724,7 +4806,7 @@ Object.assign(PRAYER_CATALOG, {
 });
 function findNewRecipes(a, n) {
   const known = new Set(Object.values(a.know || {}).filter(e => e.out).map(e => e.out));
-  const mats = Object.keys(MAT).concat(Object.values(PRODUCTS).filter(p => p.kind === 'item').map(p => p.name));
+  const mats = Object.keys(MAT).concat(Object.values(PRODUCTS).filter(p => p.kind === 'item' && !p.props.broken).map(p => p.name));
   const found = [], seen = new Set();
   const ms = Object.keys(METHODS).sort(() => Math.random() - 0.5);
   outer: for (const m of ms) for (const x of mats.slice().sort(() => Math.random() - 0.5)) for (const y of mats) {
@@ -5851,6 +5933,7 @@ function renderAllUI() {
     <div class="card" style="padding:6px; font-size:11px; border-color:${s.station ? '#f59e0b' : '#334155'};">
       🏗️ <b>${s.name}</b> ${s.builder ? `<span style="color:#94a3b8;">สร้างโดย ${s.builder}</span>` : ''}
       ${s.station ? `<div style="margin-top:3px;">${s.owner ? `👑 เจ้าของ: <b>${s.ownerName}</b>` : '🏝️ ของส่วนรวม'} ${s.public || !s.owner ? '<span class="tag tag-ok">🔓 ทุกคนใช้ได้</span>' : `<span class="tag tag-warn">🔒 ต้องขออนุญาต</span>${(s.permits || []).length ? ` · อนุญาตแล้ว: ${(s.permits || []).map(id => byId(id)?.name).filter(Boolean).join(', ')}` : ''}`}</div>` : ''}
+      ${s.maxUses ? `<div style="color:#fb923c;">🪤 ใช้ได้อีก ${s.uses ?? s.maxUses}/${s.maxUses} ครั้ง</div>` : ''}
       ${s.station && STATION_METHODS[s.station] ? `<div style="color:#fcd34d;">ใช้ทำ: ${STATION_METHODS[s.station].map(m => METHODS[m].name).join(', ')}</div>` : ''}
     </div>`).join('');
   document.getElementById('station-list').innerHTML = stationRows;
@@ -6246,7 +6329,12 @@ const MAT_ART = { 'ใบไม้สด': 'leaf_fresh', 'ใบตองสด'
 const MAT_ICON_IMG = {};
 (function () { const M = window.MAT_ICONS; if (!M || !window.ITEM_ART) return; let i = 0; for (const n in M) { const k = 'mat_' + (i++); ITEM_ART[k] = { icon: M[n] }; MAT_ART[n] = k; } })();
 function matIconImg(n) { const k = MAT_ART[n]; if (!k || !window.ITEM_ART || !ITEM_ART[k]) return null; let im = MAT_ICON_IMG[k]; if (!im) { im = MAT_ICON_IMG[k] = new Image(); im.src = ITEM_ART[k].icon; } return im.complete && im.naturalWidth ? im : null; }
-function itemArtKey(name) { if (!window.ITEM_ART) return null; const k = keyByName(name); if (k && ITEM_ART[k]) return k; const m = MAT_ART[name]; return m && ITEM_ART[m] ? m : null; }
+function trapIcons() {
+  if (!window.ITEM_ART || !window.TRAP_ART || ITEM_ART.wood_cage) return;
+  const m = { fish_trap: 'fishtrap', animal_trap: 'snare', wood_cage: 'cage_open', iron_cage: 'cage_iron_open', wood_cage_broken: 'cage_closed', iron_cage_broken: 'cage_iron_closed' };
+  for (const k in m) if (TRAP_ART[m[k]]) ITEM_ART[k] = { icon: TRAP_ART[m[k]].img };
+}
+function itemArtKey(name) { trapIcons(); if (!window.ITEM_ART) return null; const k = keyByName(name); if (k && ITEM_ART[k]) return k; const m = MAT_ART[name]; return m && ITEM_ART[m] ? m : null; }
 function itemIconHTML(name, sz = 18) { const k = itemArtKey(name); return k ? `<img src="${ITEM_ART[k].icon}" alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;vertical-align:-4px;margin-right:2px;">` : ''; }
 function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t => { if (t.holder !== a.id) return; const d = productDef(keyByName(t.name)); if (d && (!best || (d.tier || 1) > (best.tier || 1))) best = { tier: d.tier || 1, key: keyByName(t.name) }; }); return best; }
 // what the puppet actually holds for a pose: art for stone-age tools, code drawing for metal ones
@@ -7193,7 +7281,7 @@ const GLYPH_MAT = [[/ไผ่|หลิว/, 'ไผ่'], [/หินเหล
   [/เปลือก|กระดอง|เกล็ด/, 'เปลือก'], [/ทราย/, 'ทราย'], [/เกลือ/, 'เกลือ'], [/ถ่าน/, 'ถ่าน'], [/อิฐ/, 'อิฐ'], [/สาหร่าย|ปีกผีเสื้อ/, 'ใบไม้'], [/หิ่งห้อย/, 'สัตว์'], [/แร่|ถ่าน|กำมะถัน|ประสิว|เกลือ|ผลึก|เหล็ก|ทองแดง/, 'แร่'], [/หิน|กรวด|เปลือกหอย|ปะการัง|เขา|เขี้ยว|กรงเล็บ/, 'หิน'], [/ดิน/, 'ดินเหนียว'], [/น้ำ/, 'น้ำ'],
   [/เถาวัลย์|กก|ต้นจาก|กาบ|ใย|เชือก|ตะไคร่|กล้วย/, 'เส้นใย'], [/ไม้|ขอน|กิ่ง|ต้นสน|มะพร้าว/, 'ไม้'], [/แร่|ถ่าน|กำมะถัน|ประสิว|ทราย|เกลือ|ผลึก|เหล็ก|ทองแดง|แก้ว/, 'แร่'],
   [/ใบ|สมุนไพร/, 'ใบไม้'], [/หนัง|กระดอง|เปลือกแมง/, 'หนังสัตว์'], [/ไฟ|เถ้า/, 'ไฟ']];
-const GLYPH_METHOD = { knap: 'กะเทาะ', bind: 'มัด', friction: 'เสียดสี', cut: 'ตัด', mix12: 'ผสม', knead11: 'ปั้น', roast: 'ไฟ', kiln: 'เผา', smelt: 'หลอม', synth: 'ผสม' };
+const GLYPH_METHOD = { assemble: 'มัด', knap: 'กะเทาะ', bind: 'มัด', friction: 'เสียดสี', cut: 'ตัด', mix12: 'ผสม', knead11: 'ปั้น', roast: 'ไฟ', kiln: 'เผา', smelt: 'หลอม', synth: 'ผสม' };
 const GLYPH_STATION = { campfire: 'กองไฟ', kiln: 'เตาเผา', workbench: 'โต๊ะช่าง' };
 function glyphOfThing(name, isOut) {
   const k = keyByName(name), d = k && productDef(k);
@@ -7219,7 +7307,7 @@ function steleWords(r) {
 }
 let steles = [], steleSeeded = false, steleSeq = 0;
 function validRecipes() {
-  const names = [...new Set(Object.keys(MAT).concat(Object.values(PRODUCTS).filter(p => p.kind !== 'station').map(p => p.name)))];
+  const names = [...new Set(Object.keys(MAT).concat(Object.values(PRODUCTS).filter(p => p.kind !== 'station' && !(p.props && p.props.broken)).map(p => p.name)))];
   const out = {};
   for (let i = 0; i < names.length; i++) for (let j = i; j < names.length; j++) for (const m in METHODS) {
     let r; try { r = natureLaw(names[i], names[j], m); } catch (e) { continue; }
