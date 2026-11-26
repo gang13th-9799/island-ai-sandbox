@@ -463,7 +463,7 @@ function derivedStats(a) {
 function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // VIT +1 = HP +2, STR +1 = HP +1
 // attack: STR +1 = ATK +2, plus the best weapon carried; defence: VIT +1 = DEF +1, plus armour
 function atkOf(a) { const t = ['sword', 'bow', 'spear', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? Math.round(toolStat(t).pow * 4 * QMULT[t.q ?? QDEF]) : 0); }
-function defOf(a) { const ar = carriedEff(a, 'armor'), lg = carriedEff(a, 'legs'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0) + (lg ? Math.round(lg.n / 4) : 0); }
+function defOf(a) { const ar = offhandArmor(a), lg = carriedEff(a, 'legs'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0) + (lg ? Math.round(lg.n / 4) : 0); }
 function dodgeOf(a) { const ft = carriedEff(a, 'feet'); return Math.min(0.45, st(a, 'agi') * 0.01 + (ft ? ft.n / 100 : 0)); }      // AGI +1 = dodge +1% · shoes add more (max 45%)
 function hurt(a, dmg, floor = 0, by) { if (by) a._lastHurt = { by, t: nowH() }; if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
 function agentLevel(a) { return STAT_KEYS.reduce((s, k) => s + st(a, k), 0) - STAT_KEYS.length + 1; }
@@ -963,7 +963,7 @@ function newTool(name, owner, ql) {
   const t = { uid: ++toolSeq, name, type: def.tool, owner: owner ? owner.id : null, ownerName: owner ? owner.name : 'ส่วนรวม', wear: 0, public: owner ? owner.kind >= 0.8 : true, q: ql ?? QDEF };
   const af = affixRoll(t.q, Math.random); if (af) t.aff = af;
   // a tool is a real object: the maker carries it (or it lies at the camp)
-  if (owner && carriedTools(owner).length < TOOL_CARRY) { t.holder = owner.id; t.zone = owner.zone; t.x = owner.x; t.y = owner.y; }
+  if (owner && carriedTools(owner).length < toolCap(owner)) { t.holder = owner.id; t.zone = owner.zone; t.x = owner.x; t.y = owner.y; }
   else { const c = owner || campOf(); t.holder = null; t.zone = c.zone; const p = buildSpot(c.zone, c.x, c.y); t.x = p.x; t.y = p.y; }
   toolItems.push(t); syncToolStock();
   return t;
@@ -973,7 +973,10 @@ function toolNames(type) { return [...new Set(toolsOfType(type).map(t => t.name)
 // With a user: only tools they may use (own > public/friend > borrowed). Without: any on the island.
 // Tools are physical: you can only use one you are carrying. Pick one up off the ground within 2 tiles,
 // or borrow it from someone standing next to you (they may say no).
-const TOOL_CARRY = 2;          // two hands for tools; the third slot became the right accessory
+const TOOL_CARRY = 2;          // two hands: right and left
+// the left hand holds either a second tool or a shield. a.offhand: 'shield' | 'tool' | unset (AI: shield only when the left hand is free)
+function offhandArmor(a) { const e = carriedEff(a, 'armor'); if (!e || a.offhand === 'tool') return null; if (a.offhand === 'shield') return e; return carriedTools(a).length < TOOL_CARRY ? e : null; }
+function toolCap(a) { return a.offhand === 'shield' && carriedEff(a, 'armor') ? 1 : TOOL_CARRY; }
 function carriedTools(a) { return toolItems.filter(t => t.holder === a.id); }
 function toolMaxDur(t) { const def = productDef(keyByName(t.name)) || {}; return Math.round((def.dur || 10) * QMULT[t.q ?? QDEF]); }
 function hasTool(type, user) { return user ? toolItems.some(t => t.type === type && t.holder === user.id) : toolsOfType(type).length > 0; }
@@ -983,7 +986,7 @@ function getTool(type, user, ask = true) {
   if (!user) return list[0] || null;
   const mine = list.find(t => t.holder === user.id);
   if (mine || !ask) return mine || null;
-  const full = carriedTools(user).length >= TOOL_CARRY;
+  const full = carriedTools(user).length >= toolCap(user);
   for (const t of list) {
     const h = t.holder && aiAgents.find(o => o.id === t.holder);
     const lying = !t.holder && t.zone === user.zone && Math.hypot(t.x - user.x, t.y - user.y) <= 2;
@@ -1009,20 +1012,20 @@ function toolTick() {
   toolItems.forEach(t => {
     if (t.holder === undefined) {                      // old saves: owner carries it, communal tools lie at the camp
       const o = t.owner && byId.get(t.owner);
-      if (o && carriedTools(o).length < TOOL_CARRY) { t.holder = o.id; }
+      if (o && carriedTools(o).length < toolCap(o)) { t.holder = o.id; }
       else { const c = campOf(), p = buildSpot(c.zone, c.x + 2, c.y + 1); t.holder = null; t.zone = c.zone; t.x = p.x; t.y = p.y; }
     }
     if (!t.holder) return;
     const h = byId.get(t.holder);
     if (!h) { t.holder = null; return; }                // stays where its carrier was
-    if (carriedTools(h).length > TOOL_CARRY) { toolDrop(h); if (!t.holder) return; }   // old saves carried three
+    if (carriedTools(h).length > toolCap(h)) { toolDrop(h); if (!t.holder) return; }   // old saves carried three; a shield takes the left hand
     t.zone = h.zone; t.x = h.x; t.y = h.y;
-    if (t.owner && t.owner !== h.id) { const o = byId.get(t.owner); if (o && o.zone === h.zone && Math.hypot(o.x - h.x, o.y - h.y) <= 2 && carriedTools(o).length < TOOL_CARRY) t.holder = o.id; }
+    if (t.owner && t.owner !== h.id) { const o = byId.get(t.owner); if (o && o.zone === h.zone && Math.hypot(o.x - h.x, o.y - h.y) <= 2 && carriedTools(o).length < toolCap(o)) t.holder = o.id; }
   });
 }
 // go and pick up a usable tool lying nearby when you don't carry one of that kind
 function toolFetch(a) {
-  if (carriedTools(a).length >= TOOL_CARRY) return false;
+  if (carriedTools(a).length >= toolCap(a)) return false;
   const want = toolItems.filter(t => !t.holder && t.zone === a.zone && !hasTool(t.type, a) && canUse(a, t) && Math.hypot(t.x - a.x, t.y - a.y) < 30)
     .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
   if (!want) return false;
@@ -4471,7 +4474,7 @@ function effBonus(a, k) {
     const c = {}; (a.buffs || []).forEach(b => { if (b.until > h) c[b.stat] = (c[b.stat] || 0) + b.n; });
     if (a.bag) { const seen = {}; for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'charm' && !seen[d.eff.stat]) { seen[d.eff.stat] = 1; c[d.eff.stat] = (c[d.eff.stat] || 0) + d.eff.n; } } }
     try { carriedTools(a).forEach(t => { if (t.aff) for (const s in t.aff) c[s] = (c[s] || 0) + t.aff[s]; }); } catch (e) { /* tools not set up yet (start-up) */ }            // high-grade tools carry bonus stats
-    ['armor', 'warm', 'legs', 'feet', 'bag', 'light', 'charm'].forEach(ty => { const e = carriedEff(a, ty); const af = e && affixFor(e.item, e.q); if (af) for (const s in af) c[s] = (c[s] || 0) + af[s]; });
+    ['armor', 'warm', 'legs', 'feet', 'bag', 'light', 'charm'].forEach(ty => { const e = ty === 'armor' ? offhandArmor(a) : carriedEff(a, ty); const af = e && affixFor(e.item, e.q); if (af) for (const s in af) c[s] = (c[s] || 0) + af[s]; });
     carriedAcc(a).forEach(e => { c[e.stat] = (c[e.stat] || 0) + e.n; const af = affixFor(e.item, e.q); if (af) for (const s in af) c[s] = (c[s] || 0) + af[s]; });
     a._effC = { h, c };
   }
@@ -6005,7 +6008,7 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
 }
 // shields: the best one carried in the bag is strapped to the far arm (front / back art, foreshortened for the 3/4 view)
 const SHIELD_IMG = {}, SHIELD_SIZE = { wood_shield: 0.34, ironwood_shield: 0.36, iron_shield: 0.42 };
-function shieldKey(a) { let best = null, bn = 0; for (const n in (a.bag || {})) { if (a.bag[n] <= 0) continue; const k = keyByName(n), d = k && productDef(k); if (d && d.props && d.props.shield && d.eff && d.eff.n > bn) { bn = d.eff.n; best = k; } } return best; }
+function shieldKey(a) { if (!offhandArmor(a)) return null; let best = null, bn = 0; for (const n in (a.bag || {})) { if (a.bag[n] <= 0) continue; const k = keyByName(n), d = k && productDef(k); if (d && d.props && d.props.shield && d.eff && d.eff.n > bn) { bn = d.eff.n; best = k; } } return best; }
 function drawShield(ctx, mBody, foInBody, rig, key, side, guard) {
   const E = window.ITEM_ART && ITEM_ART[key] && ITEM_ART[key][side]; if (!E) return;
   const ik = key + '_' + side, im = SHIELD_IMG[ik] || (SHIELD_IMG[ik] = Object.assign(new Image(), { src: E.src }));
@@ -7779,8 +7782,9 @@ function renderAgentPop() {
     const tools = carriedTools(a), effItem = type => { let best = null, bn = null; for (const nm in a.bag || {}) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type && (!best || (d.eff.n || 0) > (best.n || 0))) { best = d.eff; bn = nm; } } return bn; };
     const of = OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา';
     const wear = [slot('ชุด', '👕', of)];
-    [['warm', '🧥', 'ผ้าคลุม'], ['legs', '👖', 'กางเกง/กระโปรง'], ['feet', '👞', 'รองเท้า'], ['armor', '🛡️', 'โล่'], ['bag', '👜', 'ย่าม/ตะกร้า'], ['light', '🔦', 'แสงไฟ'], ['charm', '📿', 'เครื่องราง']].forEach(([t, ic, lb]) => { const n = effItem(t); wear.push(slot(lb, n ? itemIcon(n, 28) : ic, n)); });
-    for (let i = 0; i < TOOL_CARRY; i++) { const t = tools[i]; wear.push(slot(`มือ ${i + 1}`, t ? itemIcon(t.name, 28) : '✋', t && t.name, t ? `สึก ${t.wear}/${productDef(keyByName(t.name))?.dur || '?'}` : '')); }
+    [['warm', '🧥', 'ผ้าคลุม'], ['legs', '👖', 'กางเกง/กระโปรง'], ['feet', '👞', 'รองเท้า'], ['bag', '👜', 'ย่าม/ตะกร้า'], ['light', '🔦', 'แสงไฟ'], ['charm', '📿', 'เครื่องราง']].forEach(([t, ic, lb]) => { const n = effItem(t); wear.push(slot(lb, n ? itemIcon(n, 28) : ic, n)); });
+    { const tl = t => t ? `สึก ${t.wear}/${toolMaxDur(t)}` : ''; const oh = offhandArmor(a); wear.push(slot('มือขวา', tools[0] ? itemIcon(tools[0].name, 28) : '✋', tools[0] && tools[0].name, tl(tools[0])));
+      wear.push(oh ? slot('มือซ้าย · โล่', itemIcon(oh.item, 28), oh.item, '') : slot('มือซ้าย', tools[1] ? itemIcon(tools[1].name, 28) : '✋', tools[1] && tools[1].name, tl(tools[1]))); }
     { const ac = carriedAcc(a); ['ประดับซ้าย', 'ประดับขวา'].forEach((lb, i) => wear.push(slot(lb, ac[i] ? itemIcon(ac[i].item, 28) : '💍', ac[i] && ac[i].item))); }
     const items = Object.entries(a.bag || {}).filter(([, n]) => n > 0).sort((p, q) => q[1] - p[1]);
     const cap = bagCap(a), used = bagCount(a);
@@ -8072,6 +8076,7 @@ function itemCat(n) {
   return d ? 'made' : 'mat';
 }
 const CAT_TH = { gear: 'อุปกรณ์', trap: 'กับดัก', made: 'ของที่ทำ', mat: 'วัตถุดิบ', food: 'อาหาร' };
+function setOffhand(m) { const a = aiAgents.find(x => x.id === CW.who); if (!a) return; a.offhand = m; if (m === 'shield') while (carriedTools(a).length > toolCap(a)) toolDrop(a); a._effC = null; a.bubble = m === 'shield' ? '🛡️ ยกโล่ขึ้นมือซ้าย' : '🔧 เก็บโล่ ใช้มือซ้ายถือเครื่องมือ'; renderCW(); }
 function cwItemCard(n, qty, extra, q, aff) {
   const k = keyByName(n), d = k && productDef(k), sl = slotsOf(n), c = itemCat(n), g = q ?? QDEF, P = propsOf(n) || {};
   const eff = d && d.eff ? Object.assign({}, d.eff, { n: Math.round((d.eff.n || 0) * QMULT[g]) }) : null;
@@ -8113,24 +8118,28 @@ function renderCW() {
     const best = type => { let bn = null, be = null; for (const nm in a.bag || {}) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type && (!be || (d.eff.n || 0) > (be.n || 0))) { be = d.eff; bn = nm; } } return bn; };
     const camp = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).camp || 0) > bv) { bv = propsOf(nm).camp; bn = nm; } return bn; })();
     const carry = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).carry || 0) > bv) { bv = propsOf(nm).carry; bn = nm; } return bn; })();
-    const tools = carriedTools(a), shield = shieldKey(a), shieldN = shield && PRODUCTS[shield].name;
+    const tools = carriedTools(a), oh = offhandArmor(a), shieldN = oh && oh.item;
     const slot = (id, lb, ic, name, sub, side, dur, g) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" ${name && g != null ? `style="--qc:${qColor(g)}" data-q="1"` : ''} onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
-    const hand = i => { const t = tools[i]; if (!t) return slot('h' + i, `มือ ${i + 1}`, '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = toolMaxDur(t); return slot('h' + i, `มือ ${i + 1} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `${qName(t.q)} · ทน ${mx - t.wear}/${mx}${t.aff ? ' · ✨' + affixText(t.aff) : ''}`, '', (mx - t.wear) / mx, t.q); };
+    const HN = ['มือขวา', 'มือซ้าย'];
+    const hand = i => { if (i === 1 && oh) return slot('h1', 'มือซ้าย · โล่', '🛡️', oh.item, `${qName(oh.q)} · ${effText(oh)}`, '', null, oh.q);
+      const t = tools[i]; if (!t) return slot('h' + i, HN[i], '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = toolMaxDur(t); return slot('h' + i, `${HN[i]} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `${qName(t.q)} · ทน ${mx - t.wear}/${mx}${t.aff ? ' · ✨' + affixText(t.aff) : ''}`, '', (mx - t.wear) / mx, t.q); };
     const gq = n => n ? qBest(a, n) : null, ge = ty => carriedEff(a, ty);
     const acc = carriedAcc(a), accSlot = (i, id, lb) => { const e = acc[i]; return slot(id, lb, '💍', e && e.item, e ? `${qName(e.q)} · ${e.stat.toUpperCase()} +${e.n}` : '', i ? '' : 'r', null, e && e.q); };
     const lg = ge('legs'), ft = ge('feet');
     const L = [hand(0), hand(1), accSlot(1, 'ar', 'ประดับขวา'), slot('lg', 'กางเกง/กระโปรง', '👖', lg && lg.item, lg ? `${qName(lg.q)} · ${effText(lg)}` : '', '', null, lg && lg.q), slot('ft', 'รองเท้า', '👞', ft && ft.item, ft ? `${qName(ft.q)} · ${effText(ft)}` : '', '', null, ft && ft.q), slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : '')];
-    const R = [slot('sh', 'มือรอง · โล่', '🛡️', shieldN, shieldN ? `${qName(gq(shieldN))} · ${effText(Object.assign({}, PRODUCTS[shield].eff, { n: Math.round(PRODUCTS[shield].eff.n * QMULT[gq(shieldN)]) }))}` : '', 'r', null, gq(shieldN)), slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
+    const R = [slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
       slot('wm', 'ผ้าคลุม', '🧥', best('warm'), '', 'r'), accSlot(0, 'al', 'ประดับซ้าย'), slot('bg', 'ย่าม/ตะกร้า', '👜', carry || best('bag'), carry ? `ความจุ +${propsOf(carry).carry}` : '', 'r'),
       slot('lt', 'แสงไฟ', '🔦', best('light'), '', 'r'), slot('ch', 'เครื่องราง', '📿', best('charm'), '', 'r')];
     const sumP = [`⚔️ ATK <b>${atkOf(a)}</b>`, `🛡️ DEF <b>${defOf(a)}</b>`, `❤️ HP <b>${maxHp(a)}</b>`, `💨 หลบ <b>${Math.round(dodgeOf(a) * 100)}%</b>`, `🎒 จุ <b>${bagCap(a)}</b> ช่อง`];
     body = `<div class="cw-doll"><div class="cw-eqcol">${L.join('')}</div><canvas id="cw-doll" width="300" height="400"></canvas><div class="cw-eqcol">${R.join('')}</div></div>
       <div class="cw-sum">${sumP.join(' · ')}</div>`;
-    const selName = { h0: tools[0] && tools[0].name, h1: tools[1] && tools[1].name, al: acc[0] && acc[0].item, ar: acc[1] && acc[1].item, lg: lg && lg.item, ft: ft && ft.item, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
-    const selTool = { h0: tools[0], h1: tools[1] }[CW.sel];
+    const selName = { h0: tools[0] && tools[0].name, h1: oh ? oh.item : tools[1] && tools[1].name, al: acc[0] && acc[0].item, ar: acc[1] && acc[1].item, lg: lg && lg.item, ft: ft && ft.item, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
+    const selTool = { h0: tools[0], h1: oh ? null : tools[1] }[CW.sel];
+    const hasSh = !!carriedEff(a, 'armor'), ohPick = CW.sel === 'h1' && a.possessed && hasSh ? `<div class="cw-oh">มือซ้ายถือ: <button class="${oh ? 'on' : ''}" onclick="setOffhand('shield')">🛡️ โล่</button><button class="${oh ? '' : 'on'}" onclick="setOffhand('tool')">🔧 เครื่องมือ</button></div>` : '';
+    body += ohPick;
     if (selTool) body += cwItemCard(selTool.name, null, '', selTool.q ?? QDEF, selTool.aff || null);
-    else if (selName) body += cwItemCard(selName, null, '', gq(selName));
-    foot = 'ถือเครื่องมือได้ 2 อย่าง · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
+    else if (selName) body += cwItemCard(selName, null, '', CW.sel === 'h1' && oh ? oh.q : gq(selName));
+    foot = 'มี 2 มือ: มือขวาถือเครื่องมือ มือซ้ายถือเครื่องมืออีกชิ้นหรือโล่ ถือโล่แล้วเหลือเครื่องมือได้ชิ้นเดียว · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
   } else if (CW.tab === 'bag') {
     const all = [];
     for (const [n, c0] of Object.entries(a.bag || {})) if (c0 > 0) qOf(a, n).forEach((c, g) => { if (c > 0) all.push([n, c, g]); });
