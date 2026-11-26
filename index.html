@@ -1242,8 +1242,8 @@ function derivedStats(a) {
 function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // VIT +1 = HP +2, STR +1 = HP +1
 // attack: STR +1 = ATK +2, plus the best weapon carried; defence: VIT +1 = DEF +1, plus armour
 function atkOf(a) { const t = ['sword', 'bow', 'spear', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? Math.round(toolStat(t).pow * 4 * QMULT[t.q ?? QDEF]) : 0); }
-function defOf(a) { const ar = carriedEff(a, 'armor'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0); }
-function dodgeOf(a) { return Math.min(0.4, st(a, 'agi') * 0.01); }      // AGI +1 = dodge +1% (max 40%)
+function defOf(a) { const ar = carriedEff(a, 'armor'), lg = carriedEff(a, 'legs'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0) + (lg ? Math.round(lg.n / 4) : 0); }
+function dodgeOf(a) { const ft = carriedEff(a, 'feet'); return Math.min(0.45, st(a, 'agi') * 0.01 + (ft ? ft.n / 100 : 0)); }      // AGI +1 = dodge +1% · shoes add more (max 45%)
 function hurt(a, dmg, floor = 0, by) { if (by) a._lastHurt = { by, t: nowH() }; if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
 function agentLevel(a) { return STAT_KEYS.reduce((s, k) => s + st(a, k), 0) - STAT_KEYS.length + 1; }
 function recipeCap(a) { return 4 + st(a, 'int') * 2; }
@@ -1342,6 +1342,14 @@ const PRODUCTS = {
   bow_horn:     { name: 'ธนูเขาสัตว์', kind: 'tool', tool: 'bow', dur: 50, pow: 3, tier: 3, props: { wood: 1 } },           // short recurve backed with horn
   bow_iron:     { name: 'ธนูเหล็ก', kind: 'tool', tool: 'bow', dur: 70, pow: 4, tier: 4, props: { wood: 1, metal: 1 } },  // horn recurve with iron tips and grip
   campfire:     { name: 'กองไฟ', kind: 'station', station: 'campfire' },
+  // worn gear: legs, feet, accessories
+  leaf_skirt:   { name: 'กระโปรงใบไม้', kind: 'item', eff: { type: 'legs', n: 8, warm: 1 }, props: { leaf: 0.5, wear: 1 } },        // leaves tied on a rope belt
+  hide_pants:   { name: 'กางเกงหนังสัตว์', kind: 'item', eff: { type: 'legs', n: 20, warm: 3 }, props: { hide: 0.5, wear: 1 } },   // hide cut and laced with rope
+  rope_sandal:  { name: 'รองเท้าสานเชือก', kind: 'item', eff: { type: 'feet', n: 2, warm: 0 }, props: { fiber: 0.5, wear: 1 } },     // woven grass soles
+  hide_boots:   { name: 'รองเท้าหนังสัตว์', kind: 'item', eff: { type: 'feet', n: 4, warm: 1 }, props: { hide: 0.5, wear: 1 } },    // hide cut to shape with a stone blade
+  fang_necklace: { name: 'สร้อยเขี้ยวสัตว์', kind: 'item', eff: { type: 'acc', stat: 'str', n: 1 }, props: { wear: 1 } },
+  shell_necklace: { name: 'สร้อยเปลือกหอย', kind: 'item', eff: { type: 'acc', stat: 'cha', n: 1 }, props: { wear: 1 } },
+  copper_bangle: { name: 'กำไลทองแดง', kind: 'item', eff: { type: 'acc', stat: 'vit', n: 2 }, props: { metal: 0.5, copper: 1, wear: 1 } },
   clay_paste:   { name: 'ดินปั้นเนื้อเนียน', kind: 'item', props: { paste: 1 } },
   raw_pot:      { name: 'หม้อดินดิบ', kind: 'item', props: { raw: 1 } },
   raw_brick:    { name: 'อิฐดิบ', kind: 'item', props: { raw: 1 } },
@@ -1484,6 +1492,7 @@ function natureLaw(a, b, m) {
       if (A.hard || B.hard) return near('ทุบแล้วแค่แตกละเอียด ไม่ได้อะไร');
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
+      if (either((P, n) => /^(เขี้ยว|ฟัน|กรงเล็บ)/.test(n), is('rope'))) return ok('fang_necklace');   // teeth threaded on a cord
       if (either(N('fence_posts'), P => P.hide >= 1)) return ok('wood_shield');        // hardwood planks lashed together with hide straps
       if (either(N('bow_hard'), (P, n) => /^เขา/.test(n))) return ok('bow_horn');       // glue horn to the belly: a short, strong recurve
       if (either(N('vine_net'), is('rope'))) return ok('rope_bridge');            // net walkway on rope lines
@@ -1539,6 +1548,11 @@ function natureLaw(a, b, m) {
       return fail('ถูกันแล้วไม่ร้อนพอ');
     }
     case 'cut':
+      if (either(P => P.hide >= 1, is('rope'))) return ok('hide_pants');              // cut hide into leggings, lace with rope
+      if (either(P => P.leaf >= 1, is('rope'))) return ok('leaf_skirt');               // leaves hung from a rope belt
+      if (either(P => P.hide >= 1, N('stone_blade'))) return ok('hide_boots');         // cut hide to the foot's shape
+      if (either(P => P.fiber && !P.rope && !P.bamboo && !P.wood, is('rope'))) return ok('rope_sandal');   // woven grass soles
+      if (either((P, n) => n === 'เปลือกหอยคม', is('rope'))) return ok('shell_necklace');
       if (either(is('bamboo'), is('rope'))) return ok('fishing_rod');                   // trim a bamboo pole, tie a line
       if (either(N('fence_posts'), is('rope'))) return ok('bow_hard');                  // carve a hardwood post into a long bow stave, string it
       if (either(N('stone_blade'), P => P.wood && !P.bamboo && !P.fence && (!P.dry || P.forked))) return ok('wood_sword');   // carve a sword from hard wood
@@ -1553,6 +1567,7 @@ function natureLaw(a, b, m) {
       if (either(N('bow_horn'), N('iron_ingot'))) return ok('bow_iron');
       if (either(N('wood_shield'), N('iron_ingot'))) return ok('ironwood_shield');   // iron rim and boss on a wooden shield
       if (either(N('ironwood_shield'), N('iron_ingot'))) return ok('iron_shield');   // plate it all over: a solid iron shield             // iron tips and grip on a horn bow
+      if (either(N('copper_ingot'), N('copper_ingot'))) return ok('copper_bangle');    // hammered into a ring for the wrist
       if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');           // iron bars
       return fail('ประกอบแล้วไม่เข้ากัน ไม่ได้อะไร');
     case 'knead11':
@@ -1737,7 +1752,7 @@ function toolNames(type) { return [...new Set(toolsOfType(type).map(t => t.name)
 // With a user: only tools they may use (own > public/friend > borrowed). Without: any on the island.
 // Tools are physical: you can only use one you are carrying. Pick one up off the ground within 2 tiles,
 // or borrow it from someone standing next to you (they may say no).
-const TOOL_CARRY = 3;
+const TOOL_CARRY = 2;          // two hands for tools; the third slot became the right accessory
 function carriedTools(a) { return toolItems.filter(t => t.holder === a.id); }
 function toolMaxDur(t) { const def = productDef(keyByName(t.name)) || {}; return Math.round((def.dur || 10) * QMULT[t.q ?? QDEF]); }
 function hasTool(type, user) { return user ? toolItems.some(t => t.type === type && t.holder === user.id) : toolsOfType(type).length > 0; }
@@ -1746,7 +1761,8 @@ function getTool(type, user, ask = true) {
   const list = toolsOfType(type).sort((p, q) => (toolMaxDur(q) - q.wear) - (toolMaxDur(p) - p.wear));
   if (!user) return list[0] || null;
   const mine = list.find(t => t.holder === user.id);
-  if (mine || !ask || carriedTools(user).length >= TOOL_CARRY) return mine || null;
+  if (mine || !ask) return mine || null;
+  const full = carriedTools(user).length >= TOOL_CARRY;
   for (const t of list) {
     const h = t.holder && aiAgents.find(o => o.id === t.holder);
     const lying = !t.holder && t.zone === user.zone && Math.hypot(t.x - user.x, t.y - user.y) <= 2;
@@ -1756,10 +1772,15 @@ function getTool(type, user, ask = true) {
     if (nextTo && h.id !== t.owner) continue;                                   // can't hand on what you borrowed
     if (nextTo && !t.public && !askToUse(user, t, t.name)) continue;
     if (lying && !canUse(user, t) && !askToUse(user, t, t.name)) continue;
+    if (full) toolDrop(user);                                                      // hands full: put down the tool used longest ago
     t.holder = user.id; user.bubble = nextTo ? `🤲 ยืม${t.name}จาก${h.name}` : `🫳 หยิบ${t.name}`;
     return t;
   }
   return null;
+}
+function toolDrop(a) {
+  const d = carriedTools(a).sort((p, q) => (p.usedAt || 0) - (q.usedAt || 0))[0]; if (!d) return;
+  d.holder = null; d.zone = a.zone; d.x = a.x; d.y = a.y;
 }
 // keep each tool's position on its carrier; dead carriers drop it; owners take back what they lent when next to the borrower
 function toolTick() {
@@ -1773,6 +1794,7 @@ function toolTick() {
     if (!t.holder) return;
     const h = byId.get(t.holder);
     if (!h) { t.holder = null; return; }                // stays where its carrier was
+    if (carriedTools(h).length > TOOL_CARRY) { toolDrop(h); if (!t.holder) return; }   // old saves carried three
     t.zone = h.zone; t.x = h.x; t.y = h.y;
     if (t.owner && t.owner !== h.id) { const o = byId.get(t.owner); if (o && o.zone === h.zone && Math.hypot(o.x - h.x, o.y - h.y) <= 2 && carriedTools(o).length < TOOL_CARRY) t.holder = o.id; }
   });
@@ -1790,7 +1812,7 @@ function useTool(type, user, tool) {
   const t = tool || (user ? getTool(type, user, false) : getTool(type, null));
   if (!t) return;
   if (user && Math.random() < Math.min(0.5, st(user, 'dex') * 0.015)) return;   // DEX +1 = tools last 1.5% longer
-  t.wear++;
+  t.wear++; t.usedAt = nowH();
   const def = productDef(keyByName(t.name));
   if (t.wear >= toolMaxDur(t)) {
     toolItems = toolItems.filter(x => x !== t); syncToolStock();
@@ -1829,7 +1851,8 @@ const RESEARCH_TIERS = [
   { label: 'ปัจจัย 4', keys: ['leaf_hut', 'campfire', 'cooked_food', 'boiled_water'] },
   { label: 'เครื่องมือพื้นฐาน', keys: ['stone_blade', 'rope', 'stone_axe', 'stone_pick', 'stone_hammer', 'stone_sickle', 'bamboo_tube'] },
   { label: 'อุปกรณ์ขนของ', keys: ['vine_net', 'bamboo_basket', 'hide_bag'] },
-  { label: 'อุปกรณ์ตั้งแคมป์', keys: ['sleep_mat', 'travel_tent'] }
+  { label: 'อุปกรณ์ตั้งแคมป์', keys: ['sleep_mat', 'travel_tent'] },
+  { label: 'เครื่องแต่งกาย', keys: ['leaf_skirt', 'rope_sandal', 'hide_pants', 'hide_boots', 'fang_necklace', 'shell_necklace'] }
 ];
 function researchPrio(k) { for (let i = 0; i < RESEARCH_TIERS.length; i++) if (RESEARCH_TIERS[i].keys.includes(k)) return i; return 9; }
 function knownOuts(a) { return new Set(Object.values(a.know || {}).filter(e => e.out).map(e => e.out)); }
@@ -4721,7 +4744,7 @@ function feltTemp(a) {
   const indoors = a.sleeping && a.sleepKind === 'bed';
   const fire = stationInZone(a.zone, 'campfire');
   const nearFire = fire && Math.hypot(a.x - fire.x, a.y - fire.y) <= 8;
-  { let ow = OUTFIT_WARMTH[pupOutfit(a)] || 0; const w = carriedEff(a, 'warm'); if (w) ow += w.n; t += t < 22 ? ow : ow * 0.3; }   // clothes matter most in the cold
+  { let ow = OUTFIT_WARMTH[pupOutfit(a)] || 0; const w = carriedEff(a, 'warm'); if (w) ow += w.n; ['legs', 'feet'].forEach(ty => { const e = carriedEff(a, ty); if (e && e.warm) ow += e.warm; }); t += t < 22 ? ow : ow * 0.3; }   // clothes matter most in the cold
   const wz = WEATHER[zoneWeather(a.zone)];
   const hs = indoors && shelters.find(x => x.name === a.sleepAt);
   // shelters, tents and fires bring the temperature TOWARD comfort (~24°C): they warm the cold, they don't cook the hot
@@ -5185,6 +5208,9 @@ function effText(e) {
   if (e.type === 'bag') return `ใส่ของได้เพิ่ม +${e.n} ช่อง`;
   if (e.type === 'light') return 'ให้แสงตอนกลางคืน สัตว์ร้ายไม่กล้าเข้าใกล้ผู้ถือ';
   if (e.type === 'armor') return `ลดความเสียหายจากสัตว์ร้าย ${e.n}%`;
+  if (e.type === 'legs') return `ลดความเสียหาย ${e.n}%${e.warm ? ` · อุ่นขึ้น +${e.warm}°` : ''}`;
+  if (e.type === 'feet') return `หลบหลีก +${e.n}%${e.warm ? ` · อุ่นขึ้น +${e.warm}°` : ''}`;
+  if (e.type === 'acc') return `สวมแล้ว ${e.stat.toUpperCase()} +${e.n} ตลอดเวลา`;
   if (e.type === 'charm') return `พกติดตัวแล้ว ${e.stat.toUpperCase()} +${e.n} ตลอดเวลา`;
   if (e.type === 'tool') return `เครื่องมือ${TOOL_LABEL[e.tool] || ''} พลัง ${e.pow} ทนทาน ${e.dur}`;
   return '';
@@ -5224,7 +5250,8 @@ function effBonus(a, k) {
     const c = {}; (a.buffs || []).forEach(b => { if (b.until > h) c[b.stat] = (c[b.stat] || 0) + b.n; });
     if (a.bag) { const seen = {}; for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'charm' && !seen[d.eff.stat]) { seen[d.eff.stat] = 1; c[d.eff.stat] = (c[d.eff.stat] || 0) + d.eff.n; } } }
     try { carriedTools(a).forEach(t => { if (t.aff) for (const s in t.aff) c[s] = (c[s] || 0) + t.aff[s]; }); } catch (e) { /* tools not set up yet (start-up) */ }            // high-grade tools carry bonus stats
-    ['armor', 'warm', 'bag', 'light', 'charm'].forEach(ty => { const e = carriedEff(a, ty); const af = e && affixFor(e.item, e.q); if (af) for (const s in af) c[s] = (c[s] || 0) + af[s]; });
+    ['armor', 'warm', 'legs', 'feet', 'bag', 'light', 'charm'].forEach(ty => { const e = carriedEff(a, ty); const af = e && affixFor(e.item, e.q); if (af) for (const s in af) c[s] = (c[s] || 0) + af[s]; });
+    carriedAcc(a).forEach(e => { c[e.stat] = (c[e.stat] || 0) + e.n; const af = affixFor(e.item, e.q); if (af) for (const s in af) c[s] = (c[s] || 0) + af[s]; });
     a._effC = { h, c };
   }
   return a._effC.c[k] || 0;
@@ -5235,6 +5262,7 @@ function effBonusSlow(a, k) {
   if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'charm' && d.eff.stat === k) { n += d.eff.n; break; } }
   return n;
 }
+function carriedAcc(a) { const L = []; if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'acc') { const q = qBest(a, nm); L.push(Object.assign({}, d.eff, { n: Math.max(1, Math.round(d.eff.n * QMULT[q])), q, item: nm })); } } return L.sort((p, r) => r.n - p.n || r.q - p.q).slice(0, 2); }   // left and right accessory slots
 function carriedEff(a, type) { let best = null; if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type) { const q = qBest(a, nm), e = Object.assign({}, d.eff, { n: Math.round((d.eff.n || 0) * QMULT[q]), q, item: nm }); if (!best || e.n > best.n) best = e; } } return best; }
 function effectsTick() {
   const h = nowH();
@@ -8530,8 +8558,9 @@ function renderAgentPop() {
     const tools = carriedTools(a), effItem = type => { let best = null, bn = null; for (const nm in a.bag || {}) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type && (!best || (d.eff.n || 0) > (best.n || 0))) { best = d.eff; bn = nm; } } return bn; };
     const of = OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา';
     const wear = [slot('ชุด', '👕', of)];
-    [['warm', '🧥', 'เสื้อผ้าเสริม'], ['armor', '🛡️', 'โล่'], ['bag', '👜', 'ย่าม/ตะกร้า'], ['light', '🔦', 'แสงไฟ'], ['charm', '📿', 'เครื่องราง']].forEach(([t, ic, lb]) => { const n = effItem(t); wear.push(slot(lb, n ? itemIcon(n, 28) : ic, n)); });
+    [['warm', '🧥', 'ผ้าคลุม'], ['legs', '👖', 'กางเกง/กระโปรง'], ['feet', '👞', 'รองเท้า'], ['armor', '🛡️', 'โล่'], ['bag', '👜', 'ย่าม/ตะกร้า'], ['light', '🔦', 'แสงไฟ'], ['charm', '📿', 'เครื่องราง']].forEach(([t, ic, lb]) => { const n = effItem(t); wear.push(slot(lb, n ? itemIcon(n, 28) : ic, n)); });
     for (let i = 0; i < TOOL_CARRY; i++) { const t = tools[i]; wear.push(slot(`มือ ${i + 1}`, t ? itemIcon(t.name, 28) : '✋', t && t.name, t ? `สึก ${t.wear}/${productDef(keyByName(t.name))?.dur || '?'}` : '')); }
+    { const ac = carriedAcc(a); ['ประดับซ้าย', 'ประดับขวา'].forEach((lb, i) => wear.push(slot(lb, ac[i] ? itemIcon(ac[i].item, 28) : '💍', ac[i] && ac[i].item))); }
     const items = Object.entries(a.bag || {}).filter(([, n]) => n > 0).sort((p, q) => q[1] - p[1]);
     const cap = bagCap(a), used = bagCount(a);
     let cells = items.map(([n, c]) => `<div class="slot ${AP.sel === n ? 'sel' : ''}" onclick="apSel('${n.replace(/'/g, "\\'")}')" title="${n}">${itemIcon(n, 30)}<span class="n">${c}</span></div>`).join('');
@@ -8866,19 +8895,21 @@ function renderCW() {
     const tools = carriedTools(a), shield = shieldKey(a), shieldN = shield && PRODUCTS[shield].name;
     const slot = (id, lb, ic, name, sub, side, dur, g) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" ${name && g != null ? `style="--qc:${qColor(g)}" data-q="1"` : ''} onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
     const hand = i => { const t = tools[i]; if (!t) return slot('h' + i, `มือ ${i + 1}`, '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = toolMaxDur(t); return slot('h' + i, `มือ ${i + 1} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `${qName(t.q)} · ทน ${mx - t.wear}/${mx}${t.aff ? ' · ✨' + affixText(t.aff) : ''}`, '', (mx - t.wear) / mx, t.q); };
-    const L = [hand(0), hand(1), hand(2), slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : '')];
     const gq = n => n ? qBest(a, n) : null, ge = ty => carriedEff(a, ty);
+    const acc = carriedAcc(a), accSlot = (i, id, lb) => { const e = acc[i]; return slot(id, lb, '💍', e && e.item, e ? `${qName(e.q)} · ${e.stat.toUpperCase()} +${e.n}` : '', i ? '' : 'r', null, e && e.q); };
+    const lg = ge('legs'), ft = ge('feet');
+    const L = [hand(0), hand(1), accSlot(1, 'ar', 'ประดับขวา'), slot('lg', 'กางเกง/กระโปรง', '👖', lg && lg.item, lg ? `${qName(lg.q)} · ${effText(lg)}` : '', '', null, lg && lg.q), slot('ft', 'รองเท้า', '👞', ft && ft.item, ft ? `${qName(ft.q)} · ${effText(ft)}` : '', '', null, ft && ft.q), slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : '')];
     const R = [slot('sh', 'มือรอง · โล่', '🛡️', shieldN, shieldN ? `${qName(gq(shieldN))} · ${effText(Object.assign({}, PRODUCTS[shield].eff, { n: Math.round(PRODUCTS[shield].eff.n * QMULT[gq(shieldN)]) }))}` : '', 'r', null, gq(shieldN)), slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
-      slot('wm', 'เสื้อผ้าเสริม', '🧥', best('warm'), '', 'r'), slot('bg', 'ย่าม/ตะกร้า', '👜', carry || best('bag'), carry ? `ความจุ +${propsOf(carry).carry}` : '', 'r'),
+      slot('wm', 'ผ้าคลุม', '🧥', best('warm'), '', 'r'), accSlot(0, 'al', 'ประดับซ้าย'), slot('bg', 'ย่าม/ตะกร้า', '👜', carry || best('bag'), carry ? `ความจุ +${propsOf(carry).carry}` : '', 'r'),
       slot('lt', 'แสงไฟ', '🔦', best('light'), '', 'r'), slot('ch', 'เครื่องราง', '📿', best('charm'), '', 'r')];
     const sumP = [`⚔️ ATK <b>${atkOf(a)}</b>`, `🛡️ DEF <b>${defOf(a)}</b>`, `❤️ HP <b>${maxHp(a)}</b>`, `💨 หลบ <b>${Math.round(dodgeOf(a) * 100)}%</b>`, `🎒 จุ <b>${bagCap(a)}</b> ช่อง`];
     body = `<div class="cw-doll"><div class="cw-eqcol">${L.join('')}</div><canvas id="cw-doll" width="300" height="400"></canvas><div class="cw-eqcol">${R.join('')}</div></div>
       <div class="cw-sum">${sumP.join(' · ')}</div>`;
-    const selName = { h0: tools[0] && tools[0].name, h1: tools[1] && tools[1].name, h2: tools[2] && tools[2].name, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
-    const selTool = { h0: tools[0], h1: tools[1], h2: tools[2] }[CW.sel];
+    const selName = { h0: tools[0] && tools[0].name, h1: tools[1] && tools[1].name, al: acc[0] && acc[0].item, ar: acc[1] && acc[1].item, lg: lg && lg.item, ft: ft && ft.item, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
+    const selTool = { h0: tools[0], h1: tools[1] }[CW.sel];
     if (selTool) body += cwItemCard(selTool.name, null, '', selTool.q ?? QDEF, selTool.aff || null);
     else if (selName) body += cwItemCard(selName, null, '', gq(selName));
-    foot = 'ถือเครื่องมือได้ 3 อย่าง · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
+    foot = 'ถือเครื่องมือได้ 2 อย่าง · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
   } else if (CW.tab === 'bag') {
     const all = [];
     for (const [n, c0] of Object.entries(a.bag || {})) if (c0 > 0) qOf(a, n).forEach((c, g) => { if (c > 0) all.push([n, c, g]); });
