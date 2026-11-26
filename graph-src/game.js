@@ -6474,15 +6474,17 @@ function drawCanvas() {
       let sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
       drawProp(ctx, art, stI, cx + sx, fy);
       if (art === 'camp_fire' && stI === 0) {             // animated flames
-        // 5 leaf-shaped tongues of flame fanning out from the logs (back ones first, the tall yellow one in front)
-        const base = fy - 7, order = [0, 4, 1, 3, 2];
+        // 5 leaf-shaped tongues of flame fanning out from the logs (back ones first, the tall yellow one in the middle)
+        // + 2 smaller ones in front, overlapping the row (7 in all)
+        const base = fy - 7, order = [0, 4, 1, 3, 2, 5, 6];
         for (const k of order) {
-          const side = k - 2, fh = (side === 0 ? 13 : Math.abs(side) === 1 ? 10.5 : 8) + 2.2 * Math.sin(now * 9 + k * 1.7);
-          const lean = side * 0.32 + Math.sin(now * 6 + k * 2.3) * 0.12, bw = side === 0 ? 3.3 : 2.8;
-          const bx = cx + side * 2.1, by = base + Math.abs(side) * 0.6;
+          const front = k >= 5, side = front ? (k === 5 ? -1.1 : 1.1) : k - 2;
+          const fh = (front ? 7.5 : side === 0 ? 13 : Math.abs(side) === 1 ? 10.5 : 8) + (front ? 1.6 : 2.2) * Math.sin(now * 9 + k * 1.7);
+          const lean = side * (front ? 0.22 : 0.32) + Math.sin(now * 6 + k * 2.3) * 0.12, bw = front ? 2.6 : side === 0 ? 3.3 : 2.8;
+          const bx = cx + side * 2.1, by = base + Math.abs(side) * 0.6 + (front ? 2.2 : 0);
           const tx = bx + Math.sin(lean) * fh, ty = by - Math.cos(lean) * fh;
           const mx = (bx + tx) / 2, my = (by + ty) / 2, nx = Math.cos(lean) * bw * 1.6, ny = Math.sin(lean) * bw * 1.6;   // leaf: widest in the middle, pointed at both ends
-          ctx.fillStyle = side === 0 ? 'rgba(255,220,95,.97)' : Math.abs(side) === 1 ? 'rgba(255,160,40,.95)' : 'rgba(240,96,30,.92)';
+          ctx.fillStyle = front ? 'rgba(255,196,70,.97)' : side === 0 ? 'rgba(255,220,95,.97)' : Math.abs(side) === 1 ? 'rgba(255,160,40,.95)' : 'rgba(240,96,30,.92)';
           ctx.beginPath(); ctx.moveTo(bx, by);
           ctx.quadraticCurveTo(mx - nx, my - ny, tx, ty);
           ctx.quadraticCurveTo(mx + nx, my + ny, bx, by); ctx.fill();
