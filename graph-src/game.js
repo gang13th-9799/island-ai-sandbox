@@ -4946,6 +4946,10 @@ function drawMouthArt(ctx, mood) {
 const ITEM_HELD_IMG = {}, TOOL_ICON_IMG = {};
 (function () { const E = window.ITEM_ART; if (!E) return; for (const k in E) if (E[k].held) { const im = new Image(); im.src = E[k].held.src; ITEM_HELD_IMG[k] = im; } })();
 const MAT_ART = { 'ใบไม้สด': 'leaf_fresh', 'ใบตองสด': 'leaf_fresh' };
+// raw-material icons (assets/mats.js): register each as an item art entry so bags, popups and the map use it
+const MAT_ICON_IMG = {};
+(function () { const M = window.MAT_ICONS; if (!M || !window.ITEM_ART) return; let i = 0; for (const n in M) { const k = 'mat_' + (i++); ITEM_ART[k] = { icon: M[n] }; MAT_ART[n] = k; } })();
+function matIconImg(n) { const k = MAT_ART[n]; if (!k || !window.ITEM_ART || !ITEM_ART[k]) return null; let im = MAT_ICON_IMG[k]; if (!im) { im = MAT_ICON_IMG[k] = new Image(); im.src = ITEM_ART[k].icon; } return im.complete && im.naturalWidth ? im : null; }
 function itemArtKey(name) { const k = keyByName(name) || MAT_ART[name]; return k && window.ITEM_ART && ITEM_ART[k] ? k : null; }
 function itemIconHTML(name, sz = 18) { const k = itemArtKey(name); return k ? `<img src="${ITEM_ART[k].icon}" alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;vertical-align:-4px;margin-right:2px;">` : ''; }
 function usableToolTier(a, type) { let best = null; toolsOfType(type).forEach(t => { if (t.holder !== a.id) return; const d = productDef(keyByName(t.name)); if (d && (!best || (d.tier || 1) > (best.tier || 1))) best = { tier: d.tier || 1, key: keyByName(t.name) }; }); return best; }
@@ -6262,9 +6266,13 @@ function drawCanvas() {
     }
     if (n.sprite === 'res_rock' && /หิน|แร่|กำมะถัน/.test(n.name)) drawProp(ctx, /แร่เหล็ก/.test(n.name) ? 'rock_iron' : 'rock_gray', 0, cx, fy, 0.8);
     const isz = HUMAN_H * 0.36;
-    ctx.font = `${isz}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(ic, cx + (tall ? WT * 0.9 : 0), fy);
-    ctx.textAlign = 'left';
+    const mim = matIconImg(n.name);
+    if (mim) { const sz = isz * 1.6; ctx.drawImage(mim, cx + (tall ? WT * 0.9 : 0) - sz / 2, fy - sz * 0.92, sz, sz); }
+    else {
+      ctx.font = `${isz}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(ic, cx + (tall ? WT * 0.9 : 0), fy);
+      ctx.textAlign = 'left';
+    }
     if (showLabels && z >= 2.6) labels.push({ x: cx, y: fy + 3, text: n.name, color: '#3f3f1f', bg: 'rgba(255,255,240,.8)', small: true, center: true, below: true });
   } }));
   if (window.WORLD_ART) {
