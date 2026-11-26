@@ -335,6 +335,28 @@
   .ac-sub { color: #6b5a3e; font-size: 11px; margin-top: 2px; }
   .ac-btns { display: flex; gap: 8px; margin-top: 8px; }
   .ac-btns .gbtn { flex: 1; padding: 8px 6px; font-size: 13px; }
+  /* ===== possession bar ===== */
+  .pos-hud { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 64px); transform: translateX(-50%); z-index: 24; width: min(460px, 96vw); display: none; flex-direction: column; gap: 6px; }
+  .pos-hud.open { display: flex; }
+  .pos-top { display: flex; gap: 8px; align-items: center; padding: 7px 9px; border-radius: 16px; background: linear-gradient(180deg, rgba(76,52,130,.96), rgba(50,32,92,.96)); color: #f5f0ff; border: 2px solid #c4b5fd; box-shadow: 0 0 18px rgba(167,139,250,.55); }
+  .pos-top canvas { width: 46px; height: 52px; border-radius: 10px; background: radial-gradient(circle at 50% 80%, #e9e3ff, #b9a8f5); flex-shrink: 0; }
+  .pos-st { flex: 1; min-width: 0; }
+  .pos-st .pn { font-family: var(--head); font-weight: 800; font-size: 14px; }
+  .pos-st .pp { background: #fde68a; color: #7c2d12; border-radius: 8px; padding: 0 6px; font-size: 11px; cursor: pointer; }
+  .pos-st .pb { display: grid; grid-template-columns: 18px 1fr; gap: 4px; align-items: center; margin-top: 2px; }
+  .pos-st .b { height: 7px; background: rgba(255,255,255,.2); border-radius: 5px; overflow: hidden; } .pos-st .b i { display: block; height: 100%; border-radius: 5px; }
+  .pos-st .pd { font-size: 11px; opacity: .9; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pos-out { align-self: flex-start; border: 2px solid #ede9fe; background: #f5f3ff; color: #5b21b6; border-radius: 10px; font-weight: 800; font-size: 11px; padding: 5px 7px; cursor: pointer; }
+  .pos-acts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .pos-acts button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 2px; border-radius: 12px; border: 2px solid #e2c48a; background: linear-gradient(180deg, #fffaf0, #f3dfb6); box-shadow: 0 3px 0 #c9a56a; font-size: 18px; color: #5b3b12; cursor: pointer; }
+  .pos-acts button span { font-size: 10.5px; font-weight: 800; }
+  .pos-craft { max-height: 42vh; overflow: auto; background: #fffaf0; border: 2px solid #c4b5fd; border-radius: 14px; padding: 8px; color: #3d2a14; }
+  .pos-craft .pt { display: flex; justify-content: space-between; font-weight: 800; font-size: 13px; margin-bottom: 4px; } .pos-craft .pt button { border: none; background: none; font-size: 14px; cursor: pointer; }
+  .pos-craft .pr { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 9px; cursor: pointer; font-size: 12.5px; font-weight: 700; }
+  .pos-craft .pr:hover { background: #fff0cf; } .pos-craft .pr.no { opacity: .5; }
+  .pos-craft .pr small { display: block; font-size: 10.5px; color: #8a6a3a; font-weight: 600; }
+  .cw-plus { width: 22px; height: 22px; border-radius: 6px; border: none; background: #16a34a; color: #fff; font-weight: 900; cursor: pointer; margin-left: 4px; }
+  .ac-possess { width: 100%; margin-top: 6px; padding: 8px; border-radius: 12px; border: 2px solid #c4b5fd; background: linear-gradient(180deg, #8b5cf6, #6d28d9); color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: 0 3px 0 #4c1d95; }
   /* ===== Character window (สถานะ / สวมใส่ / กระเป๋า / ความรู้) — ready for the possession mode ===== */
   .cw { position: fixed; inset: 0; z-index: 62; display: none; align-items: center; justify-content: center; background: rgba(28,18,8,.42); }
   .cw.open { display: flex; }
@@ -583,6 +605,7 @@
     <div id="hover-terrain">แตะแผนที่เพื่อดูพื้นที่</div>
     <div id="agent-card" class="agent-card"></div>
     <div id="agent-pop" class="agent-pop" onclick="if (event.target === this) closeAgentPop()"><div class="ap-box" id="ap-box"></div></div>
+    <div id="pos-hud" class="pos-hud"></div>
     <div id="cw" class="cw" onclick="if (event.target === this) closeCW()"><div class="cw-win" id="cw-win"></div></div>
 
     <div class="backdrop" id="backdrop" onclick="closeSheet()"></div>
@@ -1214,6 +1237,7 @@ function gainExp(a, k, amt) {
   while (a.stats[k] < STAT_MAX && a.sexp[k] >= expNeed(a.stats[k])) {
     a.sexp[k] -= expNeed(a.stats[k]);
     a.stats[k]++;
+    if (a.possessed) { a.statPts = (a.statPts || 0) + 1; a.bubble = `⬆️ ${STATS[k].short} ขึ้นเป็น ${a.stats[k]} · ได้แต้มสถานะ +1`; }
     if (k === 'vit') a.hp = Math.min(maxHp(a), a.hp + 4);
     if (a.stats[k] % 5 === 0) addLog(`⬆️ [เลเวลอัป] ${a.name} ${STATS[k].icon} ${STATS[k].name} ถึงระดับ ${a.stats[k]} (พรสวรรค์ ${talentGrade(a.talent[k])})`, '#a5b4fc');
   }
@@ -3723,6 +3747,7 @@ function tickRealmIdx(i) {
   restoreRealm(realms[activeRealm].state);
 }
 function switchRealm(i) {
+  if (POS) unpossess(true);
   realms[activeRealm].state = captureRealm();
   activeRealm = i; tickingRealm = i;
   restoreRealm(realms[i].state);
@@ -5406,38 +5431,44 @@ function agentHunt(hunter) {
         }
       }
       if (hunter._hunt) { hunter._hunt.ttl = Math.min(hunter._hunt.ttl, 3); hunter._hunt.d = undefined; }   // missed? try again right here for a bit
-      const weapon = hasTool('bow', hunter) ? 'bow' : (hasTool('blade', hunter) ? 'blade' : null);
-      const bowUp = weapon === 'bow' ? ((usableToolTier(hunter, 'bow') || { tier: 1 }).tier - 1) * 0.06 : 0;   // better bows: +6% per tier
-      const base = (target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25)) + bowUp;
-      const chance = Math.max(0.03, Math.min(0.95, base + atkOf(hunter) * 0.006 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
-      if (weapon) useTool(weapon, hunter);
-      gainExp(hunter, 'str', target.predator ? 2 : 1); gainExp(hunter, 'agi', target.predator ? 2 : 1);
-      if (Math.random() < chance) {
-        hunter._hunt = null;
-        const bonus = extraLoot(target, tz);
-        const vname = variantLabel(target, tz);
-        target.zp[tz]--; syncFauna(target);
-        if (target.lootFood) addFood(hunter, Math.round(target.lootFood * 2.2));   // a hunt now takes real stalking time, so it pays more
-        for (const [m, q] of Object.entries(target.lootMat)) gainItems(hunter, m, q);
-        for (const [m, q] of Object.entries(bonus)) gainItems(hunter, m, q);
-        if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
-        if (target.predator) hunter.rep += 3;
-        hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `${weapon === 'bow' ? '🏹' : weapon === 'blade' ? '🗡️' : '✋'} ล่า${target.name} (+${target.lootFood})`;
-        godQuestEvent(hunter, 'hunt'); if (target.predator) godQuestEvent(hunter, 'predator');
-        huntLogs.unshift({ animal: target.name, remPop: target.pop, food: target.lootFood, hunter: hunter.name });
-        addLog(target.predator
-          ? `🏆 [ล่านักล่า] ${hunter.name} ล่า "${target.name}" ที่ ${tz} สำเร็จ! ได้หนัง เขี้ยว และเนื้อที่ไม่ค่อยอร่อย (เหลือ ${target.pop} ตัว)`
-          : `🏹 [ล่าสัตว์] ${hunter.name} ล่า "${target.name}" ${weapon ? `ด้วย${TOOL_LABEL[weapon]}` : 'ด้วยมือเปล่า'} ได้อาหาร +${target.lootFood} (เหลือ ${target.pop} ตัว)`, target.predator ? '#fbbf24' : '#4ade80');
-      } else if (target.predator) {
-        // The predator hunts back
-        const tt = trOf(target, tz);
-        let dmg = (target.id === 'f_wolf' ? 10 + Math.floor(Math.random() * 15) : 18 + Math.floor(Math.random() * 18)) + tt.str * 3 + tt.fer * 2;
-        const got = hurt(hunter, dmg, 0, target.name); dmg = got;
-        gainExp(hunter, 'vit', 3);
-        hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
-        addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${Math.round(hunter.hp)})`, '#ef4444');
-      } else hunter.bubble = weapon === 'bow' ? '🏹 ยิงพลาด' : weapon ? '🗡️ แทงพลาด' : '✋ ไล่จับด้วยมือเปล่าไม่ทัน';
+      huntRoll(hunter, target, tz);
     }
+}
+// one strike/shot at an animal (used by the AI hunt and by a possessed hunter). Returns true on a kill.
+function huntRoll(hunter, target, tz) {
+  let won = false;
+  const weapon = hasTool('bow', hunter) ? 'bow' : (hasTool('blade', hunter) ? 'blade' : null);
+  const bowUp = weapon === 'bow' ? ((usableToolTier(hunter, 'bow') || { tier: 1 }).tier - 1) * 0.06 : 0;   // better bows: +6% per tier
+  const base = (target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25)) + bowUp;
+  const chance = Math.max(0.03, Math.min(0.95, base + atkOf(hunter) * 0.006 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
+  if (weapon) useTool(weapon, hunter);
+  gainExp(hunter, 'str', target.predator ? 2 : 1); gainExp(hunter, 'agi', target.predator ? 2 : 1);
+  if (Math.random() < chance) {
+    hunter._hunt = null; won = true;
+    const bonus = extraLoot(target, tz);
+    const vname = variantLabel(target, tz);
+    target.zp[tz]--; syncFauna(target);
+    if (target.lootFood) addFood(hunter, Math.round(target.lootFood * 2.2));   // a hunt now takes real stalking time, so it pays more
+    for (const [m, q] of Object.entries(target.lootMat)) gainItems(hunter, m, q);
+    for (const [m, q] of Object.entries(bonus)) gainItems(hunter, m, q);
+    if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
+    if (target.predator) hunter.rep += 3;
+    hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `${weapon === 'bow' ? '🏹' : weapon === 'blade' ? '🗡️' : '✋'} ล่า${target.name} (+${target.lootFood})`;
+    godQuestEvent(hunter, 'hunt'); if (target.predator) godQuestEvent(hunter, 'predator');
+    huntLogs.unshift({ animal: target.name, remPop: target.pop, food: target.lootFood, hunter: hunter.name });
+    addLog(target.predator
+      ? `🏆 [ล่านักล่า] ${hunter.name} ล่า "${target.name}" ที่ ${tz} สำเร็จ! ได้หนัง เขี้ยว และเนื้อที่ไม่ค่อยอร่อย (เหลือ ${target.pop} ตัว)`
+      : `🏹 [ล่าสัตว์] ${hunter.name} ล่า "${target.name}" ${weapon ? `ด้วย${TOOL_LABEL[weapon]}` : 'ด้วยมือเปล่า'} ได้อาหาร +${target.lootFood} (เหลือ ${target.pop} ตัว)`, target.predator ? '#fbbf24' : '#4ade80');
+  } else if (target.predator) {
+    // The predator hunts back
+    const tt = trOf(target, tz);
+    let dmg = (target.id === 'f_wolf' ? 10 + Math.floor(Math.random() * 15) : 18 + Math.floor(Math.random() * 18)) + tt.str * 3 + tt.fer * 2;
+    const got = hurt(hunter, dmg, 0, target.name); dmg = got;
+    gainExp(hunter, 'vit', 3);
+    hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
+    addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${Math.round(hunter.hp)})`, '#ef4444');
+  } else hunter.bubble = weapon === 'bow' ? '🏹 ยิงพลาด' : weapon ? '🗡️ แทงพลาด' : '✋ ไล่จับด้วยมือเปล่าไม่ทัน';
+  return won;
 }
 function agentWork(a, needs) {
   const night = isNightTime();
@@ -7815,6 +7846,8 @@ function drawInsect(ctx, b, now, night) {
 const FF_LAMP = [[0.762, 0.843], [0.536, 0.753], [0.684, 0.868], [0.848, 0.872], [0.771, 0.861], [0.803, 0.863]];
 let FF_GLOWS = [];
 function drawCanvas() {
+  ANIM_HITS = [];
+  drawCanvas.posMark = POS && POS.mark && POS.cmd ? POS.mark : null;
   if (bgTick) return;
   const canvas = document.getElementById('mapCanvas'); if (!VIEW.w) resizeView();
   const ctx = canvas.getContext('2d');
@@ -7992,6 +8025,7 @@ function drawCanvas() {
       let tx = h.x + ox, ty = h.y + oy;
       const artF = animalArt(f), runs = artF && FLEE_ART[artF] && !(isNightTime() && artF !== 'fish');
       if (runs) [tx, ty] = fleeStep(h, tx, ty, dt, artF === 'fish' ? 2.5 : 4.5, artF === 'rabbit' ? 5 : 3.5, artF === 'fish');
+      if (!f.predator || true) ANIM_HITS.push({ f, tx, ty });
       items.push({ y: tx + ty + 1, draw: () => {
         const [cx, fy0] = groundAt(tx + 0.5, ty + 0.5), bob = graze ? 0 : Math.abs(Math.sin(t * 6)) * 1.2, fy = fy0 - bob;
         const art = window.WORLD_ART && WORLD_ART.animals ? animalArt(f) : null;
@@ -8089,6 +8123,9 @@ function drawCanvas() {
     if (wk === 'storm' && Math.sin(t * 1.7) > 0.995) { ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(0, 0, VIEW.w, VIEW.h); }
   }
   // screen-space labels (constant size)
+  if (drawCanvas.posMark) { const m = drawCanvas.posMark, [mx, my] = groundAt(m.x + 0.5, m.y + 0.5), ph = (performance.now() / 1000 - m.t) % 1;   // where the possessed person is heading
+    ctx.save(); ctx.strokeStyle = `rgba(196,181,253,${1 - ph * 0.7})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(mx, my, 6 + ph * 6, (6 + ph * 6) * 0.5, 0, 0, 6.283); ctx.stroke();
+    ctx.fillStyle = 'rgba(167,139,250,.5)'; ctx.beginPath(); ctx.ellipse(mx, my, 3, 1.5, 0, 0, 6.283); ctx.fill(); ctx.restore(); }
   labels.forEach(l => drawLabel(ctx, l));
   drawTalks(ctx);
 }
@@ -8234,6 +8271,7 @@ function drawAgent(ctx, a, now, labels) {
   const H = HUMAN_H;
   const [fx, feetY] = groundAt(a._rx + 0.5, a._ry + 0.5); a._feet = [fx, feetY];
   groundShadow(ctx, fx, feetY, H * 0.17, H * 0.05, 0.26);
+  if (a.possessed) { const pl = 0.5 + 0.5 * Math.sin(now * 3); ctx.fillStyle = `rgba(167,139,250,${0.25 + 0.15 * pl})`; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.36, H * 0.12, 0, 0, 7); ctx.fill(); }   // a god inside: violet glow
   if (VIEW.follow === a.id) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.28, H * 0.09, 0, 0, 7); ctx.stroke(); }
   const anim = pupActivity(a, a._moving, a._fast);
   const matImg = window.CAMP_ART && CAMP_ART.mat && (window._matImg || (window._matImg = Object.assign(new Image(), { src: CAMP_ART.mat })));
@@ -8305,6 +8343,7 @@ function mapTap(e) {
   if (tk) { const n = performance.now() / 1000; tk.openUntil = tk.openUntil && n < tk.openUntil ? 0 : n + 6; return; }
   const th = aiAgents.find(a => a.zone === currentZoneId && a._thoughtHit && sx >= a._thoughtHit.x && sx <= a._thoughtHit.x + a._thoughtHit.w && sy >= a._thoughtHit.y && sy <= a._thoughtHit.y + a._thoughtHit.h);
   if (th) { const n = performance.now() / 1000; th._thoughtUntil = th._thoughtUntil && n < th._thoughtUntil ? 0 : n + 5; return; }
+  if (POS && posTap(wx, wy, sx, sy)) return;
   const hit = aiAgents.filter(a => a.zone === currentZoneId && a._hit && wx >= a._hit.x && wx <= a._hit.x + a._hit.w && wy >= a._hit.y && wy <= a._hit.y + a._hit.h)
     .sort((p, q) => (q._rx + q._ry) - (p._rx + p._ry))[0];
   if (hit) { openAgentCard(hit.id); return; }
@@ -8413,6 +8452,143 @@ function renderAgentPop() {
   }
   const sc = box.scrollTop; box.innerHTML = head + tabs + body; box.scrollTop = sc;
 }
+// ===== Possession (สิงสถิต): the god steps into a person and plays them. Tap the ground to walk, tap things to use them. =====
+let POS = null;                                     // { id, cmd, mark }
+let ANIM_HITS = [];                                 // animals drawn this frame (for tapping)
+function posAgent() { return POS && aiAgents.find(a => a.id === POS.id); }
+function possess(id) {
+  const a = aiAgents.find(x => x.id === id); if (!a || a.age < 12) return;
+  if (POS) unpossess(true);
+  POS = { id, cmd: null, mark: null };
+  a.possessed = true; a.goal = null; a.gatherT = null; a._hunt = null; a.session = null; a.wantRest = false; a.questId = a.questId || null;
+  a.busyUntil = gameNow(); a.walkUntil = gameNow();
+  if (a.zone !== currentZoneId) switchZone(a.zone);
+  closeAgentCard(); VIEW.follow = id; if (VIEW.zoom < 2.2) setZoom(2.6);
+  addLog(`👻 [สิงสถิต] พระเจ้าเข้าสิงร่าง ${a.name}`, '#c4b5fd');
+  a.bubble = '✨ ...รู้สึกถึงพลังบางอย่างในตัว';
+  renderPosHud();
+}
+function unpossess(quiet) {
+  const a = posAgent(); if (a) { delete a.possessed; a.busyUntil = gameNow(); if (!quiet) { addLog(`👻 พระเจ้าออกจากร่าง ${a.name}`, '#c4b5fd'); a.bubble = '😵 เอ๊ะ... เมื่อกี้เกิดอะไรขึ้น'; } }
+  POS = null; VIEW.follow = null; renderPosHud();
+}
+function posCmd(c) { if (!POS) return; POS.cmd = c; POS.mark = c ? { x: c.x, y: c.y, t: performance.now() / 1000 } : null; const a = posAgent(); if (a) { if (a.sleeping && c) { a.sleeping = false; a.sleepAt = null; } a.busyUntil = Math.min(a.busyUntil ?? 0, gameNow()); } }
+// tap on the map while possessing: walk / gather / hunt / talk / open storage / drink
+function posTap(wx, wy, sx, sy) {
+  const a = posAgent(); if (!a || a.zone !== currentZoneId) return false;
+  const hit = aiAgents.filter(o => o.zone === currentZoneId && o._hit && wx >= o._hit.x && wx <= o._hit.x + o._hit.w && wy >= o._hit.y && wy <= o._hit.y + o._hit.h).sort((p, q) => (q._rx + q._ry) - (p._rx + p._ry))[0];
+  if (hit && hit.id === a.id) { cardAgentId = a.id; openCW('stat'); return true; }
+  if (hit) { posCmd({ type: 'talk', who: hit.id, x: hit.x, y: hit.y }); return true; }
+  const store = shelters.filter(s => s.zone === currentZoneId && s._hit && wx >= s._hit.x && wx <= s._hit.x + s._hit.w && wy >= s._hit.y && wy <= s._hit.y + s._hit.h).sort((p, q) => (q.x + q.y) - (p.x + p.y))[0];
+  if (store) { posCmd({ type: 'store', name: store.name, x: store.x, y: store.y }); return true; }
+  const [tx, ty] = tileOf(wx, wy);
+  const an = ANIM_HITS.map(h => ({ h, d: Math.hypot(h.tx - tx + 0.5, h.ty - ty + 0.5) })).filter(o => o.d < 1.6).sort((p, q) => p.d - q.d)[0];
+  if (an) { posCmd({ type: 'hunt', f: an.h.f.id, x: an.h.tx, y: an.h.ty }); return true; }
+  const lx = Math.max(1, Math.min(78, Math.floor(tx))), ly = Math.max(1, Math.min(78, Math.floor(ty)));
+  const node = (zoneNodes[currentZoneId] || []).map(n => ({ n, d: Math.hypot(n.x - tx, n.y - ty) })).filter(o => o.d <= 1.6).sort((p, q) => p.d - q.d)[0];
+  if (node) {                                         // stand on dry, open ground within reach (fish and shrimp: the shallows by the bank)
+    const n = node.n; let ax = n.x, ay = n.y, bd = 1e9;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const x = n.x + dx, y = n.y + dy; if (Math.hypot(dx, dy) > 2.1 || x < 1 || y < 1 || x > 78 || y > 78 || deepAt(currentZoneId, x, y) || isBlocked(currentZoneId, x, y)) continue; const d = Math.hypot(x - a.x, y - a.y); if (d < bd) { bd = d; ax = x; ay = y; } }
+    posCmd({ type: 'gather', node: n.name, nx: n.x, ny: n.y, x: ax, y: ay }); return true;
+  }
+  const tile = zoneTerrainGrid[currentZoneId][ly][lx];
+  if (FRESH_TILES.includes(tile)) { const sp = drinkSpotsOf(currentZoneId).map(p => ({ p, d: Math.hypot(p.x - lx, p.y - ly) })).sort((p, q) => p.d - q.d)[0]; if (sp) { posCmd({ type: 'drink', x: sp.p.x, y: sp.p.y }); return true; } }
+  if (deepAt(currentZoneId, lx, ly)) { a.bubble = '🌊 น้ำลึกเกินไป ข้ามไม่ได้'; return true; }
+  posCmd({ type: 'move', x: lx, y: ly }); return true;
+}
+// one free moment of the possessed person (replaces the AI's own decision)
+function possessStep(a, night, season, now) {
+  const C = POS && POS.cmd, x0 = a.x, y0 = a.y, z0 = a.zone; let actMin = 6;
+  a.goal = null; a.gatherT = null; a._hunt = null; a.session = null;
+  if (!a.sleeping) insectAct(a, night, 0.2);
+  if (C && !a.sleeping) {
+    if (C.type === 'hunt') { const live = ANIM_HITS.filter(h => h.f.id === C.f).sort((p, q) => Math.hypot(p.tx - a.x, p.ty - a.y) - Math.hypot(q.tx - a.x, q.ty - a.y))[0]; if (live) { C.x = live.tx; C.y = live.ty; } }
+    const reach = { move: 0.6, gather: 0.6, hunt: 2, talk: 2, store: 2.5, drink: 1.5 }[C.type] || 1;
+    const d = Math.hypot(C.x - a.x, C.y - a.y);
+    if (d > reach) { moveToward(a, C.x, C.y); if (a.zone === z0 && Math.hypot(a.x - x0, a.y - y0) < 0.01) { if (++C.stuck >= 4) { a.bubble = '🤔 ไปทางนั้นไม่ได้'; POS.cmd = null; } } else C.stuck = 0; }
+    else if (C.type === 'move') POS.cmd = null;
+    else if (C.type === 'gather') {
+      const n = (zoneNodes[a.zone] || []).find(n => n.name === C.node && Math.hypot(n.x - (C.nx ?? C.x), n.y - (C.ny ?? C.y)) < 0.5);
+      if (!n) { a.bubble = `🍃 ${C.node} หมดแล้ว`; POS.cmd = null; }
+      else if (bagCount(a) >= bagCap(a)) { a.bubble = '🎒 กระเป๋าเต็มแล้ว'; POS.cmd = null; }
+      else { a.gatherCd = 0; agentGather(a, season); actMin = /ไม้|ต้น/.test(n.name) ? 28 : 22; }   // keeps picking until it runs out or the bag is full
+    }
+    else if (C.type === 'hunt') { const f = faunaSpecies.find(x => x.id === C.f); if (!f || (f.zp[a.zone] || 0) <= 0) { a.bubble = '🐾 ไม่เห็นตัวแล้ว'; POS.cmd = null; } else { const ok = huntRoll(a, f, a.zone); actMin = 14; if (ok || a.hp < maxHp(a) * 0.3) POS.cmd = null; } }
+    else if (C.type === 'talk') { const b = aiAgents.find(o => o.id === C.who); if (b && b.zone === a.zone) { talkEvent(a, b); addRel(a, b, 2); addRel(b, a, 2); transferKnowledge(a, b, 'share'); transferKnowledge(b, a, 'share'); gainExp(a, 'cha', 1); a.bubble = `💬 คุยกับ${b.name}`; } POS.cmd = null; actMin = 10; }
+    else if (C.type === 'store') { const s = shelters.find(x => x.name === C.name); POS.cmd = null; if (s) { cardAgentId = null; openStorePop(s); } }
+    else if (C.type === 'drink') { drink(a, 60, '💧 ดื่มน้ำ อึกใหญ่'); gainExp(a, 'vit', 0.2); POS.cmd = null; actMin = 8; }
+  }
+  const pace = Math.max(2, 5 / (1 + st(a, 'agi') * 0.02)), walked = a.zone === z0 ? Math.hypot(a.x - x0, a.y - y0) : 4;   // a god walks with purpose: a bit brisker than the AI
+  a.walkUntil = now + walked * pace; a.busyUntil = now + walked * pace + (walked > 0.3 ? 0 : a.sleeping ? 20 : actMin);
+}
+// buttons on the possession bar
+function posEat() {
+  const a = posAgent(); if (!a) return;
+  const foods = Object.keys(a.bag || {}).filter(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel).sort((p, q) => (propsOf(p).bad ? 1 : 0) - (propsOf(q).bad ? 1 : 0));
+  if (foods.length) { const n = foods[0]; take(a, n); a.hunger = Math.max(0, (a.hunger || 0) - (propsOf(n).bad ? 15 : 30)); a.hp = Math.min(maxHp(a), a.hp + 3); a.bubble = `😋 กิน${n}`; }
+  else if ((a.food || 0) > 0) { const e = Math.min(a.food, 2); a.food -= e; a.hunger = Math.max(0, (a.hunger || 0) - e * 22); a.bubble = '😋 กินเสบียงติดตัว'; }
+  else a.bubble = '😟 ไม่มีอะไรให้กินเลย';
+  renderPosHud();
+}
+function posDrink() {
+  const a = posAgent(); if (!a) return;
+  const near = drinkSpotsOf(a.zone).some(p => Math.hypot(p.x - a.x, p.y - a.y) <= 1.6) || (zoneNodes[a.zone] || []).some(n => WATER_NODE.test(n.name) && Math.hypot(n.x - a.x, n.y - a.y) <= 2.2);
+  if (near) { drink(a, 60, '💧 ดื่มน้ำ อึกใหญ่'); renderPosHud(); return; }
+  const it = Object.keys(a.bag || {}).filter(n => a.bag[n] > 0 && drinkValue(n) > 0).sort((p, q) => drinkValue(q) - drinkValue(p))[0];
+  if (it) { take(a, it); drink(a, drinkValue(it), `💧 ดื่ม${it}`); }
+  else { const sp = drinkSpotsOf(a.zone).map(p => ({ p, d: Math.hypot(p.x - a.x, p.y - a.y) })).sort((p, q) => p.d - q.d)[0]; if (sp) { posCmd({ type: 'drink', x: sp.p.x, y: sp.p.y }); a.bubble = '💧 ไปหาน้ำดื่มที่ริมน้ำ'; } else a.bubble = '🏜️ แถวนี้ไม่มีน้ำจืดเลย'; }
+  renderPosHud();
+}
+function posSleep() {
+  const a = posAgent(); if (!a) return;
+  if (a.sleeping) { a.sleeping = false; a.sleepAt = null; a.wantRest = false; a.bubble = '🌅 ตื่นแล้ว'; renderPosHud(); return; }
+  POS.cmd = null; const spot = restSpotIn(a.zone, a), gear = campGear(a);
+  a.sleeping = true; a.wantRest = false;
+  const near = spot && Math.hypot(a.x - spot.x, a.y - spot.y) <= 3;
+  a.sleepKind = near ? spot.kind : gear || 'ground'; a.sleepAt = near && spot.kind === 'bed' ? spot.s.name : null;
+  a.bubble = SLEEP_LABEL(a); renderPosHud();
+}
+let POS_CRAFT = false;
+function posCraftList() { POS_CRAFT = !POS_CRAFT; renderPosHud(); }
+function posCraft(sig) {
+  const a = posAgent(); if (!a) return; const e = a.know[sig]; if (!e) return;
+  if (!hasMaterials(e.a, e.b, a)) { a.bubble = `🧺 ของไม่ครบ: ต้องมี ${e.a} + ${e.b}`; renderPosHud(); return; }
+  if (!methodUsable(a, e.m)) { const M = METHODS[e.m]; a.bubble = M.station ? `🏭 ต้องไปทำที่${STATION_LABEL[M.station] || M.station}` : `🔧 ต้องถือ${TOOL_LABEL[M.tool] || M.tool}`; renderPosHud(); return; }
+  craftKnown(a, e); a.busyUntil = gameNow() + 30; renderPosHud();
+}
+function renderPosHud() {
+  const el = document.getElementById('pos-hud'); if (!el) return;
+  const a = posAgent();
+  if (!a) { el.classList.remove('open'); el.innerHTML = ''; POS_CRAFT = false; return; }
+  el.classList.add('open');
+  el.dataset.sleep = String(!!a.sleeping); el.dataset.pts = String(a.statPts || 0);
+  const bar = (k, pct, col) => `<div class="pb" data-k="${k}">${uiIcon('vit', k, 16, '')}<div class="b"><i style="width:${Math.max(0, Math.min(100, pct))}%;background:${col}"></i></div></div>`;
+  const hp = a.hp / maxHp(a) * 100, full = 100 - (a.hunger || 0), water = 100 - (a.thirst || 0), sta = a.stamina ?? 100;
+  const C = POS.cmd, doing = posDoing(a, C);
+  let craft = '';
+  if (POS_CRAFT) {
+    const ents = Object.entries(a.know || {}).filter(([, e]) => e.out);
+    craft = `<div class="pos-craft"><div class="pt">🛠️ ทำของจากสูตรที่รู้ <button onclick="posCraftList()">✕</button></div>${ents.length ? ents.map(([sig, e]) => { const ok = hasMaterials(e.a, e.b, a), mu = methodUsable(a, e.m);
+      return `<div class="pr ${ok && mu ? '' : 'no'}" onclick="posCraft('${sig.replace(/'/g, "\\'")}')">${itemIcon(outName(e.out), 24)}<span>${outName(e.out)}<small>${e.a} + ${e.b}${!ok ? ' · ของไม่ครบ' : !mu ? ' · ' + (METHODS[e.m].station ? 'ต้องอยู่ที่' + (STATION_LABEL[METHODS[e.m].station] || '') : 'ต้องถือเครื่องมือ') : ''}</small></span></div>`; }).join('') : '<div class="ac-sub">ยังไม่รู้สูตรอะไรเลย</div>'}</div>`;
+  }
+  el.innerHTML = `${craft}<div class="pos-top"><canvas id="pos-av" width="64" height="72"></canvas><div class="pos-st"><div class="pn">👻 ${a.name}${a.statPts ? ` <span class="pp" onclick="cardAgentId='${a.id}';openCW('stat')">+${a.statPts} แต้ม</span>` : ''}</div>
+      ${bar('hp', hp, hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171')}${bar('food', full, full < 25 ? '#ef4444' : '#f5a524')}${bar('water', water, water < 25 ? '#ef4444' : '#38bdf8')}${bar('sta', sta, sta < 25 ? '#ef4444' : '#a78bfa')}
+      <div class="pd">${doing}</div></div><button class="pos-out" onclick="unpossess()">ออกจากร่าง</button></div>
+    <div class="pos-acts"><button onclick="posEat()">${uiIcon('vit', 'food', 22, '🍖')}<span>กิน</span></button><button onclick="posDrink()">${uiIcon('vit', 'water', 22, '💧')}<span>ดื่ม</span></button>
+      <button onclick="posSleep()">${a.sleeping ? '🌅' : '😴'}<span>${a.sleeping ? 'ตื่น' : 'นอน'}</span></button><button onclick="posCraftList()">🛠️<span>ทำของ</span></button>
+      <button onclick="cardAgentId='${a.id}';openCW('bag')">${uiIcon('tabs', 'bag', 22, '🎒')}<span class="bagn">${bagCount(a)}/${bagCap(a)}</span></button><button onclick="cardAgentId='${a.id}';openCW('stat')">${uiIcon('tabs', 'stat', 22, '📊')}<span>ตัวละคร</span></button></div>`;
+  const cv = document.getElementById('pos-av'); if (cv && PUP.ready) { const c = cv.getContext('2d'); const sf = a._face; a._face = 1; drawPuppet(c, a, 32, 70, 60, 'idle', performance.now() / 1000); a._face = sf; c.setTransform(1, 0, 0, 1, 0, 0); }
+}
+function posHudTick() {                              // live numbers without rebuilding the buttons (so taps never get lost)
+  const a = posAgent(), el = document.getElementById('pos-hud'); if (!a || !el) return;
+  if (!el.querySelector('.pos-top') || el.dataset.sleep !== String(!!a.sleeping) || el.dataset.pts !== String(a.statPts || 0)) { renderPosHud(); return; }
+  const v = { hp: a.hp / maxHp(a) * 100, food: 100 - (a.hunger || 0), water: 100 - (a.thirst || 0), sta: a.stamina ?? 100 };
+  el.querySelectorAll('.pb').forEach(b => { const i = b.querySelector('i'), k = b.dataset.k; if (i && k in v) i.style.width = Math.max(0, Math.min(100, v[k])) + '%'; });
+  const C = POS.cmd, pd = el.querySelector('.pd'); if (pd) pd.textContent = posDoing(a, C);
+  const bg = el.querySelector('.bagn'); if (bg) bg.textContent = `${bagCount(a)}/${bagCap(a)}`;
+}
+function posDoing(a, C) { return a.sleeping ? '😴 นอนอยู่ (กดปุ่มตื่นเพื่อลุก)' : C ? ({ move: '🚶 กำลังเดิน', gather: `🧺 เก็บ${C.node}`, hunt: '🏹 ล่าสัตว์', talk: '💬 ไปคุย', store: '📦 ไปที่คลัง', drink: '💧 ไปดื่มน้ำ' }[C.type]) : (a.bubble ? a.bubble : '👆 แตะพื้นเพื่อเดิน · แตะของ/สัตว์/คน เพื่อใช้งาน'); }
+function cwAddStat(k) { const a = aiAgents.find(x => x.id === CW.who); if (!a || !a.possessed || !(a.statPts > 0) || a.stats[k] >= STAT_MAX) return; a.stats[k]++; a.statPts--; if (k === 'vit') a.hp = Math.min(maxHp(a), a.hp + 2); renderCW(); renderPosHud(); }
 // ===== Character window: สถานะ / สวมใส่ / กระเป๋า / ความรู้ (built so a god can later possess or play a character) =====
 function uiIcon(g, k, sz, fb) { const u = window.UI_ART && UI_ART[g] && UI_ART[g][k]; return u ? `<img src="${u}" style="width:${sz}px;height:${sz}px;vertical-align:middle">` : fb; }
 function statIcon(k, sz) { const u = window.UI_ART && UI_ART.stats && UI_ART.stats[k]; return u ? `<img src="${u}" style="width:${sz}px;height:${sz}px;vertical-align:middle">` : STATS[k].icon; }
@@ -8453,11 +8629,11 @@ function renderCW() {
       const base = a.stats ? a.stats[k] : 1, tot = st(a, k), bonus = tot - base, need = expNeed(base), xp = a.sexp ? a.sexp[k] : 0, tg = talentGrade(a.talent ? a.talent[k] : 1);
       return `<div class="cw-stat ${CW.sel === 's:' + k ? 'sel' : ''}" onclick="cwSet('sel','s:${k}')"><span class="i">${statIcon(k, 26)}</span><span class="k">${STATS[k].short}</span>
         <span class="t">${STATS[k].name}<span class="xp"><i style="width:${base >= STAT_MAX ? 100 : Math.round(xp / need * 100)}%"></i></span></span>
-        <span class="v">${base}${bonus ? `<span class="p">+${bonus}</span>` : ''}</span><span class="g ${tg}" title="พรสวรรค์">${tg}</span></div>`;
+        <span class="v">${base}${bonus ? `<span class="p">+${bonus}</span>` : ''}${a.possessed && a.statPts > 0 ? `<button class="cw-plus" onclick="event.stopPropagation();cwAddStat('${k}')">+</button>` : ''}</span><span class="g ${tg}" title="พรสวรรค์">${tg}</span></div>`;
     }).join('');
     const D = derivedStats(a);
     const tiles = D.map(([ic, n, val], i) => `<div class="cw-tile ${CW.sel === 'd:' + i ? 'sel' : ''}" onclick="cwSet('sel','d:${i}')"><div class="l">${uiIcon('der', 'd' + i, 16, ic)} ${n}</div><div class="v">${val}</div></div>`).join('');
-    body = `${vit}<div class="cw-cols"><div><div class="cw-sec"><span>ค่าสถานะ</span><span>ตัวเลขเขียว = จากของ/บัฟ · ตัวอักษร = พรสวรรค์</span></div>${rows}
+    body = `${vit}<div class="cw-cols"><div><div class="cw-sec"><span>ค่าสถานะ${a.possessed ? ` · <b style="color:#16a34a">แต้มคงเหลือ ${a.statPts || 0}</b>` : ''}</span><span>ตัวเลขเขียว = จากของ/บัฟ · ตัวอักษร = พรสวรรค์</span></div>${rows}
       <div class="ac-sub" style="margin-top:8px">ค่าสถานะโตขึ้นเองจากการลงมือทำ: ใช้แรง = STR · วิ่ง/หลบ = AGI · ทนลำบาก = VIT · ทดลอง/เรียน = INT · ประดิษฐ์ = DEX · พูดคุย/สอน = CHA</div></div>
       <div><div class="cw-sec"><span>ค่าที่คำนวณได้</span></div><div class="cw-tiles">${tiles}</div></div></div>`;
     if (CW.sel && CW.sel.startsWith('s:')) { const k = CW.sel.slice(2), base = a.stats ? a.stats[k] : 1; foot = `${statIcon(k, 18)} <b>${STATS[k].short} · ${STATS[k].name}</b> — +1 = ${STAT_RULES[k]} · EXP ${Math.floor(a.sexp ? a.sexp[k] : 0)}/${expNeed(base)} ถึงเลเวลถัดไป`; }
@@ -8558,7 +8734,8 @@ ${(() => {   // quests this person asked for, or is helping with
         return `<div class="gq">${q.giverId === a.id ? '🙏' : '🛠️'} ${q.title}${prog}<div class="d" style="margin-left:18px;font-size:11px">${who} · ตอบแทน ${rewardText(q.agreed || q.offer)} · เหลือ ${hrs} ชม.</div>${last}</div>`;
       }).join('')}</div>`;
     })()}
-    <div class="ac-btns four"><button class="gbtn moss" onclick="openCW('stat')">${uiIcon('tabs', 'stat', 20, '📊')} สถานะ</button><button class="gbtn moss" onclick="openCW('equip')">${uiIcon('tabs', 'equip', 20, '🛡️')} สวมใส่</button><button class="gbtn moss" onclick="openCW('bag')">${uiIcon('tabs', 'bag', 20, '🎒')} <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn moss" onclick="openCW('know')">${uiIcon('tabs', 'know', 20, '📖')} <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>`;
+    <div class="ac-btns four"><button class="gbtn moss" onclick="openCW('stat')">${uiIcon('tabs', 'stat', 20, '📊')} สถานะ</button><button class="gbtn moss" onclick="openCW('equip')">${uiIcon('tabs', 'equip', 20, '🛡️')} สวมใส่</button><button class="gbtn moss" onclick="openCW('bag')">${uiIcon('tabs', 'bag', 20, '🎒')} <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn moss" onclick="openCW('know')">${uiIcon('tabs', 'know', 20, '📖')} <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>
+    ${a.age >= 12 ? (a.possessed ? '<button class="ac-possess" onclick="unpossess()">👻 ออกจากร่าง</button>' : `<button class="ac-possess" onclick="possess('${a.id}')">👻 สิงร่าง ${a.name}</button>`) : ''}`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
   if (PUP.ready) { const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, 42, 90, 80, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); }
 }
@@ -8569,6 +8746,7 @@ function renderLoop(ts) {
   if (!renderLoop.mmT || ts - renderLoop.mmT > 120) { renderLoop.mmT = ts; try { drawMiniMap(); } catch (err) { console.error(err); } }
   if (!renderLoop.cardT || ts - renderLoop.cardT > 500) { renderLoop.cardT = ts; if (cardAgentId) renderAgentCard();
     if (renderLoop.popN % 3 === 2 && document.getElementById('cw').classList.contains('open')) renderCW();
+    if (POS) { const pa = posAgent(); if (!pa) { addLog('👻 ร่างที่สิงอยู่สิ้นลมแล้ว พระเจ้าถูกดีดออกจากร่าง', '#c4b5fd'); unpossess(true); } else { if (pa.zone !== currentZoneId) switchZone(pa.zone); VIEW.follow = pa.id; posHudTick(); } }
     if ((renderLoop.popN = (renderLoop.popN || 0) + 1) % 3 === 0 && document.getElementById('agent-pop').classList.contains('open')) { if (AP.store) renderStorePop(); else renderAgentPop(); }
     const open = typeof godRequests !== 'undefined' && godRequests.some(q => q.status !== 'done');
     const gd = document.getElementById('god-dot'); if (gd) gd.classList.toggle('on', open);
@@ -8649,6 +8827,8 @@ function agentsRealtime() {
   let budget = 40;
   for (const a of aiAgents.slice()) {
     if (a.busyUntil === undefined || a.busyUntil > now + 240) a.busyUntil = now + Math.random() * 60;   // new or loaded: start at a random moment
+    if (a.possessed && !(POS && POS.id === a.id)) delete a.possessed;     // a save from a possessed moment: hand the body back
+    if (a.possessed) { if (a.busyUntil <= now) possessStep(a, night, season, now); continue; }
     if (a.busyUntil > now || budget-- <= 0) continue;
     if (!aiAgents.includes(a)) continue;
     agentStep(a, night, season, now);
@@ -8657,6 +8837,7 @@ function agentsRealtime() {
 function agentsCatchUp() {
   const now = gameNow(), night = isNightTime(), season = SEASONS[currentSeasonIdx];
   for (const a of aiAgents.slice()) {
+    if (a.possessed) continue;
     if (a.busyUntil === undefined || a.busyUntil > now + 240 || a.busyUntil < now - 120) a.busyUntil = now - Math.random() * 60;
     for (let n = 0; n < 3 && a.busyUntil <= now && aiAgents.includes(a); n++) agentStep(a, night, season, a.busyUntil);
   }
