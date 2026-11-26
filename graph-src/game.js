@@ -6257,11 +6257,11 @@ function drawCanvas() {
   });
   (zoneNodes[currentZoneId] || []).forEach(n => items.push({ y: n.x + n.y + 1, draw: () => {
     const [cx, fy] = groundAt(n.x + 0.5, n.y + 0.5), ic = resIcon(n.name), tall = n.sprite === 'res_tree' || n.sprite === 'res_bamboo';
-    groundShadow(ctx, cx, fy, WT * (tall ? 1.0 : 0.5), WT * 0.24, 0.18);
+    groundShadow(ctx, cx, fy, WT * (tall ? (/กล้วย/.test(n.name) ? 0.6 : 1.0) : 0.5), WT * 0.24, 0.18);
     if (tall) {
       const hidden = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < n.x + n.y && Math.abs(a._feet[0] - cx) < HUMAN_H * 1.1 && a._feet[1] < fy && a._feet[1] > fy - HUMAN_H * 2.6);
       if (hidden) ctx.globalAlpha = 0.45;
-      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /กล้วย/.test(n.name) ? 'banana' : /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว|ต้นจาก/.test(n.name) ? 1 : 0, cx, fy, 1, (n.x + n.y) % 2 === 0))
+      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /กล้วย/.test(n.name) ? 'banana' : /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว|ต้นจาก/.test(n.name) ? 1 : 0, cx, fy, /กล้วย/.test(n.name) ? 0.55 : 1, (n.x + n.y) % 2 === 0))   // a banana plant is a big herb, not a tree
         drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
       ctx.globalAlpha = 1;
     }
