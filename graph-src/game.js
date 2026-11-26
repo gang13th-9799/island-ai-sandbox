@@ -428,7 +428,11 @@ function ensureAgent(a) {
 }
 function st(a, k) { return (a.stats ? a.stats[k] : 1) + effBonus(a, k); }
 function stBase(a, k) { return a.stats ? a.stats[k] : 1; }
-function maxHp(a) { return 80 + st(a, 'vit') * 4; }
+function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // VIT +1 = HP +2, STR +1 = HP +1
+// attack: STR +1 = ATK +2, plus the best weapon carried; defence: VIT +1 = DEF +1, plus armour
+function atkOf(a) { const t = ['bow', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
+function defOf(a) { const ar = carriedEff(a, 'armor'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0); }
+function hurt(a, dmg, floor = 0) { const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
 function agentLevel(a) { return STAT_KEYS.reduce((s, k) => s + st(a, k), 0) - STAT_KEYS.length + 1; }
 function recipeCap(a) { return 4 + st(a, 'int') * 2; }
 function failCap(a) { return 30 + st(a, 'int') * 15; }
@@ -1914,7 +1918,7 @@ function socialTick() {
     const crowded = (a.crowd || 0) > 0 && (b.crowd || 0) > 0;
     if (crowded && Math.random() < 0.3) { addRel(a, b, -1); addRel(b, a, -1); }
     if (mutual < (crowded ? -40 : -70) && Math.random() < (crowded ? 0.2 : 0.1)) {
-      a.hp = Math.max(1, a.hp - 5); b.hp = Math.max(1, b.hp - 5);
+      hurt(a, 3 + atkOf(b) * 0.3, 1); hurt(b, 3 + atkOf(a) * 0.3, 1);
       addRel(a, b, -3); addRel(b, a, -3);
       a.bubble = `💢 ทะเลาะกับ${b.name}`; b.bubble = `💢 ทะเลาะกับ${a.name}`;
       addLog(`💢 [ทะเลาะ] ${a.name} กับ ${b.name} มีปากเสียงกันรุนแรง`, '#fb7185');
@@ -3391,7 +3395,7 @@ function bodyHunger(a, season, reactorMult, hrs) {
     a.bubble = `🔄 เอาของแลกอาหารที่โกดัง${v.name}`;
   } else if (a.hunger > 75 && inAura(a)) {           // the temple never lets anyone starve: blessed fruit for the desperate
     a.hunger = 75; if (Math.random() < 0.3) a.bubble = '🙏 เทพประทานผลไม้ทิพย์ พอประทังชีวิต';
-  } else if (a.hunger >= 85 && !inAura(a)) {
+  } else if (a.hunger >= 100 && !inAura(a)) {        // nothing left in the belly: HP drains instead
     a.hp = Math.max(0, a.hp - Math.max(3, 7 - Math.floor(st(a, 'vit') / 5)) * hrs);
     gainExp(a, 'vit', hrs);
     a.bubble = '😵 หิวจัด! เลือดลด!';
@@ -4280,7 +4284,7 @@ function agentHunt(hunter) {
       if (hunter._hunt) { hunter._hunt.ttl = Math.min(hunter._hunt.ttl, 3); hunter._hunt.d = undefined; }   // missed? try again right here for a bit
       const weapon = hasTool('bow', hunter) ? 'bow' : (hasTool('blade', hunter) ? 'blade' : null);
       const base = target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25);
-      const chance = Math.max(0.03, Math.min(0.95, base + st(hunter, 'str') * 0.01 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
+      const chance = Math.max(0.03, Math.min(0.95, base + atkOf(hunter) * 0.006 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
       if (weapon) useTool(weapon, hunter);
       gainExp(hunter, 'str', target.predator ? 2 : 1); gainExp(hunter, 'agi', target.predator ? 2 : 1);
       if (Math.random() < chance) {
@@ -4302,8 +4306,8 @@ function agentHunt(hunter) {
       } else if (target.predator) {
         // The predator hunts back
         const tt = trOf(target, tz);
-        const dmg = (target.id === 'f_wolf' ? 10 + Math.floor(Math.random() * 15) : 18 + Math.floor(Math.random() * 18)) + tt.str * 3 + tt.fer * 2;
-        hunter.hp = Math.max(0, hunter.hp - dmg);
+        let dmg = (target.id === 'f_wolf' ? 10 + Math.floor(Math.random() * 15) : 18 + Math.floor(Math.random() * 18)) + tt.str * 3 + tt.fer * 2;
+        const got = hurt(hunter, dmg); dmg = got;
         gainExp(hunter, 'vit', 3);
         hunter.bubble = `🩸 ถูก${target.name}สวนกลับ!`;
         addLog(`🩸 [ล่าพลาด] ${hunter.name} พยายามล่า "${target.name}" แต่ถูกมันสวนกลับ HP -${dmg} (เหลือ ${Math.round(hunter.hp)})`, '#ef4444');
@@ -4852,12 +4856,12 @@ function renderAllUI() {
         <div class="stat-row">
           <span>❤️ ${Math.round(a.hp)}/${maxHp(a)}</span>
           <div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(100 * a.hp / maxHp(a))}%; background:${a.hp < maxHp(a) * 0.35 ? '#ef4444' : '#22c55e'};"></div></div>
-          <span>🍖 หิว ${Math.round(a.hunger)}%</span>
-          <div class="bar-wrap"><div class="bar-hg" style="width:${a.hunger}%; background:${a.hunger > 75 ? '#ef4444' : '#f59e0b'};"></div></div>
+          <span>🍖 อิ่ม ${100 - Math.round(a.hunger)}%</span>
+          <div class="bar-wrap"><div class="bar-hg" style="width:${100 - a.hunger}%; background:${a.hunger > 75 ? '#ef4444' : '#f59e0b'};"></div></div>
         </div>
         <div class="stat-row">
-          <span>💧 กระหาย ${Math.round(a.thirst || 0)}%</span>
-          <div class="bar-wrap"><div class="bar-hg" style="width:${Math.round(a.thirst || 0)}%; background:${(a.thirst || 0) > 75 ? '#ef4444' : '#38bdf8'};"></div></div>
+          <span>💧 น้ำ ${100 - Math.round(a.thirst || 0)}%</span>
+          <div class="bar-wrap"><div class="bar-hg" style="width:${100 - Math.round(a.thirst || 0)}%; background:${(a.thirst || 0) > 75 ? '#ef4444' : '#38bdf8'};"></div></div>
         </div>
         <div class="stat-row">
           <span>⚡ แรง ${Math.round(a.stamina ?? 100)}%</span>
@@ -6532,8 +6536,7 @@ function beastCheck(a, night, hrs) {
     if (hasTool('bow', a) && a.age >= 15) { a.bubble = `🏹 ยิงธนูไล่${beast.name}!`; gainExp(a, 'agi', 1); gainExp(a, 'str', 0.5); }
     else if (Math.random() < Math.min(0.6, st(a, 'agi') * 0.025)) { a.bubble = `💨 หลบ${beast.name}ทัน!`; gainExp(a, 'agi', 2); fleeFrom(a); }
     else {
-      const ar = carriedEff(a, 'armor'), dmg = Math.round(((beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3) * (ar ? 1 - ar.n / 100 : 1));
-      a.hp = Math.max(0, a.hp - dmg);
+      const dmg = hurt(a, (beast.id === 'f_wolf' ? 8 * Math.min(3, beast.zp[a.zone]) : 18) + trOf(beast, a.zone).str * 3);
       if (beast.id === 'f_cobra') a.poisonH = (a.poisonH || 0) + 8;
       gainExp(a, 'vit', 2); gainExp(a, 'agi', 0.5);
       a.bubble = `${icon} ถูก${beast.name}โจมตี!`; a.sleeping = false; a.wantRest = false; fleeFrom(a);
@@ -6576,7 +6579,7 @@ function insectAct(a, night, chance) {
           godQuestEvent(a, 'gather', got[0], 1);
         } else if (!a.goal) a.bubble = `👋 ตบ${D.name}`;
       } else if (D.fightBack && Math.random() < 0.5) {
-        a.hp = Math.max(1, a.hp - D.sting); a.bubble = tgt.k === 'bee' ? '🐝 ตบพลาด โดนผึ้งต่อย!' : '🦂 จับพลาด โดนแมงป่องต่อย!';
+        hurt(a, D.sting, 1); a.bubble = tgt.k === 'bee' ? '🐝 ตบพลาด โดนผึ้งต่อย!' : '🦂 จับพลาด โดนแมงป่องต่อย!';
         if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
       }
     }
@@ -6591,7 +6594,7 @@ function insectBody(a, night, hrs) {
     if (b.dead) continue;
     const D = INSECTS[b.k]; if (!D.sting || (D.day && night)) continue;
     if (Math.hypot(b.x - a.x, b.y - a.y) <= 2 && Math.random() < 0.03 * hrs) {
-      a.hp = Math.max(1, a.hp - D.sting); gainExp(a, 'vit', 0.5);
+      hurt(a, D.sting, 1); gainExp(a, 'vit', 0.5);
       a.bubble = b.k === 'bee' ? '🐝 โดนผึ้งต่อย!' : '🦂 โดนแมงป่องต่อย ติดพิษ!';
       if (D.poison) a.poisonH = (a.poisonH || 0) + 6;
       break;
@@ -7240,12 +7243,13 @@ function renderAgentCard() {
       <div class="ac-bubble">${a.bubble || '...'}</div></div>
       <button class="gbtn ghost round close" onclick="closeAgentCard()">✕</button></div>
     <div class="ac-bars"><span>❤️</span><div class="bar-wrap"><div class="bar-hp" style="width:${hp}%;background:${hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171'}"></div></div><span>${hp}%</span>
-      <span>🍖</span><div class="bar-wrap"><div class="bar-hg" style="width:${hg}%;background:#f5a524"></div></div><span>${hg}%</span>
-      <span>💧</span><div class="bar-wrap"><div class="bar-hg" style="width:${Math.round(a.thirst || 0)}%;background:${(a.thirst || 0) > 75 ? '#ef4444' : '#38bdf8'}"></div></div><span>${Math.round(a.thirst || 0)}%</span>
+      <span title="อิ่ม (เหลือ 0 = HP ลด)">🍖</span><div class="bar-wrap"><div class="bar-hg" style="width:${100 - hg}%;background:${100 - hg < 25 ? '#ef4444' : '#f5a524'}"></div></div><span>${100 - hg}%</span>
+      <span title="น้ำในร่างกาย (เหลือ 0 = HP ลด)">💧</span><div class="bar-wrap"><div class="bar-hg" style="width:${100 - Math.round(a.thirst || 0)}%;background:${(a.thirst || 0) > 75 ? '#ef4444' : '#38bdf8'}"></div></div><span>${100 - Math.round(a.thirst || 0)}%</span>
       <span>⚡</span><div class="bar-wrap"><div class="bar-hp" style="width:${sta}%;background:${sta < 25 ? '#ef4444' : '#38bdf8'}"></div></div><span>${sta}%</span>
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? ({ bed: 'นอนในที่พัก', tent: 'นอนในเต็นท์', mat: 'นอนบนเสื่อ', fire: 'นอนข้างกองไฟ' }[a.sleepKind] || 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
     <div class="ac-stats">${stats}</div>
+    <div class="ac-sub">❤️ HP ${Math.round(a.hp)}/${maxHp(a)} · ⚔️ ATK ${atkOf(a)} · 🛡️ DEF ${defOf(a)} <span style="opacity:.7">(VIT+1 = HP+2, DEF+1 · STR+1 = HP+1, ATK+2)</span></div>
     <div class="ac-sub">📜 อักษรเทพ ${Math.round(readCap(a) * 100)}% ${readCap(a) >= 1 ? '· อ่านศิลาเข้าใจทั้งหมด' : '· ช่วยซ่อมวิหารเพื่อเรียนอักษรเทพ'}${(a.lit || 0) >= 1 ? ' · ✍️ สลักศิลาได้' : ''}</div>
     ${(a.buffs || []).length ? `<div class="ac-sub">🧪 ${(a.buffs || []).map(b => `${b.stat.toUpperCase()} +${b.n} (${b.from}, เหลือ ${Math.max(0, Math.round((b.until - nowH()) / 24 * 10) / 10)} วัน)`).join(' · ')}</div>` : ''}
     <div class="ac-sub">ปัจจัย 4: ${Object.entries(needsOf(a)).map(([k, v]) => `<span style="margin-right:6px;${v.ok ? '' : 'color:#dc2626;font-weight:600'}">${NEED_LABEL[k]} ${v.ok ? '✓' : '✗'}</span>`).join('')}</div>
@@ -7405,7 +7409,7 @@ function bodyThirst(a, hrs) {
     if (nearW) drink(a, 50, a.thirst >= 50 ? '💧 แวะดื่มน้ำ' : null);
   }
   if (inAura(a) && a.thirst > 75) { a.thirst = 75; if (Math.random() < 0.3) a.bubble = '🙏 ดื่มน้ำจากบ่อน้ำศักดิ์สิทธิ์ของวิหาร'; }
-  if (a.thirst >= 85 && !inAura(a)) { a.hp = Math.max(0, a.hp - 4 * hrs); a.dryHurt = true; if (!a.sleeping) a.bubble = '🥵 คอแห้งจะขาดใจ!'; }
+  if (a.thirst >= 100 && !inAura(a)) { a.hp = Math.max(0, a.hp - 4 * hrs); a.dryHurt = true; if (!a.sleeping) a.bubble = '🥵 คอแห้งจะขาดใจ!'; }
   else a.dryHurt = false;
 }
 // thirsty: walk to a spring or a riverbank and drink (within 2 tiles); raw river/swamp water can upset the stomach
