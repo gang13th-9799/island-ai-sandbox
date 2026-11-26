@@ -7334,7 +7334,7 @@ function drawAgent(ctx, a, now, labels) {
   const matImg = window.CAMP_ART && CAMP_ART.mat && (window._matImg || (window._matImg = Object.assign(new Image(), { src: CAMP_ART.mat })));
   if (a.sleeping && a.sleepKind === 'mat' && matImg && matImg.complete && matImg.naturalWidth) {   // Gemini leaf mat under the sleeper
     const w = H * 2.2, h = w * CAMP_ART.matH / CAMP_ART.matW * 1.9;   // flat on the ground, clearly bigger than the sleeper
-    ctx.drawImage(matImg, fx - w * 0.6, feetY - h * 0.62, w, h);
+    ctx.drawImage(matImg, fx - w * (0.5 + 0.1 * (a._face || 1)), feetY - h * 0.45, w, h);   // follow which way the sleeper's head points
   } else if (a.sleeping && a.sleepKind === 'mat') {          // fallback: code-drawn mat
     ctx.fillStyle = '#9a8a4a'; ctx.strokeStyle = '#5c4a22'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.48, H * 0.12, 0, 0, 7); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = 'rgba(92,74,34,.5)'; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(fx + i * H * 0.12, feetY - H * 0.08); ctx.lineTo(fx + i * H * 0.12, feetY + H * 0.08); ctx.stroke(); }
@@ -7344,7 +7344,8 @@ function drawAgent(ctx, a, now, labels) {
   const tentImg = window.CAMP_ART && (window._tentImg || (window._tentImg = Object.assign(new Image(), { src: CAMP_ART.tent })));
   if (a.sleeping && a.sleepKind === 'tent' && tentImg && tentImg.complete && tentImg.naturalWidth) {   // Gemini tent art over the sleeper
     const w = H * 2.1, h = w * CAMP_ART.tentH / CAMP_ART.tentW;      // big enough to sleep inside
-    ctx.drawImage(tentImg, fx - w * 0.55, feetY + H * 0.26 - h, w, h);
+    const tx = fx - w * (0.5 + 0.05 * (a._face || 1)), ty = feetY + H * 0.26 - h;      // flipped: door faces the other way
+    ctx.save(); ctx.translate(tx + w, ty); ctx.scale(-1, 1); ctx.drawImage(tentImg, 0, 0, w, h); ctx.restore();
   } else if (a.sleeping && a.sleepKind === 'tent') {         // fallback: code-drawn hide tent
     const w = H * 0.62, h = H * 0.6;
     ctx.fillStyle = '#a0703f'; ctx.strokeStyle = '#4a2e16'; ctx.lineWidth = 1.5;
