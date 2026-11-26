@@ -3366,7 +3366,7 @@ function staminaTick() {
 }
 function bodyHunger(a, season, reactorMult, hrs) {
   const vitMult = 1 - Math.min(0.35, st(a, 'vit') * 0.01);
-  a.hunger = Math.min(100, a.hunger + 2 * season.foodMult * reactorMult * vitMult * (a.age < 12 ? 0.5 : 1) * hrs);
+  a.hunger = Math.min(100, a.hunger + 1 * season.foodMult * reactorMult * vitMult * (a.age < 12 ? 0.5 : 1) * hrs);
   if (a.hunger >= 60) gainExp(a, 'vit', 0.4 * hrs);
   const foods = a.bag ? Object.keys(a.bag).filter(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel) : [];
   const snack = foods.find(n => !propsOf(n).bad) || ((a.food || 0) <= 0 ? foods[0] : null);
@@ -4158,7 +4158,7 @@ function agentMove(a, night) {
       if (fnode && (!a.gatherT || !FOODRX.test(a.gatherT.name))) a.gatherT = Object.assign({ zone: a.zone }, fnode);
       // hungry: go straight to the food and stand at it (picking happens within 2 tiles)
       if (a.gatherT && FOODRX.test(a.gatherT.name) && a.gatherT.zone === a.zone) {
-        if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) > 1.5) { for (let k = 0; k < 2; k++) moveToward(a, a.gatherT.x, a.gatherT.y); if (!a.bubble || !a.bubble.startsWith('😵')) a.bubble = `🍃 ไปหา${a.gatherT.name}กิน`; }
+        if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) > 1.5) { for (let k = 0; k < 2 && a.gatherT; k++) moveToward(a, a.gatherT.x, a.gatherT.y); if (!a.bubble || !a.bubble.startsWith('😵')) a.bubble = `🍃 ไปหา${a.gatherT.name}กิน`; }
         return;
       }
       const fruit = !fnode && objsOf(a.zone).filter(o => !o.dead && o.fruit).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
@@ -4194,9 +4194,10 @@ function agentMove(a, night) {
       if (tgt) { moveToward(a, Math.round(tgt.x - 0.5), Math.round(tgt.y - 0.5)); return; }
     }
     if (nodes.length && Math.random() < 0.85) {
-      if (!a.gatherT || a.gatherT.zone !== a.zone) a.gatherT = Object.assign({ zone: a.zone }, questNode(a) || pick(nodes));
-      moveToward(a, a.gatherT.x, a.gatherT.y);
-      if (Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= 1.5) a.gatherT = null;
+      const reach = nodes.filter(n => canReach(a, n.x, n.y));
+      if ((!a.gatherT || a.gatherT.zone !== a.zone) && reach.length) a.gatherT = Object.assign({ zone: a.zone }, questNode(a) || pick(reach));
+      if (a.gatherT) moveToward(a, a.gatherT.x, a.gatherT.y);
+      if (a.gatherT && Math.hypot(a.x - a.gatherT.x, a.y - a.gatherT.y) <= 1.5) a.gatherT = null;
     } else moveToward(a, a.x + Math.floor(Math.random() * 9) - 4, a.y + Math.floor(Math.random() * 9) - 4);
 
     if (Math.random() < 0.14 && !night) {
@@ -7385,7 +7386,7 @@ function drink(a, amount, why) {
 function bodyThirst(a, hrs) {
   if (a.thirst === undefined) a.thirst = 0;
   if (a.sleeping && a.thirst >= 80 && a.age >= 12) { a.sleeping = false; a.sleepAt = null; a.bubble = '🥵 คอแห้งจนต้องตื่นมาหาน้ำ'; }
-  let rate = (a.age < 4 ? 0.3 : 1) * 2.5 * ((a.felt ?? 25) > 30 ? 1.5 : 1) * (a.sleeping ? 0.4 : 1) * (a.age < 12 ? 0.7 : 1) * (a.session ? 1.2 : 1);
+  let rate = (a.age < 4 ? 0.3 : 1) * 1 * ((a.felt ?? 25) > 30 ? 1.5 : 1) * (a.sleeping ? 0.4 : 1) * (a.age < 12 ? 0.7 : 1) * (a.session ? 1.2 : 1);
   a.thirst = Math.min(100, a.thirst + rate * hrs);
   // rain: a few mouthfuls standing outside, and a vessel fills up
   const wz = zoneWeather(a.zone);
