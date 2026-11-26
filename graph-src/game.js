@@ -5750,6 +5750,14 @@ function trapIcons() {
   if (!window.ITEM_ART || !window.TRAP_ART || ITEM_ART.wood_cage) return;   // (also adds icons for stations that have Gemini art)
   const m = { fish_trap: 'fishtrap', animal_trap: 'snare', wood_cage: 'cage_open', iron_cage: 'cage_iron_open', wood_cage_broken: 'cage_closed', iron_cage_broken: 'cage_iron_closed' };
   for (const k in m) if (TRAP_ART[m[k]]) ITEM_ART[k] = { icon: TRAP_ART[m[k]].img };
+  if (window.UI_ART && UI_ART.items) { if (UI_ART.items.boiled_water) ITEM_ART.boiled_water = { icon: UI_ART.items.boiled_water }; if (UI_ART.items.rainwater) { ITEM_ART.rainwater_ic = { icon: UI_ART.items.rainwater }; MAT_ART['น้ำฝน'] = 'rainwater_ic'; } }
+  for (const [k, d] of Object.entries(PRODUCTS)) {     // icons from art the game already has: homes, storage, bridges, campfire
+    if (ITEM_ART[k]) continue;
+    if (d.kind === 'home' && window.HOME_ART && HOME_ART[k]) ITEM_ART[k] = { icon: HOME_ART[k].src };
+    else if (d.kind === 'bridge' && window.BRIDGE_ART && BRIDGE_ART[k]) ITEM_ART[k] = { icon: BRIDGE_ART[k].img };
+    else if (d.kind === 'station' && STORE_KEY[d.station] && window.STORE_ART && STORE_ART[STORE_KEY[d.station]]) ITEM_ART[k] = { icon: STORE_ART[STORE_KEY[d.station]].img };
+    else if (d.station === 'campfire' && window.WORLD_ART && WORLD_ART.sprites.camp_fire) ITEM_ART[k] = { icon: WORLD_ART.sprites.camp_fire.img[0] };
+  }
   if (window.STATION_ART) for (const [k, d] of Object.entries(PRODUCTS)) if (d.kind === 'station' && STATION_ART[d.station] && STATION_ART[d.station].icon && !ITEM_ART[k]) ITEM_ART[k] = { icon: STATION_ART[d.station].icon };
 }
 function itemArtKey(name) { trapIcons(); if (!window.ITEM_ART) return null; const k = keyByName(name); if (k && ITEM_ART[k]) return k; const m = MAT_ART[name]; return m && ITEM_ART[m] ? m : null; }
