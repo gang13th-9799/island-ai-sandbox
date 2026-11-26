@@ -1343,21 +1343,21 @@ function drawSnareCatch(ctx, s, cx, fy, now, maxW) {
 // Anchored at the base (bx, by); H = flame height in px. Returns false if the art isn't loaded (caller draws its fallback).
 const FX_IMG = {};
 function fxImg(k, src) { const im = FX_IMG[k] || (FX_IMG[k] = Object.assign(new Image(), { src })); return im.complete && im.naturalWidth ? im : null; }
-function drawFlameLayers(ctx, kind, bx, by, H, now, seed) {
+function drawFlameLayers(ctx, kind, bx, by, H, now, seed, op = 1, gy = by) {
   const F = window.FX_ART && FX_ART.flame && FX_ART.flame[kind]; if (!F) return false;
   const L = ['back', 'mid', 'core'].map(l => F[l] && fxImg(kind + l, F[l].img)); if (L.some(x => !x)) return false;
   const t = now + (seed || 0), w = H * F.back.w / F.back.h;
   const wob = (f, p) => Math.sin(t * f + p) * 0.6 + Math.sin(t * f * 1.7 + p * 2.3) * 0.4;   // two beats mixed: never a clean loop
   // warm light on the ground, flickering
-  const gl = 0.32 + 0.08 * wob(11, 0.5), g = ctx.createRadialGradient(bx, by + 2, 0, bx, by + 2, H * 1.25);
+  const gl = 0.32 + 0.08 * wob(11, 0.5), g = ctx.createRadialGradient(bx, gy + 2, 0, bx, gy + 2, H * 1.25);   // on the ground, even when the flame sits higher
   g.addColorStop(0, `rgba(255,170,60,${gl})`); g.addColorStop(1, 'rgba(255,140,40,0)');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(bx, by + 2, H * 1.25, H * 0.55, 0, 0, 6.283); ctx.fill();
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(bx, gy + 2, H * 1.25, H * 0.55, 0, 0, 6.283); ctx.fill();
   const P = [[7, 0.06, 0.05, 0.00, 0.0], [9.5, 0.10, 0.09, 0.02, 1.3], [12.5, 0.15, 0.13, 0.045, 2.6]];   // freq, stretch, sway, base lift, phase
   L.forEach((im, i) => {
     const [f, st, sw, lift, ph] = P[i], sy = 1 + st * wob(f, ph), sxk = 1 - st * 0.45 * wob(f, ph), k = sw * wob(f * 0.45, ph + 0.7);
     ctx.save(); ctx.translate(bx + k * H * 0.08, by - H * lift);
     ctx.transform(sxk, 0, -k, sy, 0, 0);              // skew the tip sideways, keep the base planted
-    ctx.globalAlpha = i === 2 ? 0.9 + 0.1 * wob(17, 4) : 1;
+    ctx.globalAlpha = op * (i === 2 ? 0.9 + 0.1 * wob(17, 4) : 1);
     ctx.drawImage(im, -w / 2, -H, w, H); ctx.restore();
   });
   for (let e = 0; e < 3; e++) {                       // a few embers drifting up
@@ -7131,7 +7131,7 @@ function drawCanvas() {
       let sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
       drawProp(ctx, art, stI, cx + sx, fy);
       if (art === 'camp_fire' && stI === 0) {             // animated flames
-        if (!drawFlameLayers(ctx, 'camp', cx + sx, fy - 7, 15, now, s.x * 7.3 + s.y * 3.1)) {
+        if (!drawFlameLayers(ctx, 'camp', cx + sx, fy - 12, 15, now, s.x * 7.3 + s.y * 3.1, 1, fy - 4)) {
           // 5 leaf-shaped tongues of flame fanning out from the logs (back ones first, the tall yellow one in the middle)
           // + 2 smaller ones in front, overlapping the row (7 in all)
           const base = fy - 7, order = [0, 4, 1, 3, 2, 5, 6];
