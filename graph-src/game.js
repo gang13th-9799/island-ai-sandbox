@@ -7633,7 +7633,7 @@ function openAgentPop(tab) { AP.store = false; AP.tab = tab; AP.sel = null; if (
 const STORE_KEY = { storehouse: 'storehouse', chest: 'chest', yard: 'yard', warehouse: 'warehouse' };
 const STORE_SIZE = { storehouse: { h: 2.5, dy: 0.04 }, chest: { h: 0.62, dy: 0.08 }, yard: { w: 2.8, dy: 0.22 }, warehouse: { h: 2.0, dy: 0.06 } };   // in human heights
 const STORE_IMG = {};
-const STATION_SIZE = { workbench: { w: 1.35, dy: 0.05 }, kiln: { h: 1.55, dy: 0.04 }, smelter: { h: 1.9, dy: 0.04 }, wall: { w: 1.9, dy: 0.06 }, farm: { w: 2.8, dy: 0.12 }, lab: { h: 2.2, dy: 0.04 } };   // in human heights
+const STATION_SIZE = { workbench: { w: 1.35, dy: 0.05 }, kiln: { h: 1.55, dy: 0.04 }, smelter: { h: 1.9, dy: 0.04 }, wall: { w: 1.9, dy: 0.06 }, farm: { w: 2.8, dy: 0.12 }, lab: { h: 2.2, dy: 0.04 }, reactor: { h: 2.5, dy: 0.04 } };   // in human heights
 const STATION_IMG = {};
 function stationImg(k) { const A = window.STATION_ART && STATION_ART[k]; if (!A) return null; const im = STATION_IMG[k] || (STATION_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
 function storeImg(k) { const A = window.STORE_ART && STORE_ART[k]; if (!A) return null; const im = STORE_IMG[k] || (STORE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
