@@ -769,6 +769,7 @@
 <script src="assets/traps.js"></script>
 <script src="assets/ui.js"></script>
 <script src="assets/fx.js"></script>
+<script src="assets/stations.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -6519,9 +6520,10 @@ const MAT_ICON_IMG = {};
 (function () { const M = window.MAT_ICONS; if (!M || !window.ITEM_ART) return; let i = 0; for (const n in M) { const k = 'mat_' + (i++); ITEM_ART[k] = { icon: M[n] }; MAT_ART[n] = k; } })();
 function matIconImg(n) { const k = MAT_ART[n]; if (!k || !window.ITEM_ART || !ITEM_ART[k]) return null; let im = MAT_ICON_IMG[k]; if (!im) { im = MAT_ICON_IMG[k] = new Image(); im.src = ITEM_ART[k].icon; } return im.complete && im.naturalWidth ? im : null; }
 function trapIcons() {
-  if (!window.ITEM_ART || !window.TRAP_ART || ITEM_ART.wood_cage) return;
+  if (!window.ITEM_ART || !window.TRAP_ART || ITEM_ART.wood_cage) return;   // (also adds icons for stations that have Gemini art)
   const m = { fish_trap: 'fishtrap', animal_trap: 'snare', wood_cage: 'cage_open', iron_cage: 'cage_iron_open', wood_cage_broken: 'cage_closed', iron_cage_broken: 'cage_iron_closed' };
   for (const k in m) if (TRAP_ART[m[k]]) ITEM_ART[k] = { icon: TRAP_ART[m[k]].img };
+  if (window.STATION_ART) for (const [k, d] of Object.entries(PRODUCTS)) if (d.kind === 'station' && STATION_ART[d.station] && STATION_ART[d.station].icon && !ITEM_ART[k]) ITEM_ART[k] = { icon: STATION_ART[d.station].icon };
 }
 function itemArtKey(name) { trapIcons(); if (!window.ITEM_ART) return null; const k = keyByName(name); if (k && ITEM_ART[k]) return k; const m = MAT_ART[name]; return m && ITEM_ART[m] ? m : null; }
 function itemIconHTML(name, sz = 18) { const k = itemArtKey(name); return k ? `<img src="${ITEM_ART[k].icon}" alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;vertical-align:-4px;margin-right:2px;">` : ''; }
@@ -7917,6 +7919,12 @@ function drawCanvas() {
       const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
       ctx.drawImage(im, cx - w / 2 + sx, fy + h * sz.dy - h, w, h);
       d = { h: h * (1 - sz.dy) };
+    } else if (window.STATION_ART && STATION_ART[s.station] && stationImg(s.station)) {   // Gemini station art (workbench, kiln, ...)
+      const A = STATION_ART[s.station], z = STATION_SIZE[s.station] || { h: 1.3, dy: 0.04 }, im = stationImg(s.station);
+      const w = z.w ? HUMAN_H * z.w : HUMAN_H * z.h * A.w / A.h, h = w * A.h / A.w;
+      const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
+      ctx.drawImage(im, cx - w / 2 + sx, fy + h * z.dy - h, w, h);
+      d = { h: h * (1 - z.dy) };
     } else if (art && window.WORLD_ART) {
       const mh = stationMaxHp(s), hp = s.hp == null ? mh : s.hp, stI = hp < mh * 0.5 ? 1 : 0, A = WORLD_ART.sprites[art];
       let sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
@@ -8398,6 +8406,9 @@ function openAgentPop(tab) { AP.store = false; AP.tab = tab; AP.sel = null; if (
 const STORE_KEY = { storehouse: 'storehouse', chest: 'chest', yard: 'yard', warehouse: 'warehouse' };
 const STORE_SIZE = { storehouse: { h: 2.5, dy: 0.04 }, chest: { h: 0.62, dy: 0.08 }, yard: { w: 2.8, dy: 0.22 }, warehouse: { h: 2.0, dy: 0.06 } };   // in human heights
 const STORE_IMG = {};
+const STATION_SIZE = { workbench: { w: 1.35, dy: 0.05 }, kiln: { h: 1.55, dy: 0.04 } };   // in human heights
+const STATION_IMG = {};
+function stationImg(k) { const A = window.STATION_ART && STATION_ART[k]; if (!A) return null; const im = STATION_IMG[k] || (STATION_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
 function storeImg(k) { const A = window.STORE_ART && STORE_ART[k]; if (!A) return null; const im = STORE_IMG[k] || (STORE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
 // ---------- storage popup (village storehouse, chest, yard, warehouse) ----------
 let SP = { id: null, sel: null };
