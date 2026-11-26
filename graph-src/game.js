@@ -369,6 +369,7 @@ let shelters = [
 ];
 
 let families = [];
+let bridges = [];        // [{id, kind, name, zone, tiles:[[x,y]], axis:'x'|'y', hp, maxHp, builder}]
 let government = null;
 let currentGeneration = 1;
 
@@ -561,6 +562,11 @@ const PRODUCTS = {
   storage_yard:  { name: 'ลานเก็บวัตถุดิบ', kind: 'station', station: 'yard' },
   warehouse:     { name: 'โกดังเก็บของ', kind: 'station', station: 'warehouse' },
   village_store: { name: 'โกดังกลางหมู่บ้าน', kind: 'station', station: 'storehouse' },
+  // bridges: span water 2 / 4 / 6 / 8 tiles
+  rope_bridge:   { name: 'สะพานเชือก', kind: 'bridge', span: 2, hp: 30, props: { fiber: 1, bridge: 1 } },
+  plank_bridge:  { name: 'สะพานแขวนไม้', kind: 'bridge', span: 4, hp: 60, props: { wood: 1, bridge: 1 } },
+  wood_bridge:   { name: 'สะพานไม้ใหญ่', kind: 'bridge', span: 6, hp: 120, props: { wood: 1, bridge: 1 } },
+  stone_bridge:  { name: 'สะพานหิน', kind: 'bridge', span: 8, hp: 300, props: { hard: 1, bridge: 1 } },
   raw_tile:      { name: 'กระเบื้องดิบ', kind: 'item', props: { raw: 1, tile: 1 } },
   roof_tile:     { name: 'กระเบื้องดินเผา', kind: 'item', props: { hard: 1, tile: 1 } },
   // homes: places to sleep, from a lean-to up to a tiled brick house (better = warmer and sturdier)
@@ -632,6 +638,9 @@ function natureLaw(a, b, m) {
       if (A.hard || B.hard) return near('ทุบแล้วแค่แตกละเอียด ไม่ได้อะไร');
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
+      if (either(N('vine_net'), is('rope'))) return ok('rope_bridge');            // net walkway on rope lines
+      if (either(N('split_bamboo'), N('vine_net'))) return ok('plank_bridge');   // slats hung from a rope net
+      if (either(N('fence_posts'), N('vine_net'))) return ok('wood_bridge');     // heavy timbers lashed together
       if (either(P => P.hide >= 1, P => P.bamboo || (P.wood && !P.fence)) ) return ok('travel_tent');
       if (A.leaf >= 1 && B.leaf >= 1) return ok('sleep_mat');
       if (A.rope && B.rope) return ok('vine_net');
@@ -681,6 +690,7 @@ function natureLaw(a, b, m) {
       }
       if (m === 'knead11') {
         if (either(N('roof_tile'), N('fired_brick'))) return ok('tile_house');
+        if (either(N('fired_brick'), P => P.hard && P.mineral && !P.sharp && !P.metal && !P.brick && !P.tile)) return ok('stone_bridge');
         if (either(N('fired_brick'), N('clay_paste'))) return ok('kiln');
         if (either(N('fired_brick'), is('wood'))) return ok('brick_house');
         if (either(is('paste'), P => P.hard && P.mineral && !P.sharp && !P.metal && !P.tile)) return ok('stone_house');
@@ -993,10 +1003,10 @@ function avail(agent, n) {
 // 4 stages (0→25→50→75→100%); each stage needs 5–10 temple quests. Helping teaches recipes and gives faith.
 // Around it is a sacred zone: inside, cold, starvation, poison, stings, heat and night beasts can't hurt anyone.
 const TEMPLE_TEACH = [
-  ['stone_blade', 'stone_axe', 'rope', 'leaf_hut', 'campfire', 'vine_net', 'bamboo_basket', 'sleep_mat', 'storage_box'],
-  ['stone_pick', 'stone_sickle', 'stone_hammer', 'split_bamboo', 'bamboo_tube', 'boiled_water', 'bamboo_hut', 'hide_bag', 'travel_tent', 'storage_yard', 'village_store', 'bow'],
-  ['fence_posts', 'workbench', 'wood_house', 'warehouse', 'clay_paste', 'ranch_pen'],
-  ['raw_brick', 'fired_brick', 'kiln', 'stone_house', 'clay_pot', 'raw_tile']
+  ['stone_blade', 'stone_axe', 'rope', 'leaf_hut', 'campfire', 'vine_net', 'bamboo_basket', 'sleep_mat', 'storage_box', 'rope_bridge'],
+  ['stone_pick', 'stone_sickle', 'stone_hammer', 'split_bamboo', 'bamboo_tube', 'boiled_water', 'bamboo_hut', 'hide_bag', 'travel_tent', 'storage_yard', 'village_store', 'plank_bridge', 'bow'],
+  ['fence_posts', 'workbench', 'wood_house', 'warehouse', 'clay_paste', 'ranch_pen', 'wood_bridge'],
+  ['raw_brick', 'fired_brick', 'kiln', 'stone_house', 'clay_pot', 'raw_tile', 'stone_bridge']
 ];
 const TEMPLE_MATS = [
   ['กิ่งไม้แห้ง', 'ใบไม้สด', 'หินกรวด', 'เถาวัลย์เล็ก', 'ใบตองสด'],
@@ -1250,6 +1260,7 @@ function produce(key, agent) {
     return buildStation(def.station, agent, agent.buildFor ? byId(agent.buildFor) : null) ? `🏗️ สร้าง "${def.name}" ที่โซน ${agent.zone}` : `มี "${def.name}" ของตัวเองอยู่แล้ว/เกาะเต็มแล้ว (วัสดุถูกใช้ไปเปล่าๆ)`;
   }
   if (def.kind === 'home') return buildHome(key, agent);
+  if (def.kind === 'bridge') { const b = placeBridge(agent, key); if (b) return `🌉 สร้าง "${def.name}" ข้ามน้ำ ${b.tiles.length} ช่อง ที่โซน ${agent.zone}`; put(agent, def.name, 1); return `🌉 ได้ชุด "${def.name}" (ยังไม่มีจุดข้ามน้ำที่เหมาะ เก็บไว้ก่อน)`; }
   if (def.kind === 'food') { addFood(agent, def.food); return `🍲 ได้ "${def.name}" อาหาร +${def.food}`; }
   if (def.kind === 'tool') { newTool(def.name, agent); return `🔧 ได้ "${def.name}" เป็นของตัวเอง`; }
   put(agent, def.name, 1);
@@ -1450,6 +1461,8 @@ function computeNeeds(forAgent) {
   if (aiAgents.some(a => a.hp < maxHp(a) * 0.5) && avail(forAgent, 'ยาต้มสมุนไพร') < 2) needs.push('herbal_medicine');
   if (forAgent) { const t = bestHomeTier(forAgent); Object.entries(PRODUCTS).filter(([, d]) => d.kind === 'home' && d.tier > t).sort((p, q) => p[1].tier - q[1].tier).slice(0, 2).forEach(([k]) => needs.push(k)); }
   if (forAgent && villageOf(forAgent) && !villageStore(villageOf(forAgent))) needs.unshift('village_store');
+  if (forAgent && forAgent.bridgeFor && nowH() - forAgent.bridgeFor.t < 72) ['stone_bridge', 'wood_bridge', 'plank_bridge', 'rope_bridge'].forEach(k => needs.unshift(k));
+  else if (forAgent) forAgent.bridgeFor = null;
   Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && d.station !== 'storehouse' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
   ['blade', 'axe', 'pick', 'hammer', 'sickle', 'vessel', 'bow', 'crucible'].forEach(t => {
     if (!hasTool(t, forAgent)) Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.tool === t) needs.push(k); });
@@ -2325,13 +2338,14 @@ function captureRealm() {
   return { simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
-    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, START_ZONE, riverZones: ISLE.riverZones };
+    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, bridges, START_ZONE, riverZones: ISLE.riverZones };
 }
 function restoreRealm(st) {
   ({ simMinutes, simDay, currentZoneId, worldSeed, currentSeasonIdx, techDiscovered, discoveredProducts, ZONES, zoneTerrainGrid, zoneNodes,
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
-    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq } = st);
+    villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, bridges } = st);
+  bridges = bridges || []; for (const k in BRIDGE_SET) delete BRIDGE_SET[k];
   if (st.START_ZONE) START_ZONE = st.START_ZONE; else START_ZONE = 'E1'; { const z = ZONES[START_ZONE]; if (z && z.res) HOME_BASICS.forEach(n => { if (!z.res.includes(n)) z.res.push(n); }); }
   if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
@@ -3106,6 +3120,48 @@ function blockedSet(zone) {
   BLK[k] = { key, set }; return set;
 }
 function isBlocked(zone, x, y) { return blockedSet(zone).has(x * 100 + y); }
+// ===== Bridges: deep water can only be crossed on a bridge =====
+const BRIDGE_SET = {};
+function bridgeSet(zId) { return BRIDGE_SET[zId] || (BRIDGE_SET[zId] = new Set(bridges.filter(b => b.zone === zId && b.hp > 0).flatMap(b => b.tiles.map(([x, y]) => y * 80 + x)))); }
+function bridgeAt(zId, x, y) { return bridgeSet(zId).has(Math.round(y) * 80 + Math.round(x)); }
+function deepAt(zId, x, y) { const g = zoneTerrainGrid[zId]; x = Math.round(x); y = Math.round(y); return !!(g && g[y] && DEEP.includes(g[y][x]) && !bridgeAt(zId, x, y)); }
+// straight runs of water (along x or y) that start and end on dry land, at most `span` tiles long and with deep water in them
+function bridgeSites(zId, span) {
+  buildZoneTerrain(zId); const g = zoneTerrainGrid[zId], out = [];
+  for (let y = 2; y < 78; y++) for (let x = 2; x < 78; x++) {
+    if (WATER.includes(g[y][x])) continue;
+    for (const [dx, dy, axis] of [[1, 0, 'x'], [0, 1, 'y']]) {
+      const tiles = []; let deep = false, ok = false;
+      for (let k = 1; k <= span + 1; k++) {
+        const tx = x + dx * k, ty = y + dy * k; if (tx > 78 || ty > 78) break;
+        const t = g[ty][tx];
+        if (!WATER.includes(t)) { ok = tiles.length > 0; break; }
+        if (bridgeAt(zId, tx, ty)) break;
+        tiles.push([tx, ty]); if (DEEP.includes(t)) deep = true;
+      }
+      if (ok && deep && tiles.length <= span) out.push({ x, y, axis, tiles });
+    }
+  }
+  return out;
+}
+function placeBridge(a, key) {
+  const d = PRODUCTS[key], sites = bridgeSites(a.zone, d.span);
+  if (!sites.length) return null;
+  const tz = a.bridgeFor && a.bridgeFor.zone === a.zone ? a.bridgeFor : a;   // prefer the crossing they were stuck at
+  const site = sites.sort((p, q) => Math.hypot(p.x - tz.x, p.y - tz.y) - Math.hypot(q.x - tz.x, q.y - tz.y))[0];
+  const b = { id: 'br' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), kind: key, name: d.name, zone: a.zone, tiles: site.tiles, axis: site.axis, hp: d.hp, maxHp: d.hp, builder: a.name };
+  bridges.push(b); delete BRIDGE_SET[a.zone]; a.bridgeFor = null;
+  addLog(`🌉 [สะพาน] ${a.name} สร้าง "${d.name}" ข้ามน้ำ ${site.tiles.length} ช่องที่ ${a.zone} — ทุกคนเดินข้ามได้แล้ว`, '#7dd3fc');
+  return b;
+}
+// carrying a bridge kit: set it up at a crossing in this zone
+function bridgeKitStep(a) {
+  if (a.age < 15 || a.sleeping) return false;
+  const kit = Object.keys(a.bag || {}).find(n => a.bag[n] > 0 && PRODUCTS[keyByName(n)] && PRODUCTS[keyByName(n)].kind === 'bridge');
+  if (!kit) return false;
+  const b = placeBridge(a, keyByName(kit)); if (!b) return false;
+  take(a, kit); a.bubble = `🌉 ตั้ง${kit}ข้ามน้ำ`; return true;
+}
 function moveToward(a, gx, gy) {
   const step = Math.min(6, 2 + Math.floor(st(a, 'agi') / 8));
   const cl = v => Math.max(-step, Math.min(step, Math.round(v)));   // never overshoot the target
@@ -3115,9 +3171,37 @@ function moveToward(a, gx, gy) {
   const tries = [[dx, dy], [dx, 0], [0, dy], [Math.floor(Math.random() * 7) - 3, Math.floor(Math.random() * 7) - 3]];
   const inside = isBlocked(a.zone, Math.round(a.x), Math.round(a.y));   // woke up inside a hut: just walk out
   const cw = v => Math.max(1, Math.min(78, Math.round(v)));            // walkable range reaches the zone edges (crossing points are there)
+  // following a planned path (around water, over a bridge)
+  const mp = a._mp;
+  if (mp && mp.zone === a.zone && mp.gx === Math.round(gx) && mp.gy === Math.round(gy) && mp.path.length) {
+    let n = 0; while (mp.path.length && n < step) { const p = mp.path.shift(); a.x = p.x; a.y = p.y; n++; }
+    a._stuck = 0; return;
+  }
+  const clear = (nx, ny) => { const n = Math.max(Math.abs(nx - a.x), Math.abs(ny - a.y)); for (let k = 1; k <= n; k++) { const sx = a.x + (nx - a.x) * k / n, sy = a.y + (ny - a.y) * k / n; if (deepAt(a.zone, sx, sy)) return false; } return true; };
   for (const [ox, oy] of tries) {
     const nx = cw(a.x + ox), ny = cw(a.y + oy);
-    if (!DEEP.includes(grid[ny][nx]) && (inside || !isBlocked(a.zone, nx, ny))) { a.x = nx; a.y = ny; a._stuck = 0; return; }
+    if (!deepAt(a.zone, nx, ny) && clear(nx, ny) && (inside || !isBlocked(a.zone, nx, ny))) { a.x = nx; a.y = ny; a._stuck = 0; return; }
+  }
+  // blocked (deep water, buildings): find a real walking path, if there is one
+  if (!deepAt(a.zone, a.x, a.y)) {
+    const tx = cw(gx), ty = cw(gy), sx = cw(a.x), sy = cw(a.y);
+    const prev = new Int32Array(6400).fill(-1), Q = [sy * 80 + sx]; prev[Q[0]] = Q[0]; let end = -1, best = Q[0], bd = 1e9;
+    for (let h = 0; h < Q.length && h < 4000; h++) {
+      const c = Q[h], x = c % 80, y = (c / 80) | 0, dd = Math.hypot(x - tx, y - ty);
+      if (dd < bd) { bd = dd; best = c; } if (dd <= 1.5) { end = c; break; }
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+        const nx = x + ox, ny = y + oy; if (nx < 1 || ny < 1 || nx > 78 || ny > 78) continue;
+        const k = ny * 80 + nx; if (prev[k] >= 0 || deepAt(a.zone, nx, ny) || isBlocked(a.zone, nx, ny)) continue; prev[k] = c; Q.push(k);
+      }
+    }
+    if (end < 0 && bd > 3 && !a.bridgeFor) a.bridgeFor = { zone: a.zone, x: best % 80, y: (best / 80) | 0, gx: tx, gy: ty, t: nowH() };   // can't get across: we need a bridge here
+    const tgt = end >= 0 ? end : best;
+    if (tgt !== Q[0]) {
+      const path = []; for (let c = tgt; c !== prev[c]; c = prev[c]) path.push({ x: c % 80, y: (c / 80) | 0 });
+      a._mp = { zone: a.zone, gx: Math.round(gx), gy: Math.round(gy), path: path.reverse() };
+      let n = 0; while (a._mp.path.length && n < step) { const p = a._mp.path.shift(); a.x = p.x; a.y = p.y; n++; }
+      a._stuck = 0; return;
+    }
   }
   // boxed in (a tiny spit of land, a corner by deep water): after a while, wade out to the nearest open land
   if (++a._stuck >= 8) {
@@ -3147,7 +3231,7 @@ function crossZone(a, next) {
   const dc = Math.sign(B.c - A.c), dr = Math.sign(B.r - A.r);
   if (a._xz !== next || a._xzFrom !== a.zone) {               // plan a real walking path to a dry crossing point on the shared border
     a._xz = next; a._xzFrom = a.zone; buildZoneTerrain(next);
-    const ga = zoneTerrainGrid[a.zone], gb = zoneTerrainGrid[next], dry = (g, x, y) => !DEEP.includes(g[y][x]) && !(g === ga && isBlocked(a.zone, x, y));
+    const ga = zoneTerrainGrid[a.zone], gb = zoneTerrainGrid[next], dry = (g, x, y) => !(g === ga ? deepAt(a.zone, x, y) : deepAt(next, x, y)) && !(g === ga && isBlocked(a.zone, x, y));
     const isExit = (x, y) => (dc ? x === (dc > 0 ? 78 : 1) : y === (dr > 0 ? 78 : 1)) && dry(gb, dc ? (dc > 0 ? 1 : 78) : x, dc ? y : (dr > 0 ? 1 : 78));
     const sx = Math.max(1, Math.min(78, Math.round(a.x))), sy = Math.max(1, Math.min(78, Math.round(a.y)));
     const prev = new Int32Array(6400).fill(-1), Q = [sy * 80 + sx]; prev[Q[0]] = Q[0]; let end = -1;
@@ -5387,7 +5471,7 @@ const WT = 16;                                   // world pixels per tile
 const VIEW = { zoom: 2.4, cx: 40 * WT, cy: 40 * WT, follow: null, w: 0, h: 0, dpr: 1, last: 0 };
 const NATURE = { ocean: '#4a9fd1', shallow_sea: '#74c6e6', river_deep: '#4fa8d8', river: '#6cc0e8', swamp_water: '#5aa596', sand_bank: '#efdca6', mud_flat: '#b08a5e', grass: '#9bd472',
   tall_grass: '#84c75f', forest: '#6aad55', hill_slope: '#bdb291', mountain_cliff: '#a59e94', mountain_peak: '#d6cfc4' };
-const RES_ICON = [[/^น้ำ(?!ผึ้ง)/, '💧'], [/เต็นท์/, '⛺'], [/เสื่อ/, '🧶'], [/ตาข่าย/, '🕸️'], [/ใบไม้สด/, '🍃'], [/ไผ่/, '🎋'], [/มะพร้าว|ต้นจาก/, '🌴'], [/กล้วย/, '🍌'], [/ไม้เนื้อแข็ง/, '🌳'], [/ขอนไม้|กิ่ง/, '🪵'], [/ปลา/, '🐟'], [/กุ้ง/, '🦐'],
+const RES_ICON = [[/สะพาน/, '🌉'], [/^น้ำ(?!ผึ้ง)/, '💧'], [/เต็นท์/, '⛺'], [/เสื่อ/, '🧶'], [/ตาข่าย/, '🕸️'], [/ใบไม้สด/, '🍃'], [/ไผ่/, '🎋'], [/มะพร้าว|ต้นจาก/, '🌴'], [/กล้วย/, '🍌'], [/ไม้เนื้อแข็ง/, '🌳'], [/ขอนไม้|กิ่ง/, '🪵'], [/ปลา/, '🐟'], [/กุ้ง/, '🦐'],
   [/ปู/, '🦀'], [/ปะการัง/, '🪸'], [/หอย/, '🐚'], [/น้ำจืด/, '💧'], [/กก/, '🌾'], [/มะละกอ/, '🥭'], [/เบอร์รี่/, '🫐'], [/เห็ด/, '🍄'], [/สมุนไพร/, '🌿'],
   [/สาหร่าย/, '🌱'], [/เถาวัลย์/, '🍃'], [/ผึ้ง/, '🐝'], [/รังนก/, '🪺'], [/มด/, '🐜'], [/เกลือ/, '🧂'], [/ทราย/, '⏳'], [/แร่|เหล็ก/, '⛏️'],
   [/กำมะถัน/, '🟡'], [/ประสิว/, '⚪'], [/ดิน/, '🟤'], [/ยาง/, '🟠'], [/หิน/, '🪨']];
@@ -5402,6 +5486,35 @@ const IW = 32, IH = 16, EH = 9, TOPPAD = 4 * EH, ISO_OX = 80 * IW / 2;
 const ELEV = { mountain_peak: 3, mountain_cliff: 2, hill_slope: 1, ocean: -0.45, shallow_sea: -0.4, river_deep: -0.4, river: -0.35, swamp_water: -0.3 };
 const elevOf = t => ELEV[t] || 0;
 const isoXY = (tx, ty) => [ISO_OX + (tx - ty) * IW / 2, TOPPAD + (tx + ty) * IH / 2];
+// one tile of a bridge (code-drawn until bridge art arrives): deck across the tile + rails/posts on both sides
+const BRIDGE_LOOK = {
+  rope_bridge:  { deck: '#b08a55', edge: '#6b4a2a', post: '#7a5530', rail: '#c9a56a', railH: 7, posts: 'rope' },
+  plank_bridge: { deck: '#9c7043', edge: '#5c3d22', post: '#6b4a2a', rail: '#b98a55', railH: 6, posts: 'wood' },
+  wood_bridge:  { deck: '#8a5a32', edge: '#4f3019', post: '#5e3b1f', rail: '#7a4f2b', railH: 6, posts: 'beam' },
+  stone_bridge: { deck: '#b8b2a6', edge: '#6f695f', post: '#8f897d', rail: '#a49d90', railH: 5, posts: 'wall' }
+};
+function drawBridgeTile(ctx, b, x, y, i) {
+  const L = BRIDGE_LOOK[b.kind] || BRIDGE_LOOK.plank_bridge, lift = 3;
+  const P = (u, v) => { const [sx, sy] = isoXY(b.axis === 'x' ? x + u : x + v, b.axis === 'x' ? y + v : y + u); return [sx, sy - lift]; };
+  const w0 = 0.18, w1 = 0.82, sag = b.kind === 'rope_bridge' || b.kind === 'plank_bridge' ? Math.sin((i + 0.5) / b.tiles.length * Math.PI) * 2.5 : 0;
+  const q = [P(0, w0), P(1, w0), P(1, w1), P(0, w1)].map(([sx, sy]) => [sx, sy + sag]);
+  // side face (thickness) then deck
+  ctx.fillStyle = L.edge; ctx.beginPath(); ctx.moveTo(q[3][0], q[3][1]); ctx.lineTo(q[2][0], q[2][1]); ctx.lineTo(q[2][0], q[2][1] + 3); ctx.lineTo(q[3][0], q[3][1] + 3); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = L.deck; ctx.beginPath(); q.forEach(([sx, sy], k) => k ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = L.edge; ctx.lineWidth = 0.7;
+  if (b.kind !== 'stone_bridge') for (let k = 1; k < 4; k++) { const a1 = P(k / 4, w0), a2 = P(k / 4, w1); ctx.beginPath(); ctx.moveTo(a1[0], a1[1] + sag); ctx.lineTo(a2[0], a2[1] + sag); ctx.stroke(); }   // planks
+  else { ctx.beginPath(); const m1 = P(0.5, w0), m2 = P(0.5, w1); ctx.moveTo(m1[0], m1[1]); ctx.lineTo(m2[0], m2[1]); ctx.stroke(); }
+  // rails on both sides
+  for (const v of [w0, w1]) {
+    const r0 = P(0, v), r1 = P(1, v);
+    if (L.posts === 'wall') { ctx.fillStyle = L.rail; ctx.beginPath(); ctx.moveTo(r0[0], r0[1]); ctx.lineTo(r1[0], r1[1]); ctx.lineTo(r1[0], r1[1] - L.railH); ctx.lineTo(r0[0], r0[1] - L.railH); ctx.closePath(); ctx.fill(); ctx.strokeStyle = L.edge; ctx.stroke(); continue; }
+    ctx.strokeStyle = L.post; ctx.lineWidth = L.posts === 'beam' ? 1.8 : 1.2;
+    ctx.beginPath(); ctx.moveTo(r0[0], r0[1] + sag); ctx.lineTo(r0[0], r0[1] + sag - L.railH); ctx.stroke();
+    if (i === b.tiles.length - 1) { ctx.beginPath(); ctx.moveTo(r1[0], r1[1] + sag); ctx.lineTo(r1[0], r1[1] + sag - L.railH); ctx.stroke(); }
+    ctx.strokeStyle = L.rail; ctx.lineWidth = L.posts === 'beam' ? 1.6 : 0.9;
+    ctx.beginPath(); ctx.moveTo(r0[0], r0[1] + sag - L.railH); ctx.lineTo(r1[0], r1[1] + sag - L.railH); ctx.stroke();
+  }
+}
 function groundAt(tx, ty, zId) {
   const g = zoneTerrainGrid[zId || currentZoneId]; const cx = Math.max(0, Math.min(79, Math.floor(tx))), cy = Math.max(0, Math.min(79, Math.floor(ty)));
   const [x, y] = isoXY(tx, ty); return [x, y - Math.max(0, g ? elevOf(g[cy][cx]) : 0) * EH];
@@ -6543,6 +6656,10 @@ function drawCanvas() {
       if (cx < vx0 - 70 || cx > vx1 + 70 || fy < vy0 - 10 || fy > vy1 + 130) return;
       items.push({ y: o.x + o.y, draw: () => drawWorldObj(ctx, o, cx, fy, now) });
     });
+    bridges.forEach(b => {
+      if (b.zone !== currentZoneId || b.hp <= 0) return;
+      b.tiles.forEach(([x, y], i) => items.push({ y: x + y - 0.4, draw: () => drawBridgeTile(ctx, b, x, y, i) }));
+    });
     steles.forEach(sl => {
       if (sl.zone !== currentZoneId || sl.holder || sl.dead) return;
       const [cx, fy] = groundAt(sl.x, sl.y);
@@ -7285,6 +7402,7 @@ function agentStep(a, night, season, now) {
   else if (!a.sleeping && (a.thirst || 0) >= 65 && drinkStep(a, night)) { /* very thirsty: water first */ }
   else if (homeStep(a)) { /* evening: walking home */ }
   else if (!a.sleeping && a.age >= 12) { if (a.wantRest) restMove(a, 2); else coldMove(a, 2); }
+  if (Math.random() < 0.05) bridgeKitStep(a);
   agentMove(a, night);
   agentGather(a, season);
   if (wantsHunt(a)) agentHunt(a);
