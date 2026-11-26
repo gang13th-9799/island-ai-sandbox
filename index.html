@@ -1563,7 +1563,7 @@ function itemValue(n, v) {
   if (v && (v.store[n] || 0) <= 1) val *= 1.5;
   return Math.round(val * 10) / 10;
 }
-function atStore(agent) { const v = villageOf(agent); return !!(v && agent.zone === v.zone); }
+function atStore(agent) { const v = villageOf(agent); if (!v || agent.zone !== v.zone) return false; const st = shelters.find(x => x.villageId === v.id); return !st || structDist(agent, st) <= 2; }
 function bagValue(agent, except) {
   return Object.entries(agent.bag || {}).filter(([n]) => n !== except && n !== BAG_NAME).reduce((t, [n, q]) => t + itemValue(n) * q, 0);
 }
@@ -1639,9 +1639,15 @@ function templeStep(a, night, eager) {
   if (q && a.questId) { q.helper = null; a.templeQ = null; return false; }   // took on a neighbour's request instead
   if (!q) {
     a.templeQ = null;
-    if (t.tStage >= 4 || night || a.hunger >= 55 || (a.stamina ?? 100) < 35 || a.questId || Math.random() > (eager ? 0.85 : 0.3)) return false;
+    if (t.tStage >= 4 || night || a.hunger >= 55 || (a.stamina ?? 100) < 35 || a.questId || (!a.templeWalk && Math.random() > (eager ? 0.85 : 0.3))) return false;
     const open = (t.tQ || []).filter(x => !x.helper && !x.done);
     if (!open.length) return false;
+    if (!(a.zone === t.zone && structDist(a, t) <= 2)) {            // jobs are handed out at the temple itself
+      if (a.zone !== t.zone) { if (!a.goal) a.goal = { zone: t.zone, x: Math.round(t.x + 2), y: Math.round(t.y + 5), ttl: 20, enter: true }; travelToGoal(a); }
+      else { const p = approachOf(t, a); for (let k = 0; k < 2; k++) moveToward(a, p.x, p.y); }
+      a.bubble = '🏛️ เดินไปรับงานซ่อมที่วิหาร'; a.templeWalk = true; return true;
+    }
+    a.templeWalk = false;
     q = open.find(x => x.type === 'bring' && (zoneNodes[a.zone] || []).some(n => n.name === x.mat)) || pick(open);
     q.helper = a.id; q.since = nowH(); a.templeQ = q.id;
     a.bubble = `🏛️ รับงานซ่อมวิหาร: ${templeQuestText(q)}`;
@@ -1986,7 +1992,7 @@ function observe(agent, sig) {
   if (!e) return;
   aiAgents.forEach(o => {
     if (o === agent || o.age < 8 || o.zone !== agent.zone || o.know[sig]) return;
-    if (Math.hypot(o.x - agent.x, o.y - agent.y) > 12) return;
+    if (Math.hypot(o.x - agent.x, o.y - agent.y) > 2) return;   // must be right beside them to see how it's done
     if (Math.random() < 0.15 + st(o, 'int') * 0.025 + (o.pastKnow && o.pastKnow[sig] ? 0.4 : 0)) {
       o.know[sig] = Object.assign({}, e, { from: agent.name + ' (เห็นเอง)', day: simDay, practice: 0 });
       gainExp(o, 'int', 0.3);
@@ -2125,7 +2131,8 @@ function knowledgeExchange() {
     if (adults.length) {
       kids.forEach(k => {
         const pool = [];
-        adults.forEach(t => { const w = 1 + Math.floor(st(t, 'cha') / 4) + (t.age >= 55 ? 1 : 0); for (let i = 0; i < w; i++) pool.push(t); });
+        adults.filter(t => Math.hypot(t.x - k.x, t.y - k.y) <= 2).forEach(t => { const w = 1 + Math.floor(st(t, 'cha') / 4) + (t.age >= 55 ? 1 : 0); for (let i = 0; i < w; i++) pool.push(t); });
+        if (!pool.length) return;
         const teacher = pick(pool);
         if (Math.random() > 0.2 + st(teacher, 'cha') * 0.03 + (fire && night ? 0.3 : 0)) return;
         const times = 1 + Math.floor(st(teacher, 'cha') / 8) + (teacher.age >= 55 ? 1 : 0);
@@ -2135,7 +2142,8 @@ function knowledgeExchange() {
     const avgCha = adults.reduce((s, a) => s + st(a, 'cha'), 0) / Math.max(1, adults.length);
     if (adults.length >= 2 && Math.random() < 0.08 + avgCha * 0.012 + (fire && night ? 0.35 : 0)) {
       const p = pick(adults);
-      const q = pick(adults.filter(o => o !== p));
+      const q = pick(adults.filter(o => o !== p && Math.hypot(o.x - p.x, o.y - p.y) <= 2));   // only someone right next to you
+      if (!q) return;
       transferKnowledge(p, q, 'share');
       transferKnowledge(q, p, 'share');
     }
@@ -2223,6 +2231,7 @@ function generateQuests() {
 }
 
 function canHelp(h, q) {
+  if (h.qVisit && h.qVisit !== q.id) return false;
   if (h.id === q.giverId || h.age < 12 || h.questId || q.refused.includes(h.id)) return false;
   if (q.type === 'teach' || q.type === 'build') return Object.values(h.know).some(e => e.out === q.productKey);
   return true;
@@ -2267,10 +2276,30 @@ function assignQuests() {
   quests.filter(q => q.status === 'open').forEach(q => {
     const giver = byId(q.giverId);
     if (!giver) { q.status = 'cancelled'; return; }
-    const cands = aiAgents.filter(h => canHelp(h, q) && rel(h, giver) > -30 && !h.session);
+    // someone already walking over to talk about it?
+    const v = q.visitor && byId(q.visitor);
+    if (v && v.qVisit === q.id && canHelp(v, q)) {
+      if (!nearTo(v, giver)) {
+        if (nowH() > (q.visitUntil || 0)) { v.qVisit = null; q.visitor = null; if (v.goal && v.goal.quest) v.goal = null; }
+        else { questGoalTo(v, giver); v.bubble = `🚶 เดินไปคุยเรื่องเควสกับ ${giver.name}`; }
+        return;
+      }
+      v.qVisit = null; q.visitor = null; if (v.goal && v.goal.quest) v.goal = null;
+      if (negotiate(v, giver, q)) {
+        q.status = 'accepted'; q.helperId = v.id; q.helperName = v.name; v.questId = q.id;
+        v.bubble = `📜 รับเควสช่วย ${giver.name}`;
+        addLog(`🤝 [รับเควส] ${v.name} ตกลงช่วย ${giver.name} "${q.title}" แลกกับ ${rewardText(q.agreed)}`, '#86efac');
+      }
+      return;
+    } else if (q.visitor) q.visitor = null;
+    const cands = aiAgents.filter(h => canHelp(h, q) && !h.qVisit && rel(h, giver) > -30 && !h.session);
     for (const h of cands) {
       const chance = 0.05 + h.kind * 0.08 + rel(h, giver) / 400 + (h.zone === giver.zone ? 0.08 : 0) + rewardValue(q.offer) * 0.01;
       if (Math.random() > chance) continue;
+      if (!nearTo(h, giver)) {                       // interested: walk over first (the deal is made face to face)
+        h.qVisit = q.id; q.visitor = h.id; q.visitUntil = nowH() + 8; questGoalTo(h, giver);
+        h.bubble = `🚶 เดินไปคุยเรื่องเควสกับ ${giver.name}`; break;
+      }
       if (negotiate(h, giver, q)) {
         q.status = 'accepted'; q.helperId = h.id; q.helperName = h.name; h.questId = q.id;
         h.bubble = `📜 รับเควสช่วย ${giver.name}`;
@@ -2281,13 +2310,11 @@ function assignQuests() {
   });
 }
 
-function questGoalTo(h, target) { h.goal = { zone: target.zone, x: target.x, y: target.y, ttl: 6, quest: true }; }
+function questGoalTo(h, target) { if (h.goal && h.goal.quest && h.goal.zone === target.zone && Math.hypot(h.goal.x - target.x, h.goal.y - target.y) < 3) return; h.goal = { zone: target.zone, x: Math.round(target.x), y: Math.round(target.y), ttl: 30, quest: true }; }
 function nearTo(a, b) {
   if (a.zone !== b.zone) return false;
   const d = Math.hypot(a.x - b.x, a.y - b.y);
-  if (d <= 2) return true;
-  if (d <= 8) { const p = landNear(a.zone, Math.round(b.x + Math.sign(a.x - b.x || 1)), Math.round(b.y)); if (Math.hypot(p.x - b.x, p.y - b.y) <= 2) { a.x = p.x; a.y = p.y; return true; } }   // walk over to them
-  return false;
+  return d <= 2;                                       // everything between people happens face to face (≤2 tiles)
 }
 function questNode(a) {
   const q = a.questId && quests.find(x => x.id === a.questId);
@@ -2296,7 +2323,7 @@ function questNode(a) {
 }
 function creditGather(a, name, gain) {
   const q = a.questId && quests.find(x => x.id === a.questId);
-  if (q && q.type === 'gather' && q.item === name) { q.progress = Math.min(q.qty, q.progress + gain); a.bubble = `🧺 เควส ${q.progress}/${q.qty}`; return q; }
+  if (q && q.type === 'gather' && q.item === name) { a.bubble = `🧺 เควส ${Math.min(q.qty, q.progress + ((a.bag || {})[name] || 0) + gain)}/${q.qty} (เก็บไว้ในย่าม รอเอาไปส่ง)`; return q; }
   return null;
 }
 
@@ -2307,7 +2334,9 @@ function runQuests() {
     if (!h) { q.status = 'open'; q.helperId = null; q.helperName = null; return; }
     if (q.type === 'gather') {
       const have = (h.bag || {})[q.item] || 0;
-      if (have > 0 && q.progress < q.qty) {
+      if (q.progress < q.qty && have < q.qty - q.progress && h.zone !== q.zone) { buildZoneTerrain(q.zone); const n = zoneNodes[q.zone].find(x => x.name === q.item) || { x: 40, y: 40 }; questGoalTo(h, { zone: q.zone, x: n.x, y: n.y }); return; }
+      if ((q.progress >= q.qty || have >= q.qty - q.progress) && !nearTo(h, giver)) { questGoalTo(h, giver); h.bubble = `🧺 เอา${q.item}ไปส่ง ${giver.name}`; return; }
+      if (have > 0 && q.progress < q.qty && nearTo(h, giver)) {
         const give = Math.min(have, q.qty - q.progress);
         h.bag[q.item] -= give; if (!h.bag[q.item]) delete h.bag[q.item];
         put(giver, q.item, give); q.progress += give;
@@ -2331,7 +2360,10 @@ function runQuests() {
       } else h.bubble = '📖 สอนอยู่ ยังไม่เข้าใจ';
     } else if (q.type === 'build') {
       const type = PRODUCTS[q.productKey].station;
-      if (stationsOf(type).some(x => x.owner === giver.id) || accessibleStations(giver, type).length) return completeQuest(q, giver, h);
+      if (stationsOf(type).some(x => x.owner === giver.id) || accessibleStations(giver, type).length) {
+        if (!nearTo(h, giver)) { questGoalTo(h, giver); h.bubble = `🏗️ ไปบอก ${giver.name} ว่าสร้างเสร็จแล้ว`; return; }
+        return completeQuest(q, giver, h);
+      }
       if (h.goal) return;
       const e = planFor(h, q.productKey);
       if (!e) { h.bubble = '🏗️ ขาดวัตถุดิบ รอเก็บของ'; return; }
@@ -4508,7 +4540,7 @@ function agentMove(a, night) {
       if (!g) { g = aiAgents.filter(o => o.age >= 15).sort((p, q) => zoneDist(a.zone, p.zone) - zoneDist(a.zone, q.zone))[0]; if (g) a.guardian = g.id; }
       if (g) {
         if (a.zone !== g.zone) { a.zone = g.zone; buildZoneTerrain(a.zone); }
-        a.x = g.x; a.y = g.y; moveToward(a, g.x + 2, g.y + 2);
+        a.x = g.x; a.y = g.y; moveToward(a, g.x + 1, g.y + 1);
         if (!a.bubble || Math.random() < 0.1) a.bubble = `ตามติด ${g.name}`;
       }
       return;
@@ -4563,6 +4595,7 @@ function agentMove(a, night) {
     // ③ then the temple and the gods' requests
     if (templeStep(a, night)) return;
     if (!night && a.hunger < 70 && revelationStep(a)) return;
+    if (learnStep(a, night)) return;
     if (!night && a.hunger < 60 && stashStep(a)) return;
     if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
       const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14, enter: true }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
@@ -4608,7 +4641,7 @@ function agentGather(a, season) {
     if (hasTool('axe', a) && propsOf(t.name).wood) { gain += 1; useTool('axe', a); }
     if ((a.bag || {})[BAG_NAME] > 0) gain += 1;
     const qDeliver = creditGather(a, t.name, gain);
-    if (qDeliver) put(byId(qDeliver.giverId), t.name, gain);
+    if (qDeliver) put(a, t.name, gain);                // carry it; it's handed over face to face
     else if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) { const keep = Math.round(gain * (1 - shareRatio(a))); if (keep) put(a, t.name, keep); }
     else gainItems(a, t.name, gain);
     depositTick(a);
@@ -7631,6 +7664,24 @@ function refugeStep(a) {
   a.bubble = `🏃 ${why}เกินไป! รีบกลับไปเขตวิหารเทพ`;
   return true;
 }
+// Learning is face to face: walk over to someone who knows more and ask them to show you (≤2 tiles)
+function learnStep(a, night) {
+  if (a.age < 12 || a.hunger >= 55 || (a.stamina ?? 100) < 35) return false;
+  let t = a.learnFrom && byId(a.learnFrom);
+  if (t && (t.zone !== a.zone || t.sleeping || nowH() > (a.learnUntil || 0))) { a.learnFrom = null; t = null; }
+  if (!t) {
+    if (Math.random() > (night ? 0.04 : 0.08)) return false;
+    const mine = knownOuts(a);
+    const c = aiAgents.filter(o => o !== a && o.zone === a.zone && !o.sleeping && o.age >= 12 && rel(o, a) > -30 && Math.hypot(o.x - a.x, o.y - a.y) <= 25 && [...knownOuts(o)].some(k => !mine.has(k)))
+      .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+    if (!c) return false;
+    t = c; a.learnFrom = c.id; a.learnUntil = nowH() + 3;
+  }
+  if (Math.hypot(t.x - a.x, t.y - a.y) > 2) { for (let k = 0; k < 2; k++) moveToward(a, t.x, t.y); a.bubble = `🚶 ไปขอเรียนจาก ${t.name}`; return true; }
+  a.learnFrom = null;
+  transferKnowledge(t, a, 'teach');
+  return true;
+}
 function agentStep(a, night, season, now) {
   const z0 = a.zone, x0 = a.x, y0 = a.y;
   buildZoneTerrain(a.zone);
@@ -7644,7 +7695,7 @@ function agentStep(a, night, season, now) {
   // bump into someone? a short chat (they turn to face each other)
   if (!a.sleeping && a.age >= 8 && Math.random() < 0.08) {
     const b = aiAgents.find(o => o !== a && !o.sleeping && o.zone === a.zone && o.age >= 8 && Math.hypot(o.x - a.x, o.y - a.y) <= 2);
-    if (b && (bgTick || !talkOf(a, b))) { if (!bgTick) talkEvent(a, b); addRel(a, b, 1); addRel(b, a, 1); }
+    if (b && (bgTick || !talkOf(a, b))) { if (!bgTick) talkEvent(a, b); addRel(a, b, 1); addRel(b, a, 1); if (Math.random() < 0.6) { transferKnowledge(a, b, 'share'); transferKnowledge(b, a, 'share'); } }
   }
   // walking time: about 4-8 game minutes per tile depending on agility
   const pace = Math.max(3.5, 8 - st(a, 'agi') / 6);
