@@ -3340,6 +3340,7 @@ function warmRealm(i) {
   realms[activeRealm].state = captureRealm();
   tickingRealm = i; bgTick = i !== activeRealm;
   restoreRealm(realms[i].state);
+  ensureDivine(i);
   try { revRecipes(); if (!steleSeeded) seedSteles(); } catch (e) { console.error(e); }
   realms[i].state = captureRealm();
   tickingRealm = activeRealm; bgTick = false;
@@ -3350,11 +3351,28 @@ function scheduleWarmup() {
   order.forEach((i, k) => setTimeout(() => warmRealm(i), 400 + k * 700));
 }
 // one realm's hourly world step (the others stay as they are)
+// the temple and the gate belong to the gods: if one ever went missing (older versions let disasters wear the temple down), it comes back
+function ensureDivine(i) {
+  const def = realms[i] && realms[i].def; if (!def) return;
+  if (!templeOf()) {
+    let pct = 0; (logBuffer || []).forEach(l => { const m = /วิหารฟื้นคืน (\d+)%/.exec(typeof l === 'string' ? l : (l && (l.msg || l.text)) || ''); if (m) pct = Math.max(pct, +m[1]); });
+    const stage = Math.min(4, Math.floor(pct / 25));
+    buildZoneTerrain(START_ZONE); const p = buildSpot(START_ZONE, 40, 34);
+    shelters.push({ name: `วิหารเทพ (${START_ZONE})`, sprite: 'temple', zone: START_ZONE, x: p.x, y: p.y, station: 'temple', rest: true, cap: 4 + stage * 4, public: true, owner: null, ownerName: 'พระเจ้า', tStage: stage, tDone: 0, tNeed: 5 + Math.floor(Math.random() * 6), tQ: [], tSeq: 0 });
+    addLog(`🏛️✨ [พระเจ้า] วิหารเทพปรากฏขึ้นอีกครั้งที่ ${START_ZONE} (${stage * 25}%) — วิหารและเกจของพระเจ้าไม่มีวันถูกทำลาย`, '#fde68a');
+  }
+  if (!shelters.some(x => x.station === 'gate') && def.gate && ZONES[def.gate]) {
+    buildZoneTerrain(def.gate); const gp = findValidTile(def.gate, false);
+    shelters.push({ name: `เกจแห่งพระเจ้า (${def.gate})`, sprite: 'st_gate', zone: def.gate, x: gp.x, y: gp.y, station: 'gate', owner: null, ownerName: 'พระเจ้า', public: true, permits: [] });
+    addLog(`🌀✨ [พระเจ้า] เกจแห่งพระเจ้ากลับมาปรากฏที่ ${def.gate}`, '#f0abfc');
+  }
+}
 function tickRealmIdx(i) {
   if (!realms[i]) return;
   realms[activeRealm].state = captureRealm();
   tickingRealm = i; bgTick = i !== activeRealm;
   restoreRealm(realms[i].state);
+  ensureDivine(i);
   runAutonomousStep();
   realmTravelTick(i);
   realms[i].state = captureRealm();
@@ -6939,6 +6957,7 @@ function buildHome(key, a) {
   return `🏠 สร้าง "${d.name}"`;
 }
 function damageHome(h, dmg, why) {
+  if (h.station === 'temple' || h.station === 'gate') return;
   h.hp -= Math.max(1, Math.round(dmg * (1 - (h.tier || 1) * 0.08))); h.hitT = performance.now() / 1000;
   if (h.hp <= 0) { shelters = shelters.filter(x => x !== h); addLog(`💥 [ที่พักพัง] ${h.name} ${why || ''} พังหายไป`, '#f87171'); }
 }
@@ -7227,7 +7246,7 @@ function drawStele(ctx, s, cx, fy) {
 const STATION_HP = { campfire: 15, workbench: 30, kiln: 60, smelter: 80, wall: 150, farm: 40, lab: 120, reactor: 300, storehouse: 100, gate: 999 };
 function stationMaxHp(s) { return s.station ? (STATION_HP[s.station] || 50) : 80; }
 function damageStation(s, dmg, why) {
-  if (s.station === 'gate' || s.station === 'storehouse' || !s.station) return;
+  if (s.station === 'gate' || s.station === 'temple' || s.station === 'storehouse' || !s.station) return;   // the gods' temple and gate can't be broken
   s.hp = (s.hp == null ? stationMaxHp(s) : s.hp) - dmg; s.hitT = performance.now() / 1000;
   if (s.hp <= 0) {
     shelters = shelters.filter(x => x !== s);
