@@ -2930,6 +2930,7 @@ function restoreRealm(st) {
   if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
   zoneTerrainGrid = zoneTerrainGrid || {}; zoneNodes = zoneNodes || {}; logBuffer = logBuffer || [];
+  ensureHomeBasics();
   (shelters || []).forEach(x => { if (/ฐานบัญชาการ/.test(x.name)) Object.assign(x, { name: x.name.replace(/กระท่อมฐานบัญชาการ/, 'วิหารเทพ'), sprite: 'temple', station: 'temple', rest: true, cap: 4, public: true, owner: null, ownerName: 'พระเจ้า', tStage: 0, tDone: 0, tNeed: 7, tQ: [], tSeq: 0 }); });
   if (shelters && !SETTLED.has(shelters)) { SETTLED.add(shelters); try { settleStructures(); } catch (e) {} }
 }
@@ -3554,6 +3555,22 @@ function buildZoneTerrain(zId) {
     for (let i = 0; i < 3; i++) { const pos = isWaterRes ? shallowTile(zId) : findValidTile(zId, false); nodes.push({ name: rName, sprite: sp, x: pos.x, y: pos.y }); }
   });
   zoneNodes[zId] = nodes;
+  if (zId === START_ZONE) ensureHomeBasics();
+}
+// old saves: make sure the home zone actually has the basic materials on the ground (3 spots each)
+function ensureHomeBasics() {
+  const zs = [START_ZONE].concat(((shelters || []).find(x => x.station === 'temple') || {}).zone || []);
+  [...new Set(zs)].forEach(zId => {
+    const z = ZONES[zId]; if (!z || !z.res) return;
+    HOME_BASICS.forEach(n => { if (!z.res.includes(n)) z.res.push(n); });
+    if (!zoneTerrainGrid[zId] || !zoneNodes[zId]) return;     // nodes are made with the terrain
+    const list = zoneNodes[zId];
+    HOME_BASICS.forEach(n => {
+      const have = list.filter(o => o.name === n).length;
+      const sp = n.includes('ไผ่') ? 'res_bamboo' : /ไม้/.test(n) ? 'res_tree' : 'res_rock';
+      for (let i = have; i < 3; i++) { const pos = findValidTile(zId, false); list.push({ name: n, sprite: sp, x: pos.x, y: pos.y }); }
+    });
+  });
 }
 
 // ==========================================
