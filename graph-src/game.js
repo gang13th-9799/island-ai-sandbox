@@ -7930,12 +7930,12 @@ function renderPosHud() {
   const craft = POS_PANEL ? posPanelHTML(a) : '';
   const mq = a.questId && quests.find(x => x.id === a.questId), tq = a.templeQ && templeOf() && (templeOf().tQ || []).find(x => x.id === a.templeQ && !x.done);
   const qline = mq ? `📜 ${mq.title}${mq.qty ? ` ${mq.progress || 0}/${mq.qty}` : ''} → ${mq.giverName}` : tq ? `🏛️ ${templeQuestText(tq)}` : '';
-  el.innerHTML = `${craft}<div class="pos-top"><canvas id="pos-av" width="64" height="72"></canvas><div class="pos-st"><div class="pn">👻 ${a.name}${a.statPts ? ` <span class="pp" onclick="cardAgentId='${a.id}';openCW('stat')">+${a.statPts} แต้ม</span>` : ''}</div>
+  el.innerHTML = `${craft}<div class="pos-top"><canvas id="pos-av" width="64" height="72"></canvas><div class="pos-st"><div class="pn">${uiIcon('act', 'possess', 18, '👻')} ${a.name}${a.statPts ? ` <span class="pp" onclick="cardAgentId='${a.id}';openCW('stat')">+${a.statPts} แต้ม</span>` : ''}</div>
       ${bar('hp', hp, hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171')}${bar('food', full, full < 25 ? '#ef4444' : '#f5a524')}${bar('water', water, water < 25 ? '#ef4444' : '#38bdf8')}${bar('sta', sta, sta < 25 ? '#ef4444' : '#a78bfa')}
       <div class="pd">${doing}</div>${qline ? `<div class="pd q" onclick="posPanel('quests')">${qline}</div>` : ''}</div><button class="pos-out" onclick="unpossess()">ออกจากร่าง</button></div>
     <div class="pos-acts"><button onclick="posEat()">${uiIcon('vit', 'food', 22, '🍖')}<span>กิน</span></button><button onclick="posDrink()">${uiIcon('vit', 'water', 22, '💧')}<span>ดื่ม</span></button>
-      <button onclick="posSleep()">${a.sleeping ? '🌅' : '😴'}<span>${a.sleeping ? 'ตื่น' : 'นอน'}</span></button><button onclick="posPanel('craft')">🛠️<span>ทำของ</span></button><button onclick="posPanel('exp')">🧪<span>ทดลอง</span></button>
-      <button onclick="posPanel('quests')">📜<span>เควส</span></button><button onclick="posPanel('trap')">🪤<span>กับดัก</span></button>
+      <button onclick="posSleep()">${a.sleeping ? uiIcon('act', 'wake', 22, '🌅') : uiIcon('act', 'sleep', 22, '😴')}<span>${a.sleeping ? 'ตื่น' : 'นอน'}</span></button><button onclick="posPanel('craft')">${uiIcon('act', 'craft', 22, '🛠️')}<span>ทำของ</span></button><button onclick="posPanel('exp')">${uiIcon('act', 'exp', 22, '🧪')}<span>ทดลอง</span></button>
+      <button onclick="posPanel('quests')">${uiIcon('act', 'quest', 22, '📜')}<span>เควส</span></button><button onclick="posPanel('trap')">${uiIcon('act', 'trap', 22, '🪤')}<span>กับดัก</span></button>
       <button onclick="cardAgentId='${a.id}';openCW('bag')">${uiIcon('tabs', 'bag', 22, '🎒')}<span class="bagn">${bagCount(a)}/${bagCap(a)}</span></button><button onclick="cardAgentId='${a.id}';openCW('stat')">${uiIcon('tabs', 'stat', 22, '📊')}<span>ตัวละคร</span></button></div>`;
   const cv = document.getElementById('pos-av'); if (cv && PUP.ready) { const c = cv.getContext('2d'); const sf = a._face; a._face = 1; drawPuppet(c, a, 32, 70, 60, 'idle', performance.now() / 1000); a._face = sf; c.setTransform(1, 0, 0, 1, 0, 0); }
 }
@@ -8095,7 +8095,7 @@ ${(() => {   // quests this person asked for, or is helping with
       }).join('')}</div>`;
     })()}
     <div class="ac-btns four"><button class="gbtn moss" onclick="openCW('stat')">${uiIcon('tabs', 'stat', 20, '📊')} สถานะ</button><button class="gbtn moss" onclick="openCW('equip')">${uiIcon('tabs', 'equip', 20, '🛡️')} สวมใส่</button><button class="gbtn moss" onclick="openCW('bag')">${uiIcon('tabs', 'bag', 20, '🎒')} <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn moss" onclick="openCW('know')">${uiIcon('tabs', 'know', 20, '📖')} <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>
-    ${a.age >= 12 ? (a.possessed ? '<button class="ac-possess" onclick="unpossess()">👻 ออกจากร่าง</button>' : `<button class="ac-possess" onclick="possess('${a.id}')">👻 สิงร่าง ${a.name}</button>`) : ''}`;
+    ${a.age >= 12 ? (a.possessed ? `<button class="ac-possess" onclick="unpossess()">${uiIcon('act', 'possess', 20, '👻')} ออกจากร่าง</button>` : `<button class="ac-possess" onclick="possess('${a.id}')">${uiIcon('act', 'possess', 20, '👻')} สิงร่าง ${a.name}</button>`) : ''}`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
   if (PUP.ready) { const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, 42, 90, 80, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); }
 }
