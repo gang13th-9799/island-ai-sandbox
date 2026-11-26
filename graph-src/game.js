@@ -3366,7 +3366,7 @@ function staminaTick() {
 }
 function bodyHunger(a, season, reactorMult, hrs) {
   const vitMult = 1 - Math.min(0.35, st(a, 'vit') * 0.01);
-  a.hunger = Math.min(100, a.hunger + 4 * season.foodMult * reactorMult * vitMult * (a.age < 12 ? 0.5 : 1) * hrs);
+  a.hunger = Math.min(100, a.hunger + 2 * season.foodMult * reactorMult * vitMult * (a.age < 12 ? 0.5 : 1) * hrs);
   if (a.hunger >= 60) gainExp(a, 'vit', 0.4 * hrs);
   const foods = a.bag ? Object.keys(a.bag).filter(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel) : [];
   const snack = foods.find(n => !propsOf(n).bad) || ((a.food || 0) <= 0 ? foods[0] : null);
@@ -7385,7 +7385,7 @@ function drink(a, amount, why) {
 function bodyThirst(a, hrs) {
   if (a.thirst === undefined) a.thirst = 0;
   if (a.sleeping && a.thirst >= 80 && a.age >= 12) { a.sleeping = false; a.sleepAt = null; a.bubble = '🥵 คอแห้งจนต้องตื่นมาหาน้ำ'; }
-  let rate = (a.age < 4 ? 0.3 : 1) * 3.5 * ((a.felt ?? 25) > 30 ? 1.5 : 1) * (a.sleeping ? 0.4 : 1) * (a.age < 12 ? 0.7 : 1) * (a.session ? 1.2 : 1);
+  let rate = (a.age < 4 ? 0.3 : 1) * 2.5 * ((a.felt ?? 25) > 30 ? 1.5 : 1) * (a.sleeping ? 0.4 : 1) * (a.age < 12 ? 0.7 : 1) * (a.session ? 1.2 : 1);
   a.thirst = Math.min(100, a.thirst + rate * hrs);
   // rain: a few mouthfuls standing outside, and a vessel fills up
   const wz = zoneWeather(a.zone);
