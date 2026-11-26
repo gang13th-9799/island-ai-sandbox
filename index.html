@@ -7115,7 +7115,8 @@ function drawCanvas() {
     const rc = color ? { [MAIN_COLOR_CH[f.sprite] || 'O']: color } : null;
     const artK = animalArt(f), keyS = f.sprite || 'deer', rel = ((artK && ANIM_REL[artK]) || f.sizeRel || SIZE_REL[keyS] || 0.6) * (1 + (tt.str || 0) * 0.08);
     f._herd[currentZoneId].homes.forEach((h, i) => {
-      const t = now * h.sp + h.ph, graze = Math.sin(t * 0.7) > 0.3;   // sometimes stop to graze
+      const napping = isNightTime() && !f.predator && animalArt(f) !== 'fish';   // asleep at night: lie still in one spot
+      const t = now * h.sp + h.ph, graze = napping || Math.sin(t * 0.7) > 0.3;   // sometimes stop to graze
       const ox = graze ? Math.cos(h.ph) * h.r : Math.cos(t) * h.r, oy = graze ? Math.sin(h.ph) * h.r * 0.6 : Math.sin(t * 0.8) * h.r * 0.6;
       const vx = -Math.sin(t) - Math.cos(t * 0.8) * 0.48; let face = graze ? (h.ph > 3.14 ? 1 : -1) : (vx > 0 ? 1 : -1);
       let tx = h.x + ox, ty = h.y + oy;
