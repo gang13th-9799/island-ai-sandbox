@@ -1339,6 +1339,33 @@ function drawSnareCatch(ctx, s, cx, fy, now, maxW) {
 }
 // big square cage (guillotine door): open = door raised; closed = the caught animal sleeps on the floor,
 // drawn between the cage and its front layer (front posts, rails and bars) so it shows through the bars
+// layered Gemini flame (back / mid / core): each layer sways, stretches and flickers on its own beat so the fire looks alive.
+// Anchored at the base (bx, by); H = flame height in px. Returns false if the art isn't loaded (caller draws its fallback).
+const FX_IMG = {};
+function fxImg(k, src) { const im = FX_IMG[k] || (FX_IMG[k] = Object.assign(new Image(), { src })); return im.complete && im.naturalWidth ? im : null; }
+function drawFlameLayers(ctx, kind, bx, by, H, now, seed) {
+  const F = window.FX_ART && FX_ART.flame && FX_ART.flame[kind]; if (!F) return false;
+  const L = ['back', 'mid', 'core'].map(l => F[l] && fxImg(kind + l, F[l].img)); if (L.some(x => !x)) return false;
+  const t = now + (seed || 0), w = H * F.back.w / F.back.h;
+  const wob = (f, p) => Math.sin(t * f + p) * 0.6 + Math.sin(t * f * 1.7 + p * 2.3) * 0.4;   // two beats mixed: never a clean loop
+  // warm light on the ground, flickering
+  const gl = 0.32 + 0.08 * wob(11, 0.5), g = ctx.createRadialGradient(bx, by + 2, 0, bx, by + 2, H * 1.25);
+  g.addColorStop(0, `rgba(255,170,60,${gl})`); g.addColorStop(1, 'rgba(255,140,40,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(bx, by + 2, H * 1.25, H * 0.55, 0, 0, 6.283); ctx.fill();
+  const P = [[7, 0.06, 0.05, 0.00, 0.0], [9.5, 0.10, 0.09, 0.02, 1.3], [12.5, 0.15, 0.13, 0.045, 2.6]];   // freq, stretch, sway, base lift, phase
+  L.forEach((im, i) => {
+    const [f, st, sw, lift, ph] = P[i], sy = 1 + st * wob(f, ph), sxk = 1 - st * 0.45 * wob(f, ph), k = sw * wob(f * 0.45, ph + 0.7);
+    ctx.save(); ctx.translate(bx + k * H * 0.08, by - H * lift);
+    ctx.transform(sxk, 0, -k, sy, 0, 0);              // skew the tip sideways, keep the base planted
+    ctx.globalAlpha = i === 2 ? 0.9 + 0.1 * wob(17, 4) : 1;
+    ctx.drawImage(im, -w / 2, -H, w, H); ctx.restore();
+  });
+  for (let e = 0; e < 3; e++) {                       // a few embers drifting up
+    const life = ((t * 0.7 + e * 0.37) % 1), ex = bx + Math.sin(t * 2 + e * 5) * H * 0.25 * life + (e - 1) * H * 0.12, ey = by - H * (0.5 + life * 0.9);
+    ctx.fillStyle = `rgba(255,${190 - life * 80},70,${(1 - life) * 0.85})`; ctx.beginPath(); ctx.arc(ex, ey, 0.9 + (1 - life) * 0.6, 0, 6.283); ctx.fill();
+  }
+  return true;
+}
 function drawCage(ctx, s, cx, fy, now) {
   const H = HUMAN_H, iron = s.station === 'cage_iron', base = iron ? 'cage_iron' : 'cage', full = (s.catch || 0) > 0;
   const img = k => { const A = window.TRAP_ART && TRAP_ART[k]; if (!A) return null; const im = TRAP_IMG[k] || (TRAP_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? { A, im } : null; };
@@ -7104,22 +7131,24 @@ function drawCanvas() {
       let sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
       drawProp(ctx, art, stI, cx + sx, fy);
       if (art === 'camp_fire' && stI === 0) {             // animated flames
-        // 5 leaf-shaped tongues of flame fanning out from the logs (back ones first, the tall yellow one in the middle)
-        // + 2 smaller ones in front, overlapping the row (7 in all)
-        const base = fy - 7, order = [0, 4, 1, 3, 2, 5, 6];
-        for (const k of order) {
-          const front = k >= 5, side = front ? (k === 5 ? -1.1 : 1.1) : k - 2;
-          const fh = (front ? 7.5 : side === 0 ? 13 : Math.abs(side) === 1 ? 10.5 : 8) + (front ? 1.6 : 2.2) * Math.sin(now * 9 + k * 1.7);
-          const lean = side * (front ? 0.22 : 0.32) + Math.sin(now * 6 + k * 2.3) * 0.12, bw = front ? 2.6 : side === 0 ? 3.3 : 2.8;
-          const bx = cx + side * 2.1, by = base + Math.abs(side) * 0.6 + (front ? 2.2 : 0);
-          const tx = bx + Math.sin(lean) * fh, ty = by - Math.cos(lean) * fh;
-          const mx = (bx + tx) / 2, my = (by + ty) / 2, nx = Math.cos(lean) * bw * 1.6, ny = Math.sin(lean) * bw * 1.6;   // leaf: widest in the middle, pointed at both ends
-          ctx.fillStyle = front ? 'rgba(255,196,70,.97)' : side === 0 ? 'rgba(255,220,95,.97)' : Math.abs(side) === 1 ? 'rgba(255,160,40,.95)' : 'rgba(240,96,30,.92)';
-          ctx.beginPath(); ctx.moveTo(bx, by);
-          ctx.quadraticCurveTo(mx - nx, my - ny, tx, ty);
-          ctx.quadraticCurveTo(mx + nx, my + ny, bx, by); ctx.fill();
+        if (!drawFlameLayers(ctx, 'camp', cx + sx, fy - 7, 15, now, s.x * 7.3 + s.y * 3.1)) {
+          // 5 leaf-shaped tongues of flame fanning out from the logs (back ones first, the tall yellow one in the middle)
+          // + 2 smaller ones in front, overlapping the row (7 in all)
+          const base = fy - 7, order = [0, 4, 1, 3, 2, 5, 6];
+          for (const k of order) {
+            const front = k >= 5, side = front ? (k === 5 ? -1.1 : 1.1) : k - 2;
+            const fh = (front ? 7.5 : side === 0 ? 13 : Math.abs(side) === 1 ? 10.5 : 8) + (front ? 1.6 : 2.2) * Math.sin(now * 9 + k * 1.7);
+            const lean = side * (front ? 0.22 : 0.32) + Math.sin(now * 6 + k * 2.3) * 0.12, bw = front ? 2.6 : side === 0 ? 3.3 : 2.8;
+            const bx = cx + side * 2.1, by = base + Math.abs(side) * 0.6 + (front ? 2.2 : 0);
+            const tx = bx + Math.sin(lean) * fh, ty = by - Math.cos(lean) * fh;
+            const mx = (bx + tx) / 2, my = (by + ty) / 2, nx = Math.cos(lean) * bw * 1.6, ny = Math.sin(lean) * bw * 1.6;   // leaf: widest in the middle, pointed at both ends
+            ctx.fillStyle = front ? 'rgba(255,196,70,.97)' : side === 0 ? 'rgba(255,220,95,.97)' : Math.abs(side) === 1 ? 'rgba(255,160,40,.95)' : 'rgba(240,96,30,.92)';
+            ctx.beginPath(); ctx.moveTo(bx, by);
+            ctx.quadraticCurveTo(mx - nx, my - ny, tx, ty);
+            ctx.quadraticCurveTo(mx + nx, my + ny, bx, by); ctx.fill();
+          }
         }
-      }
+        }
       d = { h: A.ay };
     } else d = drawSized(ctx, key, cx, fy);
     if (s.station === 'storehouse' || STASH_CAP[s.station]) { const hw = Math.max(24, d.h * 0.6); s._hit = { x: cx - hw, y: fy - d.h, w: hw * 2, h: d.h + 6 }; }   // tap to look inside
