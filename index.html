@@ -1199,6 +1199,9 @@ const PRODUCTS = {
   stone_axe:    { name: 'ขวานหิน', kind: 'tool', tool: 'axe', dur: 50, pow: 1, tier: 1, props: { hard: 1 } },
   workbench:    { name: 'โต๊ะช่างไม้', kind: 'station', station: 'workbench' },
   bow:          { name: 'ธนูไม้ไผ่', kind: 'tool', tool: 'bow', dur: 20, pow: 1, tier: 1, props: { wood: 1 } },
+  wood_shield:  { name: 'โล่ไม้', kind: 'item', eff: { type: 'armor', n: 20 }, props: { wood: 1, armor: 1, shield: 1 } },            // planks lashed with hide straps · DEF +5
+  ironwood_shield: { name: 'โล่ไม้หุ้มเหล็ก', kind: 'item', eff: { type: 'armor', n: 40 }, props: { wood: 1, metal: 1, armor: 1, shield: 1 } },   // iron rim and boss · DEF +10
+  iron_shield:  { name: 'โล่เหล็ก', kind: 'item', eff: { type: 'armor', n: 60 }, props: { metal: 1, hard: 1, armor: 1, shield: 1 } },  // all iron · DEF +15
   bow_hard:     { name: 'ธนูไม้เนื้อแข็ง', kind: 'tool', tool: 'bow', dur: 35, pow: 2, tier: 2, props: { wood: 1 } },        // a long self-bow carved from a hardwood post
   bow_horn:     { name: 'ธนูเขาสัตว์', kind: 'tool', tool: 'bow', dur: 50, pow: 3, tier: 3, props: { wood: 1 } },           // short recurve backed with horn
   bow_iron:     { name: 'ธนูเหล็ก', kind: 'tool', tool: 'bow', dur: 70, pow: 4, tier: 4, props: { wood: 1, metal: 1 } },  // horn recurve with iron tips and grip
@@ -1345,6 +1348,7 @@ function natureLaw(a, b, m) {
       if (A.hard || B.hard) return near('ทุบแล้วแค่แตกละเอียด ไม่ได้อะไร');
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
+      if (either(N('fence_posts'), P => P.hide >= 1)) return ok('wood_shield');        // hardwood planks lashed together with hide straps
       if (either(N('bow_hard'), (P, n) => /^เขา/.test(n))) return ok('bow_horn');       // glue horn to the belly: a short, strong recurve
       if (either(N('vine_net'), is('rope'))) return ok('rope_bridge');            // net walkway on rope lines
       if (either(N('split_bamboo'), N('vine_net'))) return ok('plank_bridge');   // slats hung from a rope net
@@ -1410,7 +1414,9 @@ function natureLaw(a, b, m) {
       if (either(N('wood_cage_broken'), P => (P.wood || P.fence || P.rope) && !P.broken)) return ok('wood_cage');
       if (either(N('iron_cage_broken'), N('iron_ingot'))) return ok('iron_cage');
       if (either(N('fence_posts'), is('forked'))) return ok('wood_cage');             // hardwood posts lashed into a guillotine-door cage
-      if (either(N('bow_horn'), N('iron_ingot'))) return ok('bow_iron');             // iron tips and grip on a horn bow
+      if (either(N('bow_horn'), N('iron_ingot'))) return ok('bow_iron');
+      if (either(N('wood_shield'), N('iron_ingot'))) return ok('ironwood_shield');   // iron rim and boss on a wooden shield
+      if (either(N('ironwood_shield'), N('iron_ingot'))) return ok('iron_shield');   // plate it all over: a solid iron shield             // iron tips and grip on a horn bow
       if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');           // iron bars
       return fail('ประกอบแล้วไม่เข้ากัน ไม่ได้อะไร');
     case 'knead11':
