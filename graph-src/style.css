@@ -422,6 +422,12 @@
   .cw-search { width: 100%; padding: 6px 9px; border-radius: 9px; border: 1.5px solid #e2cb9c; background: #fff; margin-bottom: 8px; font-size: 13px; }
   .cw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 6px; }
   .cw-slot { position: relative; aspect-ratio: 1; border-radius: 10px; background: #fff; border: 1.5px solid #e2cb9c; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 22px; }
+  .cw-slot[style*="--qc"] { border-color: var(--qc); box-shadow: inset 0 0 0 1.5px var(--qc); }
+  .cw-slot.q0, .cw-slot.q1 { border-color: #cbb68a; box-shadow: none; }
+  .cw-eq[data-q] { border-color: var(--qc); box-shadow: inset 0 0 0 1.5px var(--qc); }
+  .cw-card[style*="--qc"] .ic { border-color: var(--qc); }
+  .qtag { display: inline-block; font-size: 10.5px; font-weight: 900; border-radius: 6px; padding: 0 6px; margin: 2px 4px 2px 0; background: var(--qc); color: #2a1a0c; border: 1px solid rgba(0,0,0,.25); }
+  .cw-card .tg.q { background: #ede9fe; color: #5b21b6; }
   .cw-slot.sel { border-color: #e0a43a; box-shadow: 0 0 0 2px #f6d58a; background: #fff6df; }
   .cw-slot.free { background: #f6ead0; border-style: dashed; cursor: default; }
   .cw-slot .n { position: absolute; right: 3px; bottom: 1px; font-size: 11px; font-weight: 900; color: #3d2a14; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
