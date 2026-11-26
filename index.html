@@ -371,6 +371,10 @@
   .ac-gq { margin: 4px 0; padding: 6px 8px; border-radius: 10px; background: #fff6dc; border: 1px solid #f1d58f; font-size: 11px; }
   .ac-gq .gq { margin-top: 3px; } .ac-gq .gq.done { color: #15803d; } .ac-gq .d { color: #b45309; font-size: 10px; } .ac-gq .p { float: right; color: #6b5a3e; }
   .ac-stats { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+  .ac-derived { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; font-size: 11px; background: #fbf3e1; border-radius: 10px; padding: 6px 9px; margin: 2px 0 6px; max-height: 165px; overflow-y: auto; }
+  .ac-derived .v { font-weight: 700; text-align: right; font-family: var(--head); }
+  .ac-derived .n { color: #9a7b4f; grid-column: 1 / -1; font-size: 10px; margin: -2px 0 2px 20px; }
+  .ac-more { border: 0; background: #f6e9cc; border-radius: 999px; padding: 2px 9px; font-size: 10.5px; font-family: var(--head); cursor: pointer; }
   .ac-stats .st { padding: 2px 7px; border-radius: 999px; background: #f6e9cc; font-size: 10.5px; font-family: var(--head); }
   .disaster-banner { top: 136px !important; }
   @media (max-width: 560px) {
@@ -1042,17 +1046,50 @@ function ensureAgent(a) {
 }
 function st(a, k) { return (a.stats ? a.stats[k] : 1) + effBonus(a, k); }
 function stBase(a, k) { return a.stats ? a.stats[k] : 1; }
+// everything the six stats do to the body and the work, as numbers (shown under the stats on the character card)
+// what each stat point does (VIT/STR like the user's examples; the others in the same style) and the resulting numbers
+const STAT_RULES = {
+  vit: 'HP +2 · DEF +1 · เผาผลาญช้าลง 1% · ทนหนาว 1.5%',
+  str: 'HP +1 · ATK +2 · ความจุกระเป๋า +2 · แรงเก็บ/ตัด +2%',
+  agi: 'หลบ +1% · เดินเร็วขึ้น 2% · คริติคอล +0.5%',
+  int: 'EXP ที่ได้ +2% · เรียนเข้าใจ +4% · คิดสูตรตรงเป้า +3%',
+  dex: 'ทำพลาด −2% · ถนอมเครื่องมือ +1.5% · แรงเก็บ/ตัด +1%',
+  cha: 'สอนเข้าใจ +3% · คนอื่นสนิทด้วยเร็วขึ้น 5%'
+};
+function derivedStats(a) {
+  const S = k => st(a, k), pct = v => Math.round(v * 100) + '%', def = defOf(a);
+  return [
+    ['❤️', 'HP สูงสุด', maxHp(a), '80 + VIT×2 + STR×1'],
+    ['⚔️', 'โจมตี (ATK)', atkOf(a), 'STR×2 + อาวุธที่ถือ'],
+    ['🛡️', 'ป้องกัน (DEF)', def, `VIT×1 + เกราะ · ลดความเสียหายจากภายนอก ${pct(1 - 40 / (40 + def))}`],
+    ['💨', 'หลบหลีก', pct(dodgeOf(a)), 'AGI×1% (สูงสุด 40%)'],
+    ['🎯', 'คริติคอล (แรง 2 เท่า)', pct(S('agi') * 0.005), 'AGI×0.5%'],
+    ['🏃', 'ความเร็วเดิน', '+' + pct(S('agi') * 0.02), `AGI×2% · ${Math.round(Math.max(3, 8 / (1 + S('agi') * 0.02)) * 10) / 10} นาที/ช่อง`],
+    ['🎒', 'ความจุกระเป๋า', bagCap(a), '8 + STR×2 + อุปกรณ์ขนของ'],
+    ['🪓', 'แรงเก็บ/ตัด/ทุบ', '+' + pct(S('str') * 0.02 + S('dex') * 0.01), 'STR×2% + DEX×1%'],
+    ['🍖', 'เผาผลาญช้าลง', pct(Math.min(0.35, S('vit') * 0.01)), 'VIT×1% (สูงสุด 35%)'],
+    ['🥶', 'ทนหนาว', pct(Math.min(0.4, S('vit') * 0.015)), 'VIT×1.5% (สูงสุด 40%)'],
+    ['✨', 'EXP ที่ได้', '+' + pct(S('int') * 0.02), 'INT×2% (ทุกสถานะ)'],
+    ['📖', 'เรียนแล้วเข้าใจ', pct(Math.min(0.97, 0.25 + S('int') * 0.04)), '25% + INT×4% (+CHA ของผู้สอน)'],
+    ['💡', 'คิดสูตรตรงเป้า', pct(Math.min(0.8, 0.35 + S('int') * 0.03)), '35% + INT×3%'],
+    ['🛠️', 'โอกาสทำพลาด', pct(Math.max(0.03, 0.3 - S('dex') * 0.02)), '30% − DEX×2% (ต่ำสุด 3%)'],
+    ['🔧', 'ถนอมเครื่องมือ', pct(Math.min(0.5, S('dex') * 0.015)), 'DEX×1.5% ที่ใช้แล้วไม่สึก (สูงสุด 50%)'],
+    ['🧑‍🏫', 'สอนเข้าใจ', '+' + pct(S('cha') * 0.03), 'CHA×3%'],
+    ['🤝', 'คนอื่นสนิทด้วยเร็วขึ้น', '+' + pct(S('cha') * 0.05), 'CHA×5%']
+  ];
+}
 function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // VIT +1 = HP +2, STR +1 = HP +1
 // attack: STR +1 = ATK +2, plus the best weapon carried; defence: VIT +1 = DEF +1, plus armour
 function atkOf(a) { const t = ['bow', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
 function defOf(a) { const ar = carriedEff(a, 'armor'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0); }
-function hurt(a, dmg, floor = 0) { const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
+function dodgeOf(a) { return Math.min(0.4, st(a, 'agi') * 0.01); }      // AGI +1 = dodge +1% (max 40%)
+function hurt(a, dmg, floor = 0) { if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
 function agentLevel(a) { return STAT_KEYS.reduce((s, k) => s + st(a, k), 0) - STAT_KEYS.length + 1; }
 function recipeCap(a) { return 4 + st(a, 'int') * 2; }
 function failCap(a) { return 30 + st(a, 'int') * 15; }
 function gainExp(a, k, amt) {
   if (!a.stats) ensureAgent(a);
-  a.sexp[k] += amt * a.talent[k];
+  a.sexp[k] += amt * a.talent[k] * (1 + (a.stats ? a.stats.int : 1) * 0.02);   // INT +1 = EXP gained +2%
   while (a.stats[k] < STAT_MAX && a.sexp[k] >= expNeed(a.stats[k])) {
     a.sexp[k] -= expNeed(a.stats[k]);
     a.stats[k]++;
@@ -1532,7 +1569,7 @@ function toolFetch(a) {
 function useTool(type, user, tool) {
   const t = tool || (user ? getTool(type, user, false) : getTool(type, null));
   if (!t) return;
-  if (user && Math.random() < Math.min(0.5, st(user, 'dex') * 0.012)) return;
+  if (user && Math.random() < Math.min(0.5, st(user, 'dex') * 0.015)) return;   // DEX +1 = tools last 1.5% longer
   t.wear++;
   const def = productDef(keyByName(t.name));
   if (t.wear >= (def.dur || 10)) {
@@ -2212,7 +2249,7 @@ const REWARDS = {
 const KEEPSAKES = ['สร้อยเปลือกหอย', 'ขลุ่ยไม้ไผ่', 'หินสีสวย', 'ขนนกหายาก', 'ตุ๊กตาฟาง', 'กำไลเถาวัลย์', 'หวีกระดูก', 'เครื่องรางไม้แกะ'];
 
 function rel(a, b) { return (a && b && a.rel && a.rel[b.id]) || 0; }
-function addRel(a, b, d) { if (!a || !b || a === b) return; a.rel = a.rel || {}; a.rel[b.id] = Math.max(-100, Math.min(100, Math.round((a.rel[b.id] || 0) + d))); }
+function addRel(a, b, d) { if (!a || !b || a === b) return; a.rel = a.rel || {}; if (d > 0 && b.stats) d *= 1 + st(b, 'cha') * 0.05; /* CHA +1 = people warm to you 5% faster */ a.rel[b.id] = Math.max(-100, Math.min(100, Math.round((a.rel[b.id] || 0) + d))); }
 function relLabel(v) { return v >= 60 ? 'เพื่อนรัก' : v >= 30 ? 'เพื่อนสนิท' : v >= 10 ? 'ถูกคอ' : v > -10 ? 'เฉยๆ' : v > -30 ? 'ไม่ค่อยชอบ' : v > -60 ? 'ไม่ถูกกัน' : 'ศัตรู'; }
 function byId(id) { return aiAgents.find(a => a.id === id); }
 function nowH() { return (simDay - 1) * 24 + Math.floor(simMinutes / 60); }
@@ -6619,7 +6656,7 @@ function harvestTool(a, o) {
     .sort((p, q) => toolStat(q).pow - toolStat(p).pow || d.tool.indexOf(p.type) - d.tool.indexOf(q.type))[0] || null;
 }
 function wearTool(a, t, amt = 1) {
-  if (Math.random() < Math.min(0.4, st(a, 'dex') * 0.004)) return;     // skilled hands spare the tool
+  if (Math.random() < Math.min(0.5, st(a, 'dex') * 0.015)) return;     // skilled hands spare the tool
   t.wear = (t.wear || 0) + amt;
   if (t.wear >= toolStat(t).dur) {
     toolItems = toolItems.filter(x => x !== t); syncToolStock();
@@ -6630,7 +6667,7 @@ function wearTool(a, t, amt = 1) {
 function hitDamage(a, t) {
   const x = toolStat(t).pow * (1 + st(a, 'str') * 0.02 + st(a, 'dex') * 0.01);
   let n = Math.floor(x) + (Math.random() < x % 1 ? 1 : 0);
-  if (Math.random() < st(a, 'agi') * 0.003) { n *= 2; a._crit = true; }
+  if (Math.random() < st(a, 'agi') * 0.005) { n *= 2; a._crit = true; }
   return n;
 }
 function pickFruit(a, o) {
@@ -7844,6 +7881,7 @@ function renderAgentPop() {
   }
   const sc = box.scrollTop; box.innerHTML = head + tabs + body; box.scrollTop = sc;
 }
+let CARD_DERIVED = false;
 function renderAgentCard() {
   const el = document.getElementById('agent-card'); if (!cardAgentId) return;
   const a = aiAgents.find(x => x.id === cardAgentId); if (!a) { closeAgentCard(); return; }
@@ -7862,8 +7900,9 @@ function renderAgentCard() {
       <span>⚡</span><div class="bar-wrap"><div class="bar-hp" style="width:${sta}%;background:${sta < 25 ? '#ef4444' : '#38bdf8'}"></div></div><span>${sta}%</span>
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? ({ bed: 'นอนในที่พัก', tent: 'นอนในเต็นท์', mat: 'นอนบนเสื่อ', fire: 'นอนข้างกองไฟ' }[a.sleepKind] || 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
-    <div class="ac-stats">${stats}</div>
-    <div class="ac-sub">❤️ HP ${Math.round(a.hp)}/${maxHp(a)} · ⚔️ ATK ${atkOf(a)} · 🛡️ DEF ${defOf(a)} <span style="opacity:.7">(VIT+1 = HP+2, DEF+1 · STR+1 = HP+1, ATK+2)</span></div>
+    <div class="ac-stats">${stats}<button class="ac-more" onclick="CARD_DERIVED = !CARD_DERIVED; renderAgentCard()">📊 ค่าต่างๆ ${CARD_DERIVED ? '▴' : '▾'}</button></div>
+    <div class="ac-sub">❤️ HP ${Math.round(a.hp)}/${maxHp(a)} · ⚔️ ATK ${atkOf(a)} · 🛡️ DEF ${defOf(a)} · 💨 หลบ ${Math.round(dodgeOf(a) * 100)}%</div>
+    ${CARD_DERIVED ? `<div class="ac-derived"><span class="n" style="margin-left:0">${STAT_KEYS.map(k => `<b>${k.toUpperCase()} +1</b> = ${STAT_RULES[k]}`).join('<br>')}</span>${derivedStats(a).map(([i, n, v, note]) => `<span>${i}</span><span>${n}</span><span class="v">${v}</span><span class="n">${note}</span>`).join('')}</div>` : ''}
     <div class="ac-sub">📜 อักษรเทพ ${Math.round(readCap(a) * 100)}% ${readCap(a) >= 1 ? '· อ่านศิลาเข้าใจทั้งหมด' : '· ช่วยซ่อมวิหารเพื่อเรียนอักษรเทพ'}${(a.lit || 0) >= 1 ? ' · ✍️ สลักศิลาได้' : ''}</div>
     ${(a.buffs || []).length ? `<div class="ac-sub">🧪 ${(a.buffs || []).map(b => `${b.stat.toUpperCase()} +${b.n} (${b.from}, เหลือ ${Math.max(0, Math.round((b.until - nowH()) / 24 * 10) / 10)} วัน)`).join(' · ')}</div>` : ''}
     <div class="ac-sub">ปัจจัย 4: ${Object.entries(needsOf(a)).map(([k, v]) => `<span style="margin-right:6px;${v.ok ? '' : 'color:#dc2626;font-weight:600'}">${NEED_LABEL[k]} ${v.ok ? '✓' : '✗'}</span>`).join('')}</div>
@@ -8136,7 +8175,7 @@ function agentStep(a, night, season, now) {
     if (b && (bgTick || !talkOf(a, b))) { if (!bgTick) talkEvent(a, b); addRel(a, b, 1); addRel(b, a, 1); if (Math.random() < 0.6) { transferKnowledge(a, b, 'share'); transferKnowledge(b, a, 'share'); } }
   }
   // walking time: about 4-8 game minutes per tile depending on agility
-  const pace = Math.max(3.5, 8 - st(a, 'agi') / 6);
+  const pace = Math.max(3, 8 / (1 + st(a, 'agi') * 0.02));     // AGI +1 = walk 2% faster
   const walked = a.zone === z0 ? Math.hypot(a.x - x0, a.y - y0) : 40;
   const walkMin = walked * pace;
   const act = a.sleeping ? 'sleep' : pupActivity(a, false, false);
