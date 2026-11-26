@@ -992,13 +992,13 @@ function templeTick() {
 }
 function templeQuestText(q) { return q.type === 'bring' ? `ขนวัสดุ "${q.mat}" ${q.qty} ชิ้นมาซ่อมวิหาร` : `ช่วยแรงซ่อมวิหาร ${q.hrs} ชม.`; }
 // a person's turn at temple work: take a job, gather, haul, labour
-function templeStep(a, night) {
+function templeStep(a, night, eager) {
   const t = templeOf(); if (!t || a.age < 12) return false;
   let q = a.templeQ && (t.tQ || []).find(x => x.id === a.templeQ && !x.done);
   if (q && a.questId) { q.helper = null; a.templeQ = null; return false; }   // took on a neighbour's request instead
   if (!q) {
     a.templeQ = null;
-    if (t.tStage >= 4 || night || a.hunger >= 55 || (a.stamina ?? 100) < 35 || a.questId || Math.random() > 0.3) return false;
+    if (t.tStage >= 4 || night || a.hunger >= 55 || (a.stamina ?? 100) < 35 || a.questId || Math.random() > (eager ? 0.85 : 0.3)) return false;
     const open = (t.tQ || []).filter(x => !x.helper && !x.done);
     if (!open.length) return false;
     q = open.find(x => x.type === 'bring' && (zoneNodes[a.zone] || []).some(n => n.name === x.mat)) || pick(open);
@@ -1039,7 +1039,8 @@ function templeDone(a, t, q) {
   let learned = null;
   const list = TEMPLE_TEACH[Math.min(3, t.tStage)].filter(k => PRODUCTS[k] && !Object.values(a.know).some(e => e.out === k));
   const R = revRecipes(), isle = new Set(Object.values(ZONES).flatMap(z => z.res));
-  for (const k of list.sort(() => Math.random() - 0.5)) {
+  const want = k => (PRODUCTS[k].kind === 'home' && !hasShelter(a) ? 2 : 0) + (k === 'campfire' && !stationsOf('campfire').some(f => f.zone === a.zone) ? 1 : 0);
+  for (const k of list.sort(() => Math.random() - 0.5).sort((p, q) => want(q) - want(p))) {   // teach what this person needs most first
     const rs = (R[k] || []).slice().sort((p, r) => (isle.has(r.a) + isle.has(r.b)) - (isle.has(p.a) + isle.has(p.b)));
     if (!rs.length) continue;
     const r = rs[0]; a.know[sigOf(r.a, r.b, r.m)] = { a: r.a, b: r.b, m: r.m, out: k, from: 'วิหารเทพ', day: simDay, practice: 0 }; trimMemory(a); learned = k; break;
@@ -2992,9 +2993,18 @@ function moveToward(a, gx, gy) {
   const grid = zoneTerrainGrid[a.zone];
   const tries = [[dx, dy], [dx, 0], [0, dy], [Math.floor(Math.random() * 7) - 3, Math.floor(Math.random() * 7) - 3]];
   const inside = isBlocked(a.zone, Math.round(a.x), Math.round(a.y));   // woke up inside a hut: just walk out
+  const cw = v => Math.max(1, Math.min(78, Math.round(v)));            // walkable range reaches the zone edges (crossing points are there)
   for (const [ox, oy] of tries) {
-    const nx = clampC(a.x + ox), ny = clampC(a.y + oy);
-    if (!DEEP.includes(grid[ny][nx]) && (inside || !isBlocked(a.zone, nx, ny))) { a.x = nx; a.y = ny; return; }
+    const nx = cw(a.x + ox), ny = cw(a.y + oy);
+    if (!DEEP.includes(grid[ny][nx]) && (inside || !isBlocked(a.zone, nx, ny))) { a.x = nx; a.y = ny; a._stuck = 0; return; }
+  }
+  // boxed in (a tiny spit of land, a corner by deep water): after a while, wade out to the nearest open land
+  if (++a._stuck >= 8) {
+    a._stuck = 0;
+    for (let r = 2; r <= 12; r++) for (let k = 0; k < 24; k++) {
+      const an = k / 24 * 6.283, x = cw(a.x + Math.cos(an) * r), y = cw(a.y + Math.sin(an) * r);
+      if (!WATER.includes(grid[y][x]) && !isBlocked(a.zone, x, y)) { a.x = x; a.y = y; return; }
+    }
   }
 }
 
@@ -3322,6 +3332,44 @@ function pickRevelation(a) {
   }
   if (!pool.length) return null;
   const r = pick(pool); return { item: r.out, ra: r.a, rb: r.b, rm: r.m };
+}
+// ===== Finding a mate and providing for a family =====
+function mateOf(a) { const m = a.mate && byId(a.mate); return m && m.mate === a.id ? m : null; }
+function courtStep(a, night) {
+  if (a.age < 18 || a.age > 50 || a.hunger >= 55 || a.sleeping || Math.random() > 0.3) return false;
+  const m = mateOf(a);
+  if (m) {
+    // a couple: keep the bond warm and keep enough food for a child (the household needs ~30)
+    const fam = (a.food || 0) + (m.food || 0);
+    if (fam < 30 && (a.food || 0) < 18) {
+      const FOOD = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
+      const n = (zoneNodes[a.zone] || []).filter(x => FOOD.test(x.name)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+      if (n) { a.gatherT = Object.assign({ zone: a.zone }, n); for (let k = 0; k < 2; k++) moveToward(a, n.x, n.y); a.bubble = `🍼 หาอาหารเผื่อครอบครัวกับ${m.name}`; return true; }
+      return false;
+    }
+    if (m.zone === a.zone && !m.sleeping && Math.random() < 0.5) {
+      if (Math.hypot(m.x - a.x, m.y - a.y) > 2) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(m.x), Math.round(m.y)); a.bubble = `💞 ไปหา${m.name}`; return true; }
+      addRel(a, m, 2); addRel(m, a, 2); if (!bgTick && !talkOf(a, m)) talkEvent(a, m); a.bubble = `💞 ใช้เวลากับ${m.name}`; return true;
+    }
+    return false;
+  }
+  // already close to someone free? that's a couple
+  { const sweet = aiAgents.find(o => o !== a && o.gender !== a.gender && o.age >= 18 && o.age <= 50 && !mateOf(o) && rel(a, o) >= 30 && rel(o, a) >= 30);
+    if (sweet) { a.mate = sweet.id; sweet.mate = a.id; a.bubble = sweet.bubble = '💞 เป็นคู่กันแล้ว'; if (!bgTick) addLog(`💞 [คู่รัก] ${a.name} กับ ${sweet.name} ตกลงเป็นคู่กัน และจะช่วยกันสร้างครอบครัว`, '#f9a8d4'); return true; } }
+  // single: look for someone of the other sex, also free, ideally nearby and already liked
+  const cands = aiAgents.filter(o => o !== a && o.gender !== a.gender && o.age >= 18 && o.age <= 50 && !mateOf(o) && o.zone === a.zone);
+  if (!cands.length) return false;
+  const b = cands.sort((p, q) => (rel(a, q) - Math.hypot(q.x - a.x, q.y - a.y) * 0.5) - (rel(a, p) - Math.hypot(p.x - a.x, p.y - a.y) * 0.5))[0];
+  if (Math.hypot(b.x - a.x, b.y - a.y) > 2) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(b.x), Math.round(b.y)); a.bubble = `😊 เดินไปคุยกับ${b.name}`; return true; }
+  const like = 2 + Math.floor(st(a, 'cha') / 4);
+  addRel(a, b, like); addRel(b, a, like); if (!bgTick && !talkOf(a, b)) talkEvent(a, b);
+  a.bubble = `😊 จีบ${b.name}`;
+  if (rel(a, b) >= 30 && rel(b, a) >= 30) {
+    a.mate = b.id; b.mate = a.id;
+    a.bubble = b.bubble = `💞 เป็นคู่กันแล้ว`;
+    if (!bgTick) addLog(`💞 [คู่รัก] ${a.name} กับ ${b.name} ตกลงเป็นคู่กัน และจะช่วยกันสร้างครอบครัว`, '#f9a8d4');
+  }
+  return true;
 }
 function revelationStep(a) {
   const rv = revelationOf(a); if (!rv) return false;
@@ -3817,12 +3865,7 @@ function agentMove(a, night) {
     if (night && fire && a.hunger < 60) { moveToward(a, fire.x + 1, fire.y + 1); return; }
     a.wantHunt = false;
     if (!night && a._hunt && a._hunt.ttl > 0) return;
-    if (!night && a.age >= 12 && a.hunger < 60 && Math.random() < 0.25 && toolFetch(a)) return;           // stalking prey (handled in the hunting step)
-    if (templeStep(a, night)) return;
-    if (!night && a.hunger < 70 && revelationStep(a)) return;
-    if (!night && a.hunger < 60 && stashStep(a)) return;
-    if (needStep(a, night)) return;
-
+    // ① the four requisites — food first (an empty belly can't wait), then shelter, clothing, medicine and fire
     const nodes = zoneNodes[a.zone] || [];
     // Feeding yourself comes first: hungry AI look for food spots, or move to a zone that has some
     const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
@@ -3841,6 +3884,15 @@ function agentMove(a, night) {
         if (nb.length) { a.goal = { zone: pick(nb), x: 40, y: 40, ttl: 12, enter: true }; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; travelToGoal(a); return; }
       }
     }
+    if (needStep(a, night)) return;
+
+    // ② survive and raise the next generation: tools for the work, then find a mate and build a family
+    if (!night && a.age >= 12 && a.hunger < 60 && Math.random() < 0.25 && toolFetch(a)) return;
+    if (courtStep(a, night)) return;
+    // ③ then the temple and the gods' requests
+    if (templeStep(a, night)) return;
+    if (!night && a.hunger < 70 && revelationStep(a)) return;
+    if (!night && a.hunger < 60 && stashStep(a)) return;
     if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
       const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14, enter: true }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
     }
@@ -4083,7 +4135,8 @@ function runAutonomousStep() {
         const food = (m.food || 0) + (f.food || 0) + (v ? v.food / 4 : 0);
         const kidsOf = aiAgents.filter(k => k.age < 12 && (k.guardian === f.id || k.guardian === m.id)).length;
         // A child only when the household can feed one more mouth
-        if ((sc >= 30 && food >= 30 && food / (2 + kidsOf + 1) >= 7 && kidsOf < 3) || (f.fertile && sc >= 20 && food >= 15 && kidsOf < 4)) pairs.push([m, f, sc + (f.fertile ? 100 : 0)]);
+        const couple = m.mate === f.id && f.mate === m.id;
+        if ((sc >= 30 && food >= 30 && food / (2 + kidsOf + 1) >= 7 && kidsOf < 3) || (f.fertile && sc >= 20 && food >= 15 && kidsOf < 4)) pairs.push([m, f, sc + (f.fertile ? 100 : 0) + (couple ? 80 : 0)]);
       }));
       if (!pairs.length) { addLog('💔 ยังไม่มีคู่ไหนพร้อมสร้างครอบครัว (ต้องสนิทกันและมีอาหารพอ)', '#f9a8d4'); }
       else {
@@ -5785,6 +5838,8 @@ function needStep(a, night) {
       if (miss && seekItem(a, new RegExp(miss.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `🏠 ปัจจัย 4: หา${miss}มาสร้าง${outName(e.out)}`)) return true;
       return false;
     }
+    // no idea yet: helping restore the temple teaches how to build a shelter (its first stage teaches the leaf hut)
+    { const T = templeOf(); if (T && T.tStage === 0 && Math.random() < 0.6 && templeStep(a, night, true)) { if (!/ปัจจัย/.test(a.bubble)) a.bubble = `🏠 ปัจจัย 4: ช่วยซ่อมวิหารเพื่อเรียนวิธีทำที่พัก · ${a.bubble}`; return true; } }
     // no idea yet: an unread tablet nearby may hold the answer
     const sg = steleTarget(a);
     if (sg && sg.n === 1) { moveToward(a, Math.round(sg.x - 0.5), Math.round(sg.y - 0.5)); if (Math.hypot(sg.x - a.x - 0.5, sg.y - a.y - 0.5) <= 2) steleAct(a); else a.bubble = '📜 ปัจจัย 4: ไปอ่านศิลาโบราณ เผื่อมีวิธีทำที่พัก'; return true; }
@@ -5805,6 +5860,8 @@ function needStep(a, night) {
       if (miss && seekItem(a, new RegExp(miss), `🔥 หา${miss}มาก่อไฟ`)) return true;
       return false;
     }
+    // never made fire: the temple's first stage also teaches the campfire
+    { const T = templeOf(); if (T && T.tStage === 0 && Math.random() < 0.4 && templeStep(a, night, true)) return true; }
     // never made fire: gather dry wood and something dry and fluffy, then try rubbing them
     const dry = Object.keys(a.bag || {}).find(n => a.bag[n] > 0 && propsOf(n).wood && propsOf(n).dry);
     const fluff = Object.keys(a.bag || {}).find(n => a.bag[n] > 0 && propsOf(n).fiber && propsOf(n).dry);
