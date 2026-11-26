@@ -367,8 +367,30 @@
   .ac-more { border: 0; background: #f6e9cc; border-radius: 999px; padding: 2px 9px; font-size: 10.5px; font-family: var(--head); cursor: pointer; }
   .ac-stats .st { padding: 2px 7px; border-radius: 999px; background: #f6e9cc; font-size: 10.5px; font-family: var(--head); }
   .disaster-banner { top: 136px !important; }
+  /* Portrait tablets / unfolded phones: info top-left, clock + minimap top-right, menu as a full row along the bottom,
+     chronicle and speed buttons just above it — nothing overlaps */
+  @media (orientation: portrait) and (min-width: 561px) {
+    .menu-bar { top: auto !important; bottom: calc(env(safe-area-inset-bottom) + 10px); left: 50%; transform: translateX(-50%);
+      max-width: calc(100vw - 16px) !important; overflow-x: auto; padding: 8px 4px 2px; gap: 6px; scrollbar-width: none; }
+    .menu-bar::-webkit-scrollbar { display: none; }
+    .menu-bar .tab-btn { width: 58px; height: 58px; flex: 0 0 auto; font-size: 10px; }
+    .menu-bar .tab-btn .ico { font-size: 22px; }
+    .hud-tl { max-width: 44vw; }
+    .hud-tr { max-width: 46vw; }
+    .mm-canvas { width: 200px; height: 166px; }
+    .log-bar { bottom: calc(env(safe-area-inset-bottom) + 84px) !important; left: 8px !important; width: 58vw !important; max-height: 104px !important; }
+    .hud-br { bottom: calc(env(safe-area-inset-bottom) + 84px); }
+    .side-left { top: 42%; }
+    .portal-s { bottom: 200px !important; }
+    .agent-card { bottom: calc(env(safe-area-inset-bottom) + 200px); }
+    #hover-terrain { bottom: 200px !important; }
+    .disaster-banner { top: 160px !important; }
+  }
   @media (max-width: 560px) {
-    .menu-bar { top: auto !important; bottom: calc(env(safe-area-inset-bottom) + 8px); left: 8px; transform: none; gap: 4px; }
+    .menu-bar { top: auto !important; bottom: calc(env(safe-area-inset-bottom) + 8px); left: 8px; right: 8px; transform: none; gap: 4px;
+      max-width: none !important; overflow-x: auto; padding-top: 8px; scrollbar-width: none; }
+    .menu-bar::-webkit-scrollbar { display: none; }
+    .menu-bar .tab-btn { flex: 0 0 auto; }
     .menu-bar .tab-btn { width: 44px; height: 46px; font-size: 8.5px; }
     .menu-bar .tab-btn .ico { font-size: 18px; }
     .hud-br { bottom: calc(env(safe-area-inset-bottom) + 64px); }
