@@ -7554,7 +7554,7 @@ function inspectCanvasPointer() {}
 // ---------- agent card (tap a character) ----------
 let cardAgentId = null;
 function openAgentCard(id) { cardAgentId = id; VIEW.follow = id; renderAgentCard(); document.getElementById('agent-card').classList.add('open'); }
-function closeAgentCard() { closeAgentPop(); cardAgentId = null; VIEW.follow = null; document.getElementById('agent-card').classList.remove('open'); }
+function closeAgentCard() { closeAgentPop(); closeCW(); cardAgentId = null; VIEW.follow = null; document.getElementById('agent-card').classList.remove('open'); }
 // ===== Bag & knowledge popup =====
 let AP = { tab: 'bag', sel: null, open: new Set(), who: null };
 const OUTFIT_TH = { under: 'ผ้าอ้อม', cape: 'ผ้าคลุมหัวหน้า', winter: 'ชุดกันหนาว', village: 'ชุดชาวบ้าน', cloth: 'ชุดผ้า', deer: 'ชุดหนังกวาง', hide: 'ชุดหนังสัตว์', flower: 'ชุดใบไม้ประดับดอกไม้', leaf: 'ชุดใบไม้' };
@@ -7645,6 +7645,114 @@ function renderAgentPop() {
   }
   const sc = box.scrollTop; box.innerHTML = head + tabs + body; box.scrollTop = sc;
 }
+// ===== Character window: สถานะ / สวมใส่ / กระเป๋า / ความรู้ (built so a god can later possess or play a character) =====
+let CW = { tab: 'stat', sel: null, cat: 'all', q: '', rc: null, who: null };
+function openCW(tab) { if (CW.who !== cardAgentId) { CW = { tab, sel: null, cat: 'all', q: '', rc: null, who: cardAgentId }; } CW.tab = tab; CW.sel = null; document.getElementById('cw').classList.add('open'); renderCW(); }
+function closeCW() { document.getElementById('cw').classList.remove('open'); }
+function cwSet(k, v) { CW[k] = CW[k] === v && (k === 'sel' || k === 'rc') ? null : v; renderCW(); }
+const CW_CATS = [['all', '🧺', 'ทั้งหมด'], ['gear', '🛡️', 'อุปกรณ์'], ['trap', '🪤', 'กับดัก'], ['made', '🛠️', 'ของที่ทำ'], ['mat', '🪵', 'วัตถุดิบ'], ['food', '🍖', 'อาหาร']];
+function itemCat(n) {
+  const k = keyByName(n), d = k && productDef(k), P = propsOf(n) || {};
+  if (d && (d.kind === 'trap' || P.broken)) return 'trap';
+  if (d && (d.eff || P.carry || P.camp || P.shield)) return 'gear';
+  if (P.food || (d && d.kind === 'food')) return 'food';
+  return d ? 'made' : 'mat';
+}
+const CAT_TH = { gear: 'อุปกรณ์', trap: 'กับดัก', made: 'ของที่ทำ', mat: 'วัตถุดิบ', food: 'อาหาร' };
+function cwItemCard(n, qty, extra) {
+  const k = keyByName(n), d = k && productDef(k), sl = slotsOf(n), c = itemCat(n);
+  return `<div class="cw-card"><div class="ic">${itemIcon(n, 40)}</div><div style="min-width:0">
+    <div class="nm">${n}${qty != null ? ` <span style="color:#8a6a3a;font-weight:700">×${qty}</span>` : ''}</div>
+    <span class="tg">${CAT_TH[c] || 'ของ'}</span>${sl > 1 ? `<span class="tg o">กิน ${sl} ช่อง</span>` : ''}${d && d.eff ? `<span class="tg g">${effText(d.eff)}</span>` : ''}${d && d.uses ? `<span class="tg">ใช้ได้ ${d.uses} ครั้ง</span>` : ''}${extra || ''}
+    <div class="ds">${itemDesc(n)}</div></div></div>`;
+}
+function renderCW() {
+  const win = document.getElementById('cw-win'), a = aiAgents.find(x => x.id === CW.who);
+  if (!a) { closeCW(); return; }
+  if (document.activeElement && document.activeElement.id === 'cw-q') return;       // don't wipe the search box while typing
+  const v = villageOf(a), stage = getAgeStage(a.age);
+  const lvl = Math.round(STAT_KEYS.reduce((t, k) => t + (a.stats ? a.stats[k] : 1), 0) / STAT_KEYS.length * 10) / 10;
+  const knowN = Object.values(a.know || {}).filter(e => e.out).length, bagN = Object.values(a.bag || {}).filter(q => q > 0).length;
+  const TABS = [['stat', '📊', 'สถานะ', ''], ['equip', '🛡️', 'สวมใส่', ''], ['bag', '🎒', 'กระเป๋า', `${bagCount(a)}/${bagCap(a)}`], ['know', '📖', 'ความรู้', knowN]];
+  let body = '', foot = '';
+  if (CW.tab === 'stat') {
+    const bar = (ic, lb, pct, col, txt) => `<span title="${lb}">${ic}</span><div class="b"><i style="width:${Math.max(0, Math.min(100, pct))}%;background:${col}"></i></div><span>${txt}</span>`;
+    const hp = a.hp / maxHp(a) * 100, full = 100 - (a.hunger || 0), water = 100 - (a.thirst || 0), sta = a.stamina ?? 100, warm = a.warmth ?? 100;
+    const vit = `<div class="cw-vit">${bar('❤️', 'HP', hp, hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171', `${Math.round(a.hp)}/${maxHp(a)}`)}${bar('🍖', 'อิ่ม', full, full < 25 ? '#ef4444' : '#f5a524', Math.round(full) + '%')}${bar('💧', 'น้ำ', water, water < 25 ? '#ef4444' : '#38bdf8', Math.round(water) + '%')}${bar('⚡', 'แรง', sta, sta < 25 ? '#ef4444' : '#a78bfa', Math.round(sta) + '%')}${bar('🌡️', 'ความอุ่น', warm, warm < 50 ? '#60a5fa' : '#fb923c', (a.felt ?? '-') + '°')}</div>`;
+    const rows = STAT_KEYS.map(k => {
+      const base = a.stats ? a.stats[k] : 1, tot = st(a, k), bonus = tot - base, need = expNeed(base), xp = a.sexp ? a.sexp[k] : 0, tg = talentGrade(a.talent ? a.talent[k] : 1);
+      return `<div class="cw-stat ${CW.sel === 's:' + k ? 'sel' : ''}" onclick="cwSet('sel','s:${k}')"><span class="i">${STATS[k].icon}</span><span class="k">${STATS[k].short}</span>
+        <span class="t">${STATS[k].name}<span class="xp"><i style="width:${base >= STAT_MAX ? 100 : Math.round(xp / need * 100)}%"></i></span></span>
+        <span class="v">${base}${bonus ? `<span class="p">+${bonus}</span>` : ''}</span><span class="g ${tg}" title="พรสวรรค์">${tg}</span></div>`;
+    }).join('');
+    const D = derivedStats(a);
+    const tiles = D.map(([ic, n, val], i) => `<div class="cw-tile ${CW.sel === 'd:' + i ? 'sel' : ''}" onclick="cwSet('sel','d:${i}')"><div class="l">${ic} ${n}</div><div class="v">${val}</div></div>`).join('');
+    body = `${vit}<div class="cw-cols"><div><div class="cw-sec"><span>ค่าสถานะ</span><span>ตัวเลขเขียว = จากของ/บัฟ · ตัวอักษร = พรสวรรค์</span></div>${rows}
+      <div class="ac-sub" style="margin-top:8px">ค่าสถานะโตขึ้นเองจากการลงมือทำ: ใช้แรง = STR · วิ่ง/หลบ = AGI · ทนลำบาก = VIT · ทดลอง/เรียน = INT · ประดิษฐ์ = DEX · พูดคุย/สอน = CHA</div></div>
+      <div><div class="cw-sec"><span>ค่าที่คำนวณได้</span></div><div class="cw-tiles">${tiles}</div></div></div>`;
+    if (CW.sel && CW.sel.startsWith('s:')) { const k = CW.sel.slice(2), base = a.stats ? a.stats[k] : 1; foot = `${STATS[k].icon} <b>${STATS[k].short} · ${STATS[k].name}</b> — +1 = ${STAT_RULES[k]} · EXP ${Math.floor(a.sexp ? a.sexp[k] : 0)}/${expNeed(base)} ถึงเลเวลถัดไป`; }
+    else if (CW.sel && CW.sel.startsWith('d:')) { const r = D[+CW.sel.slice(2)]; if (r) foot = `${r[0]} <b>${r[1]}</b> ${r[2]} — ${r[3]}`; }
+    else foot = 'แตะค่าสถานะหรือช่องค่าต่างๆ เพื่อดูว่าคำนวณมาจากอะไร';
+  } else if (CW.tab === 'equip') {
+    const best = type => { let bn = null, be = null; for (const nm in a.bag || {}) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type && (!be || (d.eff.n || 0) > (be.n || 0))) { be = d.eff; bn = nm; } } return bn; };
+    const camp = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).camp || 0) > bv) { bv = propsOf(nm).camp; bn = nm; } return bn; })();
+    const carry = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).carry || 0) > bv) { bv = propsOf(nm).carry; bn = nm; } return bn; })();
+    const tools = carriedTools(a), shield = shieldKey(a), shieldN = shield && PRODUCTS[shield].name;
+    const slot = (id, lb, ic, name, sub, side, dur) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : ic}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
+    const hand = i => { const t = tools[i]; if (!t) return slot('h' + i, `มือ ${i + 1}`, '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = D.dur || 10; return slot('h' + i, `มือ ${i + 1} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `ทน ${mx - t.wear}/${mx}`, '', (mx - t.wear) / mx); };
+    const L = [hand(0), hand(1), hand(2), slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : '')];
+    const R = [slot('sh', 'มือรอง · โล่', '🛡️', shieldN, shieldN ? effText(PRODUCTS[shield].eff) : '', 'r'), slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
+      slot('wm', 'เสื้อผ้าเสริม', '🧥', best('warm'), '', 'r'), slot('bg', 'ย่าม/ตะกร้า', '👜', carry || best('bag'), carry ? `ความจุ +${propsOf(carry).carry}` : '', 'r'),
+      slot('lt', 'แสงไฟ', '🔦', best('light'), '', 'r'), slot('ch', 'เครื่องราง', '📿', best('charm'), '', 'r')];
+    const sumP = [`⚔️ ATK <b>${atkOf(a)}</b>`, `🛡️ DEF <b>${defOf(a)}</b>`, `❤️ HP <b>${maxHp(a)}</b>`, `💨 หลบ <b>${Math.round(dodgeOf(a) * 100)}%</b>`, `🎒 จุ <b>${bagCap(a)}</b> ช่อง`];
+    body = `<div class="cw-doll"><div class="cw-eqcol">${L.join('')}</div><canvas id="cw-doll" width="300" height="400"></canvas><div class="cw-eqcol">${R.join('')}</div></div>
+      <div class="cw-sum">${sumP.join(' · ')}</div>`;
+    const selName = { h0: tools[0] && tools[0].name, h1: tools[1] && tools[1].name, h2: tools[2] && tools[2].name, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
+    if (selName) body += cwItemCard(selName, null);
+    foot = 'ถือเครื่องมือได้ 3 อย่าง · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
+  } else if (CW.tab === 'bag') {
+    const all = Object.entries(a.bag || {}).filter(([, n]) => n > 0);
+    const cnt = c => c === 'all' ? all.length : all.filter(([n]) => itemCat(n) === c).length;
+    const q = (CW.q || '').trim();
+    const list = all.filter(([n]) => (CW.cat === 'all' || itemCat(n) === CW.cat) && (!q || n.includes(q))).sort((p, r) => itemCat(p[0]).localeCompare(itemCat(r[0])) || r[1] - p[1]);
+    const cap = bagCap(a), used = bagCount(a), pct = used / Math.max(1, cap) * 100;
+    const cells = list.map(([n, c]) => `<div class="cw-slot ${CW.sel === n ? 'sel' : ''}" onclick="cwSet('sel','${n.replace(/'/g, "\\'")}')" title="${n}">${itemIcon(n, 34)}${slotsOf(n) > 1 ? `<span class="big">${slotsOf(n)}ช่อง</span>` : ''}${propsOf(n).broken ? '<span class="br">⚠️</span>' : ''}<span class="n">${c}</span></div>`).join('')
+      + (CW.cat === 'all' && !q ? Array.from({ length: Math.max(0, Math.min(cap - used, 30 - list.length)) }, () => '<div class="cw-slot free"></div>').join('') : '');
+    body = `<div class="cw-bag"><div class="cw-cats">${CW_CATS.map(([k, ic, lb]) => `<button class="${CW.cat === k ? 'on' : ''}" onclick="CW.cat='${k}';CW.sel=null;renderCW()">${ic} ${lb}<span>${cnt(k)}</span></button>`).join('')}</div>
+      <div><input id="cw-q" class="cw-search" placeholder="🔍 ค้นหาชื่อของ" value="${q.replace(/"/g, '&quot;')}" oninput="CW.q=this.value" onchange="CW.q=this.value;this.blur();renderCW()" onkeydown="if(event.key==='Enter'){CW.q=this.value;this.blur();renderCW()}">
+      <div class="cw-grid">${cells || '<div class="ac-sub">ไม่มีของในหมวดนี้</div>'}</div>
+      <div class="cw-cap"><div class="bar"><i style="width:${Math.min(100, pct)}%;background:${pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : '#16a34a'}"></i><u style="left:75%"></u></div>
+        <div class="row"><span>🎒 ใช้ไป ${used}/${cap} ช่อง (${Math.round(pct)}%)</span><span>🍖 อาหารติดตัว ${Math.round(a.food || 0)}</span></div></div>
+      ${CW.sel && (a.bag || {})[CW.sel] > 0 ? cwItemCard(CW.sel, a.bag[CW.sel]) : ''}</div></div>`;
+    foot = pct >= 75 ? '⚠️ กระเป๋าเกือบเต็ม: คนในหมู่บ้านจะเอาของไปฝากโกดัง ของใหญ่อย่างกรงกินที่ 4 ช่อง' : 'แตะช่องเพื่อดูรายละเอียด · ของใหญ่อย่างกรงดักสัตว์กินที่ 4 ช่อง';
+  } else {
+    const ents = Object.entries(a.know || {}), good = ents.filter(([, e]) => e.out), bad = ents.filter(([, e]) => !e.out);
+    const groups = {}; good.forEach(([sig, e]) => (groups[e.m] = groups[e.m] || []).push([sig, e]));
+    const srcTag = e => e.from === 'self' ? '🧪 ค้นพบเอง' : e.from === 'ชาติก่อน' ? '🔮 ชาติก่อน' : /ศิลา/.test(e.from || '') ? '📜 ศิลา' : e.from === 'god' || /พระเจ้า|สวรรค์/.test(e.from || '') ? '✨ พรสวรรค์' : `📖 ${e.from || 'เรียนมา'}`;
+    const pdots = n => { const lv = Math.min(5, Math.floor((n || 0) / 3)); return Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join(''); };
+    const grpHTML = Object.entries(groups).map(([m, rs]) => { const M = METHODS[m] || { name: m };
+      return `<div class="cw-grp"><div class="gh">${M.name}<span>${M.station ? 'ที่' + (STATION_LABEL[M.station] || M.station) : M.tool ? 'ต้องถือ' + (TOOL_LABEL[M.tool] || M.tool) : 'มือเปล่า'} · ${rs.length} สูตร</span></div>${rs.map(([sig, e]) => `<div class="cw-rc ${CW.rc === sig ? 'sel' : ''}" onclick="cwSet('rc','${sig.replace(/'/g, "\\'")}')"><span class="ic">${itemIcon(outName(e.out), 26)}</span><span class="nm">${outName(e.out)}<small>${e.a} + ${e.b}</small></span><span class="pr">ฝึก ${e.practice || 0}<br>${pdots(e.practice)}</span></div>`).join('')}</div>`; }).join('');
+    const memPct = good.length / recipeCap(a) * 100;
+    let det = '';
+    const e = CW.rc && a.know[CW.rc];
+    if (e && e.out) { const d = productDef(e.out), M = METHODS[e.m] || { name: e.m };
+      det = `<div class="cw-card"><div class="ic">${itemIcon(outName(e.out), 40)}</div><div style="min-width:0"><div class="nm">${outName(e.out)}</div>
+        <span class="tg">${srcTag(e)}</span><span class="tg">ฝึกแล้ว ${e.practice || 0} ครั้ง</span>${d && d.eff ? `<span class="tg g">${effText(d.eff)}</span>` : ''}
+        <div class="ds">🧩 ${itemIcon(e.a, 16)}${e.a} + ${itemIcon(e.b, 16)}${e.b}<br>🔧 ${M.name}${M.station ? ` · ต้องอยู่ที่${STATION_LABEL[M.station] || M.station}` : ''}${M.tool ? ` · ต้องถือ${TOOL_LABEL[M.tool] || M.tool}` : ''}<br>${d && d.desc ? d.desc : itemDesc(outName(e.out))}</div></div></div>`; }
+    body = `<div class="cw-cap" style="margin:0 0 10px"><div class="bar"><i style="width:${Math.min(100, memPct)}%;background:${memPct > 90 ? '#f59e0b' : '#8b5cf6'}"></i></div><div class="row"><span>🧠 จำสูตรได้ ${good.length}/${recipeCap(a)} (ขยายได้ด้วย INT)</span><span>📜 อักษรเทพ ${Math.round(readCap(a) * 100)}%</span></div></div>
+      <div class="cw-cols"><div>${grpHTML || '<div class="ac-sub">ยังไม่มีความรู้ใดๆ ต้องทดลองเอง เรียนจากคนอื่น หรืออ่านศิลา</div>'}</div><div>${det || '<div class="ac-sub">แตะสูตรเพื่อดูรายละเอียด</div>'}
+      ${bad.length ? `<div class="cw-grp" style="margin-top:10px"><div class="gh">⚠️ สิ่งที่ลองแล้วไม่ได้ผล<span>${bad.length} อย่าง</span></div>${bad.slice(0, 12).map(([, x]) => `<div class="cw-rc" style="cursor:default"><span class="ic">❌</span><span class="nm">${x.a} + ${x.b}<small>${(METHODS[x.m] || { name: x.m }).name}${x.reason ? ' · ' + x.reason : ''}</small></span><span></span></div>`).join('')}</div>` : ''}</div></div>`;
+    foot = 'ความรู้ได้จากการทดลอง เรียนจากคนอื่น อ่านศิลา หรือช่วยซ่อมวิหาร · ยิ่งฝึกยิ่งทำพลาดน้อยลง';
+  }
+  const sc = document.querySelector('.cw-body') ? document.querySelector('.cw-body').scrollTop : 0;
+  win.innerHTML = `<div class="cw-head"><canvas id="cw-av" width="80" height="92"></canvas><div class="tt"><div class="nm">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${v && v.chiefId === a.id ? ' 👑' : ''}</div>
+      <div class="sb"><span class="lv">Lv ${lvl}</span>${stage.label} ${Math.floor(a.age)} ปี · ${a.role || 'ยังไม่มีอาชีพ'}${v ? ' · ' + v.name : ' · อิสระ'}</div></div><button class="cw-x" onclick="closeCW()">✕</button></div>
+    <div class="cw-tabs">${TABS.map(([k, ic, lb, c]) => `<button class="${CW.tab === k ? 'on' : ''}" onclick="CW.tab='${k}';CW.sel=null;renderCW()">${ic} ${lb}${c !== '' ? `<span class="c">${c}</span>` : ''}</button>`).join('')}</div>
+    <div class="cw-body">${body}</div><div class="cw-foot">${foot}</div>`;
+  const nb = document.querySelector('.cw-body'); if (nb) nb.scrollTop = sc;
+  const draw = (id, w, h, fy, H) => { const cv = document.getElementById(id); if (!cv || !PUP.ready) return; const c = cv.getContext('2d'); c.clearRect(0, 0, w, h); const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, w / 2, fy, H, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); };
+  draw('cw-av', 80, 92, 88, 78); draw('cw-doll', 300, 400, 370, 320);
+}
 let CARD_DERIVED = false;
 function renderAgentCard() {
   const el = document.getElementById('agent-card'); if (!cardAgentId) return;
@@ -7664,9 +7772,7 @@ function renderAgentCard() {
       <span>⚡</span><div class="bar-wrap"><div class="bar-hp" style="width:${sta}%;background:${sta < 25 ? '#ef4444' : '#38bdf8'}"></div></div><span>${sta}%</span>
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? ({ bed: 'นอนในที่พัก', tent: 'นอนในเต็นท์', mat: 'นอนบนเสื่อ', fire: 'นอนข้างกองไฟ' }[a.sleepKind] || 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
-    <div class="ac-stats">${stats}<button class="ac-more" onclick="CARD_DERIVED = !CARD_DERIVED; renderAgentCard()">📊 ค่าต่างๆ ${CARD_DERIVED ? '▴' : '▾'}</button></div>
     <div class="ac-sub">❤️ HP ${Math.round(a.hp)}/${maxHp(a)} · ⚔️ ATK ${atkOf(a)} · 🛡️ DEF ${defOf(a)} · 💨 หลบ ${Math.round(dodgeOf(a) * 100)}%</div>
-    ${CARD_DERIVED ? `<div class="ac-derived"><span class="n" style="margin-left:0">${STAT_KEYS.map(k => `<b>${k.toUpperCase()} +1</b> = ${STAT_RULES[k]}`).join('<br>')}</span>${derivedStats(a).map(([i, n, v, note]) => `<span>${i}</span><span>${n}</span><span class="v">${v}</span><span class="n">${note}</span>`).join('')}</div>` : ''}
     <div class="ac-sub">📜 อักษรเทพ ${Math.round(readCap(a) * 100)}% ${readCap(a) >= 1 ? '· อ่านศิลาเข้าใจทั้งหมด' : '· ช่วยซ่อมวิหารเพื่อเรียนอักษรเทพ'}${(a.lit || 0) >= 1 ? ' · ✍️ สลักศิลาได้' : ''}</div>
     ${(a.buffs || []).length ? `<div class="ac-sub">🧪 ${(a.buffs || []).map(b => `${b.stat.toUpperCase()} +${b.n} (${b.from}, เหลือ ${Math.max(0, Math.round((b.until - nowH()) / 24 * 10) / 10)} วัน)`).join(' · ')}</div>` : ''}
     <div class="ac-sub">ปัจจัย 4: ${Object.entries(needsOf(a)).map(([k, v]) => `<span style="margin-right:6px;${v.ok ? '' : 'color:#dc2626;font-weight:600'}">${NEED_LABEL[k]} ${v.ok ? '✓' : '✗'}</span>`).join('')}</div>
@@ -7682,7 +7788,7 @@ ${(() => {   // quests this person asked for, or is helping with
         return `<div class="gq">${q.giverId === a.id ? '🙏' : '🛠️'} ${q.title}${prog}<div class="d" style="margin-left:18px;font-size:11px">${who} · ตอบแทน ${rewardText(q.agreed || q.offer)} · เหลือ ${hrs} ชม.</div>${last}</div>`;
       }).join('')}</div>`;
     })()}
-    <div class="ac-btns"><button class="gbtn moss" onclick="openAgentPop('bag')">🎒 กระเป๋า <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn" onclick="openAgentPop('know')">🧠 ความรู้ <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>`;
+    <div class="ac-btns four"><button class="gbtn moss" onclick="openCW('stat')">📊 สถานะ</button><button class="gbtn moss" onclick="openCW('equip')">🛡️ สวมใส่</button><button class="gbtn moss" onclick="openCW('bag')">🎒 <b>${bagCount(a)}/${bagCap(a)}</b></button><button class="gbtn moss" onclick="openCW('know')">📖 <b>${Object.values(a.know || {}).filter(e => e.out).length}</b></button></div>`;
   const av = document.getElementById('ac-avatar'); const c = av.getContext('2d'); c.clearRect(0, 0, 84, 96);
   if (PUP.ready) { const sf = a._face, sh = a._hit; a._face = 1; drawPuppet(c, a, 42, 90, 80, 'idle', performance.now() / 1000); a._face = sf; a._hit = sh; c.setTransform(1, 0, 0, 1, 0, 0); }
 }
@@ -7692,6 +7798,7 @@ function renderLoop(ts) {
   if (!renderLoop.last || ts - renderLoop.last > 32) { renderLoop.last = ts; try { drawCanvas(); } catch (err) { console.error(err); } }
   if (!renderLoop.mmT || ts - renderLoop.mmT > 120) { renderLoop.mmT = ts; try { drawMiniMap(); } catch (err) { console.error(err); } }
   if (!renderLoop.cardT || ts - renderLoop.cardT > 500) { renderLoop.cardT = ts; if (cardAgentId) renderAgentCard();
+    if (renderLoop.popN % 3 === 2 && document.getElementById('cw').classList.contains('open')) renderCW();
     if ((renderLoop.popN = (renderLoop.popN || 0) + 1) % 3 === 0 && document.getElementById('agent-pop').classList.contains('open')) { if (AP.store) renderStorePop(); else renderAgentPop(); }
     const open = typeof godRequests !== 'undefined' && godRequests.some(q => q.status !== 'done');
     const gd = document.getElementById('god-dot'); if (gd) gd.classList.toggle('on', open);
