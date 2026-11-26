@@ -1241,20 +1241,27 @@ function trapKey(s) { return (s.station === 'fishtrap' ? 'fishtrap' : 'snare') +
 const TRAP_IMG = {};
 function trapImg(s) { const k = trapKey(s), A = window.TRAP_ART && (TRAP_ART[k] || TRAP_ART[k.replace('_full', '')]); if (!A) return null; const kk = TRAP_ART[k] ? k : k.replace('_full', ''); const im = TRAP_IMG[kk] || (TRAP_IMG[kk] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
 // the game's own animal art in its sleeping pose, lying in the snare
-function drawSnareCatch(ctx, s, cx, fy, now) {
+function drawSnareCatch(ctx, s, cx, fy, now, maxW) {
   const f = faunaSpecies.find(x => x.id === s.catchId) || faunaSpecies.find(x => x.name === s.catchName); if (!f || !window.WORLD_ART || !WORLD_ART.animals) return;
   const art = animalArt(f); if (!art || !WORLD_ART.animals[art] || art === 'fish') return;
-  const rel = ANIM_REL[art] || f.sizeRel || 0.6, sc = rel / (WORLD_ART.animals[art][0].h / HUMAN_H);
+  const fr = WORLD_ART.animals[art], rel = ANIM_REL[art] || f.sizeRel || 0.6, sl = fr[3] || fr[0];
+  let sc = rel / (fr[0].h / HUMAN_H); if (maxW && sl.w) sc = Math.min(sc, maxW / sl.w);   // fit inside a cage
   drawAnimal(ctx, art, 3, cx, fy, 1, sc, null, now);
 }
-// big square cage: the caught animal sleeps inside (drawn first), bars over it; code-drawn until cage art arrives
+// big square cage (guillotine door): open = door raised; closed = the caught animal sleeps on the floor,
+// drawn between the cage and its front layer (front posts, rails and bars) so it shows through the bars
 function drawCage(ctx, s, cx, fy, now) {
-  const H = HUMAN_H, iron = s.station === 'cage_iron', k = iron ? 'cage_iron' : 'cage';
-  const A = window.TRAP_ART && TRAP_ART[k], im = A && (TRAP_IMG[k] || (TRAP_IMG[k] = Object.assign(new Image(), { src: A.img })));
-  if (A && im.complete && im.naturalWidth) {
-    const w = H * 1.6, h = w * A.h / A.w;
-    if ((s.catch || 0) > 0) drawSnareCatch(ctx, s, cx, fy - h * 0.12, now);
-    ctx.drawImage(im, cx - w / 2, fy - h * 0.85, w, h); return { h: h * 0.85 };
+  const H = HUMAN_H, iron = s.station === 'cage_iron', base = iron ? 'cage_iron' : 'cage', full = (s.catch || 0) > 0;
+  const img = k => { const A = window.TRAP_ART && TRAP_ART[k]; if (!A) return null; const im = TRAP_IMG[k] || (TRAP_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? { A, im } : null; };
+  const C = img(base + '_closed'), O = full ? C : img(base + '_open'), F = img(base + '_closed_front');
+  if (C && O) {
+    const w = H * 1.6, hc = w * C.A.h / C.A.w, bot = fy + hc * 0.15, h = w * O.A.h / O.A.w;
+    ctx.drawImage(O.im, cx - w / 2, bot - h, w, h);
+    if (full) {
+      drawSnareCatch(ctx, s, cx - w * 0.06, bot - hc * 0.24, now, w * 0.6);
+      if (F) { ctx.save(); ctx.globalAlpha = 0.72; ctx.drawImage(F.im, cx - w / 2, bot - hc, w, hc); ctx.restore(); }   // a little see-through so the catch reads
+    }
+    return { h: h - hc * 0.15 };
   }
   const w = H * 0.75, h = H * 0.85, dep = H * 0.25, col = iron ? '#6b7280' : '#7a4f2b', dark = iron ? '#374151' : '#4a2e16';
   if ((s.catch || 0) > 0) drawSnareCatch(ctx, s, cx, fy - H * 0.05, now);
