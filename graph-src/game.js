@@ -6721,8 +6721,8 @@ function drawAgent(ctx, a, now, labels) {
   const anim = pupActivity(a, a._moving, a._fast);
   const matImg = window.CAMP_ART && CAMP_ART.mat && (window._matImg || (window._matImg = Object.assign(new Image(), { src: CAMP_ART.mat })));
   if (a.sleeping && a.sleepKind === 'mat' && matImg && matImg.complete && matImg.naturalWidth) {   // Gemini leaf mat under the sleeper
-    const w = H * 1.5, h = w * CAMP_ART.matH / CAMP_ART.matW;
-    ctx.drawImage(matImg, fx - w * 0.6, feetY - h * 0.6, w, h);
+    const w = H * 1.6, h = w * CAMP_ART.matH / CAMP_ART.matW * 1.5;   // flat on the ground, head-to-feet like the sleeper
+    ctx.drawImage(matImg, fx - w * 0.66, feetY - h * 0.7, w, h);
   } else if (a.sleeping && a.sleepKind === 'mat') {          // fallback: code-drawn mat
     ctx.fillStyle = '#9a8a4a'; ctx.strokeStyle = '#5c4a22'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(fx, feetY, H * 0.48, H * 0.12, 0, 0, 7); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = 'rgba(92,74,34,.5)'; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(fx + i * H * 0.12, feetY - H * 0.08); ctx.lineTo(fx + i * H * 0.12, feetY + H * 0.08); ctx.stroke(); }
