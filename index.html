@@ -1105,7 +1105,7 @@ function derivedStats(a) {
 }
 function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // VIT +1 = HP +2, STR +1 = HP +1
 // attack: STR +1 = ATK +2, plus the best weapon carried; defence: VIT +1 = DEF +1, plus armour
-function atkOf(a) { const t = ['bow', 'spear', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
+function atkOf(a) { const t = ['sword', 'bow', 'spear', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
 function defOf(a) { const ar = carriedEff(a, 'armor'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0); }
 function dodgeOf(a) { return Math.min(0.4, st(a, 'agi') * 0.01); }      // AGI +1 = dodge +1% (max 40%)
 function hurt(a, dmg, floor = 0, by) { if (by) a._lastHurt = { by, t: nowH() }; if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
@@ -1166,7 +1166,7 @@ function world() {
 // Physical properties of raw materials (what things ARE, not what to do with them)
 const MAT = {
   'หินเหล็กไฟ': { hard: 1, mineral: 1, sharpable: 1, spark: 1 }, 'หินกรวด': { hard: 1, mineral: 1 },
-  'กิ่งไม้แห้ง': { wood: 1, dry: 1, fuel: 1 }, 'กิ่งง่ามไม้แข็ง': { wood: 1, dry: 1, fuel: 1 },
+  'กิ่งไม้แห้ง': { wood: 1, dry: 1, fuel: 1 }, 'กิ่งง่ามไม้แข็ง': { wood: 1, dry: 1, fuel: 1, forked: 1 },
   'ขอนไม้ลอยน้ำ': { wood: 1, fuel: 1, wet: 1 }, 'ต้นไม้เนื้อแข็ง': { wood: 1, fuel: 1 }, 'ต้นมะพร้าว': { wood: 1, fuel: 1 },
   'เถาวัลย์เล็ก': { fiber: 1 }, 'ต้นกก': { fiber: 1 }, 'ต้นจาก': { fiber: 1 }, 'กาบมะพร้าว': { fiber: 1, dry: 1, fuel: 1 },
   'ต้นกล้วยป่า': { fiber: 1, wet: 1 }, 'กอไผ่สด': { wood: 1, bamboo: 1, fiber: 0.5 }, 'ใบตองสด': { leaf: 1, wet: 1 }, 'ใบไม้สด': { leaf: 1 },
@@ -1241,7 +1241,15 @@ const PRODUCTS = {
   stone_spear:   { name: 'หอกหิน', kind: 'tool', tool: 'spear', dur: 40, pow: 1, tier: 1, props: { wood: 1, sharp: 1 } },
   copper_spear:  { name: 'หอกทองแดง', kind: 'tool', tool: 'spear', dur: 120, pow: 2, tier: 2, props: { sharp: 1, metal: 1 } },
   iron_spear:    { name: 'หอกเหล็ก', kind: 'tool', tool: 'spear', dur: 250, pow: 3, tier: 3, props: { sharp: 1, metal: 1 } },
-  iron_sword:    { name: 'ดาบเหล็ก', kind: 'tool', tool: 'blade', dur: 300, pow: 4, tier: 4, props: { hard: 1, sharp: 1, metal: 1 } },
+  // swords (weapons; knives stay 'blade' for crafting)
+  wood_sword:    { name: 'ดาบไม้', kind: 'tool', tool: 'sword', dur: 20, pow: 1, tier: 1, props: { wood: 1 } },
+  stone_sword:   { name: 'ดาบหิน', kind: 'tool', tool: 'sword', dur: 50, pow: 2, tier: 1, props: { hard: 1, sharp: 1 } },
+  copper_sword:  { name: 'ดาบทองแดง', kind: 'tool', tool: 'sword', dur: 150, pow: 3, tier: 2, props: { hard: 1, sharp: 1, metal: 1 } },
+  iron_sword:    { name: 'ดาบเหล็ก', kind: 'tool', tool: 'sword', dur: 300, pow: 4, tier: 3, props: { hard: 1, sharp: 1, metal: 1 } },
+  // fishing and trapping
+  fishing_rod:   { name: 'เบ็ดตกปลาไม้ไผ่', kind: 'tool', tool: 'rod', dur: 40, pow: 1, tier: 1, props: { wood: 1 } },
+  fish_trap:     { name: 'ลอบดักปลา', kind: 'station', station: 'fishtrap' },
+  animal_trap:   { name: 'กับดักสัตว์', kind: 'station', station: 'snare' },
   iron_pick:    { name: 'อีเต้อเหล็ก', kind: 'tool', tool: 'pick', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
   reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' },
   // bamboo: the island's basic plant, good for many things
@@ -1267,7 +1275,7 @@ const PRODUCTS = {
   tile_house:  { name: 'บ้านอิฐหลังคากระเบื้อง', kind: 'home', tier: 6, warm: 18, hp: 300 }
 };
 
-const STATION_SPRITE = { chest: 'st_store', yard: 'st_store', warehouse: 'st_store', campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
+const STATION_SPRITE = { fishtrap: 'st_store', snare: 'st_store', chest: 'st_store', yard: 'st_store', warehouse: 'st_store', campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
 const STATION_LABEL = { chest: 'กล่องเก็บของ', yard: 'ลานเก็บวัตถุดิบ', warehouse: 'โกดังเก็บของ', temple: 'วิหารเทพ', campfire: 'กองไฟ', workbench: 'โต๊ะช่าง', kiln: 'เตาเผา', smelter: 'เตาถลุง', wall: 'กำแพงอิฐ', farm: 'คอกสัตว์', lab: 'ห้องแล็บ', reactor: 'หอปฏิกรณ์' };
 const TOOL_LABEL = { blade: 'ของมีคม', vessel: 'ภาชนะใส่น้ำ', crucible: 'เบ้าหลอม', axe: 'ขวาน', bow: 'ธนู', pick: 'อีเต้อ', sickle: 'เคียว', hammer: 'ค้อน' };
 
@@ -1344,6 +1352,9 @@ function natureLaw(a, b, m) {
       if (either(N('split_bamboo'), is('rope'))) return ok('bamboo_hut');
       // metal heads on the right handle: bamboo pole = spear, split bamboo = sickle, a post = hammer; ingot + knife = sword
       if (either(N('iron_ingot'), N('iron_tools'))) return ok('iron_sword');
+      if (either(N('copper_ingot'), N('wood_sword'))) return ok('copper_sword');       // copper sheathing on a wooden sword
+      if (either(N('split_bamboo'), N('bamboo_basket'))) return ok('fish_trap');      // a funnel basket that fish swim into
+      if (either(is('forked'), N('vine_net'))) return ok('animal_trap');              // a net snare on a forked stick
       if (either(N('copper_ingot'), N('split_bamboo'))) return ok('copper_sickle');
       if (either(N('iron_ingot'), N('split_bamboo'))) return ok('iron_sickle');
       if (either(N('copper_ingot'), N('fence_posts'))) return ok('copper_hammer');
@@ -1357,6 +1368,7 @@ function natureLaw(a, b, m) {
       if (either(N('stone_blade'), is('rope'))) return ok('stone_sickle');
       if (either(N('fence_posts'), is('rope'))) return ok('ranch_pen');
       if (either(is('rope'), is('bamboo'))) return ok('bow');
+      if (either(N('stone_blade'), N('wood_sword'))) return ok('stone_sword');       // stone edges set into a wooden blade
       if (either(N('stone_blade'), is('bamboo'))) return ok('stone_spear');      // a sharp stone lashed to a bamboo pole
       if (either(N('stone_blade'), is('wood'))) return ok('stone_axe');
       if (either(P => P.hard && P.mineral && !P.sharp && !P.metal, is('wood'))) return ok('stone_pick');
@@ -1376,6 +1388,8 @@ function natureLaw(a, b, m) {
       return fail('ถูกันแล้วไม่ร้อนพอ');
     }
     case 'cut':
+      if (either(is('bamboo'), is('rope'))) return ok('fishing_rod');                   // trim a bamboo pole, tie a line
+      if (either(N('stone_blade'), P => P.wood && !P.bamboo && !P.fence && (!P.dry || P.forked))) return ok('wood_sword');   // carve a sword from hard wood
       if (A.bamboo && B.bamboo) return ok('bamboo_tube');
       if (A.wood && B.wood && !A.bamboo && !B.bamboo && !A.fence && !B.fence) return ok('fence_posts');
       if (A.hide && B.hide) return ok('hide_bag');
@@ -1717,6 +1731,24 @@ function templeOf() { return shelters.find(x => x.station === 'temple') || null;
 function templePct(t) { t = t || templeOf(); if (!t) return 0; return t.tStage >= 4 ? 100 : Math.min(99, Math.round(t.tStage * 25 + (t.tDone / Math.max(1, t.tNeed)) * 25)); }
 function auraR(t) { return 5 + templePct(t) * 0.15; }            // 5 tiles when ruined → 20 tiles when whole
 function inAura(a) { const t = templeOf(); return !!(t && a && a.zone === t.zone && Math.hypot(a.x - t.x - 2, a.y - t.y - 2) <= auraR(t)); }
+// traps work on their own: a fish trap fills with fish, a snare catches small game; the owner walks over (≤2 tiles) to empty it
+function trapTick() {
+  shelters.filter(s => s.station === 'fishtrap' || s.station === 'snare').forEach(s => {
+    s.catch = s.catch || 0; if (s.catch >= 3) return;
+    if (s.station === 'fishtrap') { const fish = (ZONES[s.zone].res || []).find(r => /ปลา|กุ้ง|ปู/.test(r)); if (fish && Math.random() < 0.18) { s.catch++; s.catchName = fish; } }
+    else { const prey = faunaSpecies.find(f => !f.predator && (f.zp[s.zone] || 0) > 1 && !/ปลา|กุ้ง|ปู/.test(f.name)); if (prey && Math.random() < 0.08) { s.catch++; s.catchName = prey.name; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); } }
+  });
+}
+function trapStep(a, night) {
+  if (night || a.age < 12) return false;
+  const t = shelters.find(s => (s.station === 'fishtrap' || s.station === 'snare') && s.owner === a.id && s.zone === a.zone && (s.catch || 0) > 0);
+  if (!t) return false;
+  if (structDist(a, t) > 2) { const p = approachOf(t, a); for (let k = 0; k < 2; k++) moveToward(a, p.x, p.y); a.bubble = `🪤 ไปเก็บของจาก${t.name.split(' (')[0]}`; return true; }
+  if (t.station === 'fishtrap') { gainItems(a, t.catchName || 'ปลา', t.catch); a.bubble = `🪤 ได้${t.catchName} ${t.catch} ตัวจากลอบ`; }
+  else { a.food = (a.food || 0) + 6 * t.catch; a.bubble = `🪤 กับดักจับ${t.catchName}ได้ ${t.catch} ตัว (อาหาร +${6 * t.catch})`; addLog(`🪤 [กับดัก] ${a.name} เก็บ${t.catchName} ${t.catch} ตัวจากกับดัก`, '#fbbf24'); }
+  t.catch = 0; gainExp(a, 'int', 0.3);
+  return true;
+}
 function templeTick() {
   const t = templeOf(); if (!t || t.tStage >= 4) return;
   t.tQ = t.tQ || []; t.tSeq = t.tSeq || 0;
@@ -1835,6 +1867,26 @@ function groundShadow(ctx, cx, fy, rx, ry, a = 0.2) {
 // the Gods' gate: same size and placement as the temple; glows while someone is crossing
 const GATE_IMG = {};
 function gateImg(k) { const A = window.GATE_ART && GATE_ART[k]; if (!A) return null; const im = GATE_IMG[k] || (GATE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
+function trapKey(s) { return (s.station === 'fishtrap' ? 'fishtrap' : 'snare') + ((s.catch || 0) > 0 ? '_full' : ''); }
+const TRAP_IMG = {};
+function trapImg(s) { const k = trapKey(s), A = window.TRAP_ART && (TRAP_ART[k] || TRAP_ART[k.replace('_full', '')]); if (!A) return null; const kk = TRAP_ART[k] ? k : k.replace('_full', ''); const im = TRAP_IMG[kk] || (TRAP_IMG[kk] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
+function drawTrapCode(ctx, s, cx, fy) {
+  const H = HUMAN_H;
+  if (s.station === 'fishtrap') {                      // a cone basket lying in the water
+    ctx.fillStyle = '#c9a15a'; ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cx - H * 0.18, fy - H * 0.12, H * 0.12, H * 0.13, 0, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - H * 0.18, fy - H * 0.25); ctx.lineTo(cx + H * 0.3, fy - H * 0.1); ctx.lineTo(cx - H * 0.18, fy + H * 0.01); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(cx - H * 0.18 + k * H * 0.11, fy - H * 0.25 + k * H * 0.04); ctx.lineTo(cx - H * 0.18 + k * H * 0.11, fy + H * 0.01 - k * H * 0.03); ctx.stroke(); }
+    if (s.catch) { ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.ellipse(cx, fy - H * 0.12, H * 0.07, H * 0.03, 0, 0, 7); ctx.fill(); }
+  } else {                                             // a bent sapling with a rope loop
+    ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - H * 0.2, fy); ctx.quadraticCurveTo(cx - H * 0.15, fy - H * 0.5, cx + H * 0.1, fy - H * 0.35); ctx.stroke();
+    ctx.strokeStyle = '#c9a56a'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx + H * 0.1, fy - H * 0.35); ctx.lineTo(cx + H * 0.1, fy - H * 0.08); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx + H * 0.1, fy - H * 0.04, H * 0.1, H * 0.04, 0, 0, 7); ctx.stroke();
+    if (s.catch) { ctx.fillStyle = '#a16207'; ctx.beginPath(); ctx.ellipse(cx + H * 0.12, fy - H * 0.08, H * 0.09, H * 0.06, 0, 0, 7); ctx.fill(); }
+  }
+  return { h: H * 0.4 };
+}
 function drawGate(ctx, s, cx, fy, now) {
   const active = (s.activeUntil || 0) > simDay * 24 * 60 + simMinutes, A = GATE_ART[active ? 'active' : 'dormant'], im = gateImg(active ? 'active' : 'dormant') || gateImg('dormant');
   const TA = window.TEMPLE_ART && TEMPLE_ART.s4, hhT = HUMAN_H * 4.6, w = TA ? hhT * TA.w / TA.h : hhT * 1.1, h = w * A.h / A.w;
@@ -1961,7 +2013,14 @@ function buildStation(type, agent, ownerOverride) {
   const exists = stationsOf(type).length >= cap || stationsOf(type).some(s => s.owner === owner.id) || (type === 'campfire' && stationInZone(agent.zone, 'campfire'));
   if (exists) return false;
   buildZoneTerrain(agent.zone);
-  const bs = buildSpot(agent.zone, agent.x + 1, agent.y - 1); let x = bs.x, y = bs.y;
+  let bs = buildSpot(agent.zone, agent.x + 1, agent.y - 1);
+  if (type === 'fishtrap') {                           // set in shallow water near the bank, where fish live
+    const g = zoneTerrainGrid[agent.zone]; let best = null;
+    for (let r = 1; r <= 8 && !best; r++) for (let dy = -r; dy <= r && !best; dy++) for (let dx = -r; dx <= r; dx++) { const tx = Math.round(agent.x) + dx, ty = Math.round(agent.y) + dy; if (g[ty] && SHALLOW.includes(g[ty][tx])) { best = { x: tx, y: ty }; break; } }
+    if (!best || !(ZONES[agent.zone].res || []).some(r => /ปลา|กุ้ง|ปู/.test(r))) return false;
+    bs = best;
+  }
+  let x = bs.x, y = bs.y;
   const key = Object.keys(PRODUCTS).find(k => PRODUCTS[k].station === type);
   const isPublic = type === 'wall' || type === 'reactor' || owner.kind >= 0.75;
   shelters.push({ name: `${PRODUCTS[key].name} (${agent.zone})`, sprite: STATION_SPRITE[type], zone: agent.zone, x, y, station: type, builder: agent.name,
@@ -2181,7 +2240,7 @@ function computeNeeds(forAgent) {
   if (forAgent && forAgent.bridgeFor && nowH() - forAgent.bridgeFor.t < 72) ['stone_bridge', 'wood_bridge', 'plank_bridge', 'rope_bridge'].forEach(k => needs.unshift(k));
   else if (forAgent) forAgent.bridgeFor = null;
   Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && d.station !== 'storehouse' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
-  ['blade', 'axe', 'pick', 'hammer', 'sickle', 'spear', 'vessel', 'bow', 'crucible'].forEach(t => {
+  ['blade', 'axe', 'pick', 'hammer', 'sickle', 'spear', 'sword', 'rod', 'vessel', 'bow', 'crucible'].forEach(t => {
     if (!hasTool(t, forAgent)) Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.tool === t) needs.push(k); });
   });
   if (stationsOf('smelter').length && avail(forAgent, 'ถ่านไม้') < 2) needs.push('charcoal');
@@ -4978,6 +5037,7 @@ function agentMove(a, night) {
     if (templeStep(a, night)) return;
     if (!night && a.hunger < 70 && revelationStep(a)) return;
     if (learnStep(a, night)) return;
+    if (trapStep(a, night)) return;
     if (!night && a.hunger < 60 && stashStep(a)) return;
     if (!night && a.age >= 12 && (steles.some(x => x.holder === a.id) && a.zone !== homeOf(a).zone) && Math.random() < 0.3) {
       const H = homeOf(a); a.goal = { zone: H.zone, x: 40, y: 40, ttl: 14, enter: true }; a.bubble = '🧩 ถือเศษศิลากลับแคมป์'; travelToGoal(a); return;
@@ -5023,6 +5083,7 @@ function agentGather(a, season) {
     gainExp(a, 'str', 0.6); gainExp(a, 'vit', 0.2);
     if (hasTool('axe', a) && propsOf(t.name).wood) { gain += 1; useTool('axe', a); }
     if ((a.bag || {})[BAG_NAME] > 0) gain += 1;
+    if (/ปลา|กุ้ง/.test(t.name) && hasTool('rod', a)) { gain += 2; useTool('rod', a); a.bubble = `🎣 ตกปลา ได้${t.name}`; }
     if (WATER_NODE.test(t.name)) {                     // water can't be carried in bare hands
       if ((a.thirst || 0) > 10) drink(a, 60, `💧 ดื่ม${t.name}`);
       if (!hasTool('vessel', a)) { if (!a.goal) a.bubble = a.bubble || `💧 ดื่ม${t.name}`; return; }
@@ -5348,7 +5409,7 @@ function runAutonomousStep() {
   if (!RT_ON()) aiAgents.filter(wantsHunt).slice(0, 6).forEach(agentHunt);
 
   // Work: craft from own knowledge, or experiment
-  templeTick();
+  templeTick(); trapTick();
   HOUR_NEEDS = computeNeeds();
   if (!RT_ON()) aiAgents.forEach(a => agentWork(a, HOUR_NEEDS));
   // background realms: nobody is watching, so their people live the same way but are worked out once an hour
@@ -6052,6 +6113,14 @@ const PUP_ANIM = {
   bow: { dur: 2.2, item: 'bow', f: u => pupKeys([[0, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: 65 })], [0.22, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -2, draw: 0.06, lean: 2 })],
     [0.48, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -4, draw: 1, lean: 4 })], [0.6, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -4, draw: 1, lean: 4 })],
     [0.63, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -5, draw: 0, hold: 1, lean: 5 })], [0.86, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -6, hold: 0.95, lean: 4 })], [1, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: 65 })]], u) },
+  // two-handed spear thrust: chamber back, lunge forward with the front knee bent, spear level (far hand grips ahead of the near hand)
+  thrust: { dur: 1.2, item: 'spear', f: u => pupKeys([[0, pr({ upN: 25, foN: 65, item: -10, two: 34, thN: -6, thF: 8 })],
+    [0.32, pr({ dx: -5, lean: 9, upN: -35, foN: 115, item: -4, two: 34, thN: -16, thF: 20, knF: -14 })],
+    [0.5, pr({ dx: 16, dy: 4, lean: -14, upN: 88, foN: -6, item: 2, two: 34, thN: 45, knN: -50, thF: -26, knF: -6, cape: 4, capeRot: 0 })],
+    [0.74, pr({ dx: 16, dy: 4, lean: -14, upN: 88, foN: -6, item: 2, two: 34, thN: 45, knN: -50, thF: -26, knF: -6, cape: 4, capeRot: 0 })],
+    [1, pr({ upN: 25, foN: 65, item: -10, two: 34, thN: -6, thF: 8 })]], u) },
+  // fishing: stand still, rod held out over the water, a gentle bob
+  fish: { dur: 3, item: 'rod', f: u => { const b = Math.sin(u * 2 * Math.PI); return pr({ dy: b * 0.3, upN: 55 + b * 2, foN: 20, upF: 10, foF: 30, item: -38 + b * 3, thN: 4, thF: -4 }); } },
   sleep: { dur: 4, f: u => { const b = Math.sin(u * 2 * Math.PI); return pr({ lean: 84, dy: 25.5, dx: 6, thN: 8 + b, thF: -6, knN: -10, knF: -14, upN: 20 + b * 2, foN: 70, upF: 10, foF: 30, capeRot: 0, cape: 3 }); } },
   sit: { dur: 4, f: u => { const b = Math.sin(u * 2 * Math.PI); return pr({ dy: 14 + b * 0.2, lean: 6 + b * 0.8, thN: 125, knN: -115, thF: 118, knF: -110, upN: 62 + b * 2, foN: 55, upF: 55, foF: 50, capeRot: 60 }); } }
 };
@@ -6077,9 +6146,11 @@ function pupActivity(a, moving, fast) {
   const b = a.bubble || '';
   if (a.sleeping && !moving) return 'sleep';
   if (moving) return fast || b.startsWith('💨') || b.startsWith('⚠️') || b.includes('โจมตี') ? 'run' : 'walk';
-  if (b.startsWith('🏹')) return hasTool('bow', a) ? 'bow' : hasTool('spear', a) || hasTool('blade', a) ? 'slash' : 'gather';
-  if (b.startsWith('🗡️')) return hasTool('blade', a) ? 'slash' : 'gather';
-  if (b.startsWith('🩸') || b.includes('โจมตี') || b.startsWith('💢')) return 'slash';
+  const melee = () => hasTool('spear', a) && !hasTool('sword', a) ? 'thrust' : 'slash';
+  if (b.startsWith('🏹')) return hasTool('bow', a) ? 'bow' : hasTool('spear', a) || hasTool('sword', a) || hasTool('blade', a) ? melee() : 'gather';
+  if (b.startsWith('🗡️')) return hasTool('spear', a) || hasTool('sword', a) || hasTool('blade', a) ? melee() : 'gather';
+  if (b.startsWith('🩸') || b.includes('โจมตี') || b.startsWith('💢')) return melee();
+  if (b.startsWith('🎣') && hasTool('rod', a)) return 'fish';
   if (b.startsWith('🛠️') || b.startsWith('🔬') || b.startsWith('🔁') || b.startsWith('😓') || b.startsWith('😅')) return 'craft';
   if ((b.startsWith('เก็บ') || b.startsWith('🍃') || b.startsWith('🌿') || b.startsWith('🧺') || a.gatherT) && nearGatherable(a)) {
     if (/ไม้|ไผ่/.test(b) && getEquip(a).hand === 'axe') return 'chop';
@@ -6145,9 +6216,12 @@ function pupHeldItem(a, kind) {
     const k = { sickle: 'stone_sickle', pick: 'stone_pick', hammer: 'stone_hammer', axe: 'stone_axe' }[type];
     return ITEM_HELD_IMG[k] ? 'art:' + k : 'axe';
   }
+  if (kind === 'spear' || kind === 'rod') { const t = usableToolTier(a, kind); return t && ITEM_HELD_IMG[t.key] ? 'art:' + t.key : (kind === 'spear' ? 'sword' : null); }
   if (kind === 'sword') {
-    const sp = usableToolTier(a, 'spear'), bl = usableToolTier(a, 'blade'), best = [sp, bl].filter(x => x && ITEM_HELD_IMG[x.key]).sort((p, q) => q.tier - p.tier)[0];
-    if (best && (best.tier >= 2 || best === sp)) return 'art:' + best.key;   // spears and metal blades have their own art
+    const sw = usableToolTier(a, 'sword');
+    if (sw && ITEM_HELD_IMG[sw.key]) return 'art:' + sw.key;                 // a real sword first
+    const bl = usableToolTier(a, 'blade');
+    if (bl && bl.tier >= 2 && ITEM_HELD_IMG[bl.key]) return 'art:' + bl.key;
     const t = bl;
     if (t && t.tier >= 3) return ITEM_HELD_IMG[t.key] ? 'art:' + t.key : 'sword';
     const k = t ? 'stone_blade' : 'digging_stick';
@@ -6214,6 +6288,14 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
                                    : pupArmIK(rig, 'shN', 'elN', 'fist', hand, ad);
     build();
     bowInfo = { gripL: grip, adL: ad, handL: hand, dl: p.draw, hold };
+  }
+  // two-handed items (spear): far hand grips further along the shaft
+  if (p.two != null && item && item !== 'bow') {
+    const fb = base.inverse().multiply(M.foN).transformPoint({ x: rig.joints.fist[0], y: rig.joints.fist[1] });
+    const th = p.item * Math.PI / 180, gb = { x: fb.x + Math.cos(th) * p.two, y: fb.y + Math.sin(th) * p.two };
+    const gl = Mb.inverse().multiply(base).transformPoint(gb);
+    [ang.upF, ang.foF] = pupArmIK(rig, 'shF', 'elF', 'fistF', { x: gl.x, y: gl.y });
+    build();
   }
   const img = rig.img;
   const piece = (k, m) => { const pc = rig.pieces[k]; if (!pc) return; ctx.setTransform(m); ctx.drawImage(img, pc.sx, pc.sy, pc.w, pc.h, pc.x, pc.y, pc.w, pc.h); };
@@ -7473,6 +7555,8 @@ function drawCanvas() {
     const hk = s.station === 'temple' ? null : homeArtKey(s), HA = hk && window.HOME_ART && HOME_ART[hk], him = HA && homeImg(hk);
     if (s.station === 'temple') { d = drawTemple(ctx, s, cx, fy); }
     else if (s.station === 'gate' && gateImg('dormant')) { d = drawGate(ctx, s, cx, fy, now); }
+    else if ((s.station === 'fishtrap' || s.station === 'snare') && !(window.TRAP_ART && trapImg(s))) { d = drawTrapCode(ctx, s, cx, fy); }
+    else if (s.station === 'fishtrap' || s.station === 'snare') { const im = trapImg(s), A = TRAP_ART[trapKey(s)], w = HUMAN_H * (s.station === 'fishtrap' ? 0.9 : 0.8), h = w * A.h / A.w; ctx.drawImage(im, cx - w / 2, fy - h * 0.8, w, h); d = { h: h * 0.8 }; }
     else if (him) {
       const hh = HUMAN_H * (hk === 'leaf_hut' ? 1.45 : 2.0), hw = hh * HA.w / HA.h;
       const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
