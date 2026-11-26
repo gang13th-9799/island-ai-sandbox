@@ -963,7 +963,7 @@ function newTool(name, owner, ql) {
   const t = { uid: ++toolSeq, name, type: def.tool, owner: owner ? owner.id : null, ownerName: owner ? owner.name : 'ส่วนรวม', wear: 0, public: owner ? owner.kind >= 0.8 : true, q: ql ?? QDEF };
   const af = affixRoll(t.q, Math.random); if (af) t.aff = af;
   // a tool is a real object: the maker carries it (or it lies at the camp)
-  if (owner && carriedTools(owner).length < toolCap(owner)) { t.holder = owner.id; t.zone = owner.zone; t.x = owner.x; t.y = owner.y; }
+  if (owner && canHold(owner, t)) { t.holder = owner.id; t.zone = owner.zone; t.x = owner.x; t.y = owner.y; }
   else { const c = owner || campOf(); t.holder = null; t.zone = c.zone; const p = buildSpot(c.zone, c.x, c.y); t.x = p.x; t.y = p.y; }
   toolItems.push(t); syncToolStock();
   return t;
@@ -975,8 +975,15 @@ function toolNames(type) { return [...new Set(toolsOfType(type).map(t => t.name)
 // or borrow it from someone standing next to you (they may say no).
 const TOOL_CARRY = 2;          // two hands: right and left
 // the left hand holds either a second tool or a shield. a.offhand: 'shield' | 'tool' | unset (AI: shield only when the left hand is free)
-function offhandArmor(a) { const e = carriedEff(a, 'armor'); if (!e || a.offhand === 'tool') return null; if (a.offhand === 'shield') return e; return carriedTools(a).length < TOOL_CARRY ? e : null; }
-function toolCap(a) { return a.offhand === 'shield' && carriedEff(a, 'armor') ? 1 : TOOL_CARRY; }
+// bows and spears need both hands: holding one leaves no hand for a shield or another tool
+function isTwoHand(t) { const d = productDef(keyByName(t.name)) || {}; return d.tool === 'bow' || d.tool === 'spear' || /^หอก/.test(t.name); }
+function toolHands(t) { return isTwoHand(t) ? 2 : 1; }
+function handsOnTools(a) { return carriedTools(a).reduce((s, t) => s + toolHands(t), 0); }
+function offhandArmor(a) { const e = carriedEff(a, 'armor'); if (!e || a.offhand === 'tool') return null; const h = handsOnTools(a); if (a.offhand === 'shield') return h <= 1 ? e : null; return h < TOOL_CARRY ? e : null; }
+function shieldHand(a) { return a.offhand === 'shield' && carriedEff(a, 'armor') ? 1 : 0; }   // a chosen shield keeps the left hand busy (a two-hand weapon lowers it)
+function canHold(a, t) { return handsOnTools(a) + toolHands(t) + (toolHands(t) === 2 ? 0 : shieldHand(a)) <= TOOL_CARRY; }
+function makeRoom(a, t) { let n = 4; while (!canHold(a, t) && carriedTools(a).length && n--) toolDrop(a); }
+function toolCap(a) { return TOOL_CARRY - shieldHand(a); }
 function carriedTools(a) { return toolItems.filter(t => t.holder === a.id); }
 function toolMaxDur(t) { const def = productDef(keyByName(t.name)) || {}; return Math.round((def.dur || 10) * QMULT[t.q ?? QDEF]); }
 function hasTool(type, user) { return user ? toolItems.some(t => t.type === type && t.holder === user.id) : toolsOfType(type).length > 0; }
@@ -986,7 +993,6 @@ function getTool(type, user, ask = true) {
   if (!user) return list[0] || null;
   const mine = list.find(t => t.holder === user.id);
   if (mine || !ask) return mine || null;
-  const full = carriedTools(user).length >= toolCap(user);
   for (const t of list) {
     const h = t.holder && aiAgents.find(o => o.id === t.holder);
     const lying = !t.holder && t.zone === user.zone && Math.hypot(t.x - user.x, t.y - user.y) <= 2;
@@ -996,14 +1002,14 @@ function getTool(type, user, ask = true) {
     if (nextTo && h.id !== t.owner) continue;                                   // can't hand on what you borrowed
     if (nextTo && !t.public && !askToUse(user, t, t.name)) continue;
     if (lying && !canUse(user, t) && !askToUse(user, t, t.name)) continue;
-    if (full) toolDrop(user);                                                      // hands full: put down the tool used longest ago
+    makeRoom(user, t);                                                           // hands full: put down the tool used longest ago
     t.holder = user.id; user.bubble = nextTo ? `🤲 ยืม${t.name}จาก${h.name}` : `🫳 หยิบ${t.name}`;
     return t;
   }
   return null;
 }
-function toolDrop(a) {
-  const d = carriedTools(a).sort((p, q) => (p.usedAt || 0) - (q.usedAt || 0))[0]; if (!d) return;
+function toolDrop(a, twoFirst) {
+  const d = carriedTools(a).sort((p, q) => (twoFirst ? toolHands(q) - toolHands(p) : 0) || (p.usedAt || 0) - (q.usedAt || 0))[0]; if (!d) return;
   d.holder = null; d.zone = a.zone; d.x = a.x; d.y = a.y;
 }
 // keep each tool's position on its carrier; dead carriers drop it; owners take back what they lent when next to the borrower
@@ -1012,21 +1018,21 @@ function toolTick() {
   toolItems.forEach(t => {
     if (t.holder === undefined) {                      // old saves: owner carries it, communal tools lie at the camp
       const o = t.owner && byId.get(t.owner);
-      if (o && carriedTools(o).length < toolCap(o)) { t.holder = o.id; }
+      if (o && canHold(o, t)) { t.holder = o.id; }
       else { const c = campOf(), p = buildSpot(c.zone, c.x + 2, c.y + 1); t.holder = null; t.zone = c.zone; t.x = p.x; t.y = p.y; }
     }
     if (!t.holder) return;
     const h = byId.get(t.holder);
     if (!h) { t.holder = null; return; }                // stays where its carrier was
-    if (carriedTools(h).length > toolCap(h)) { toolDrop(h); if (!t.holder) return; }   // old saves carried three; a shield takes the left hand
+    if (handsOnTools(h) > TOOL_CARRY || (handsOnTools(h) + shieldHand(h) > TOOL_CARRY && !carriedTools(h).some(isTwoHand))) { toolDrop(h); if (!t.holder) return; }   // more than two hands' worth (old saves, or a raised shield)
     t.zone = h.zone; t.x = h.x; t.y = h.y;
-    if (t.owner && t.owner !== h.id) { const o = byId.get(t.owner); if (o && o.zone === h.zone && Math.hypot(o.x - h.x, o.y - h.y) <= 2 && carriedTools(o).length < toolCap(o)) t.holder = o.id; }
+    if (t.owner && t.owner !== h.id) { const o = byId.get(t.owner); if (o && o.zone === h.zone && Math.hypot(o.x - h.x, o.y - h.y) <= 2 && canHold(o, t)) t.holder = o.id; }
   });
 }
 // go and pick up a usable tool lying nearby when you don't carry one of that kind
 function toolFetch(a) {
-  if (carriedTools(a).length >= toolCap(a)) return false;
-  const want = toolItems.filter(t => !t.holder && t.zone === a.zone && !hasTool(t.type, a) && canUse(a, t) && Math.hypot(t.x - a.x, t.y - a.y) < 30)
+  if (handsOnTools(a) >= toolCap(a)) return false;
+  const want = toolItems.filter(t => !t.holder && t.zone === a.zone && !hasTool(t.type, a) && canUse(a, t) && canHold(a, t) && Math.hypot(t.x - a.x, t.y - a.y) < 30)
     .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
   if (!want) return false;
   if (Math.hypot(want.x - a.x, want.y - a.y) > 2) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(want.x), Math.round(want.y)); a.bubble = `🚶 ไปหยิบ${want.name}`; return true; }
@@ -7784,7 +7790,8 @@ function renderAgentPop() {
     const wear = [slot('ชุด', '👕', of)];
     [['warm', '🧥', 'ผ้าคลุม'], ['legs', '👖', 'กางเกง/กระโปรง'], ['feet', '👞', 'รองเท้า'], ['bag', '👜', 'ย่าม/ตะกร้า'], ['light', '🔦', 'แสงไฟ'], ['charm', '📿', 'เครื่องราง']].forEach(([t, ic, lb]) => { const n = effItem(t); wear.push(slot(lb, n ? itemIcon(n, 28) : ic, n)); });
     { const tl = t => t ? `สึก ${t.wear}/${toolMaxDur(t)}` : ''; const oh = offhandArmor(a); wear.push(slot('มือขวา', tools[0] ? itemIcon(tools[0].name, 28) : '✋', tools[0] && tools[0].name, tl(tools[0])));
-      wear.push(oh ? slot('มือซ้าย · โล่', itemIcon(oh.item, 28), oh.item, '') : slot('มือซ้าย', tools[1] ? itemIcon(tools[1].name, 28) : '✋', tools[1] && tools[1].name, tl(tools[1]))); }
+      const two = tools[0] && isTwoHand(tools[0]);
+      wear.push(oh ? slot('มือซ้าย · โล่', itemIcon(oh.item, 28), oh.item, '') : two ? slot('มือซ้าย', itemIcon(tools[0].name, 28), tools[0].name, 'ใช้สองมือ') : slot('มือซ้าย', tools[1] ? itemIcon(tools[1].name, 28) : '✋', tools[1] && tools[1].name, tl(tools[1]))); }
     { const ac = carriedAcc(a); ['ประดับซ้าย', 'ประดับขวา'].forEach((lb, i) => wear.push(slot(lb, ac[i] ? itemIcon(ac[i].item, 28) : '💍', ac[i] && ac[i].item))); }
     const items = Object.entries(a.bag || {}).filter(([, n]) => n > 0).sort((p, q) => q[1] - p[1]);
     const cap = bagCap(a), used = bagCount(a);
@@ -8076,7 +8083,7 @@ function itemCat(n) {
   return d ? 'made' : 'mat';
 }
 const CAT_TH = { gear: 'อุปกรณ์', trap: 'กับดัก', made: 'ของที่ทำ', mat: 'วัตถุดิบ', food: 'อาหาร' };
-function setOffhand(m) { const a = aiAgents.find(x => x.id === CW.who); if (!a) return; a.offhand = m; if (m === 'shield') while (carriedTools(a).length > toolCap(a)) toolDrop(a); a._effC = null; a.bubble = m === 'shield' ? '🛡️ ยกโล่ขึ้นมือซ้าย' : '🔧 เก็บโล่ ใช้มือซ้ายถือเครื่องมือ'; renderCW(); }
+function setOffhand(m) { const a = aiAgents.find(x => x.id === CW.who); if (!a) return; a.offhand = m; if (m === 'shield') { let n = 4; while (handsOnTools(a) > toolCap(a) && n--) toolDrop(a, true); } a._effC = null; a.bubble = m === 'shield' ? '🛡️ ยกโล่ขึ้นมือซ้าย' : '🔧 เก็บโล่ ใช้มือซ้ายถือเครื่องมือ'; renderCW(); }
 function cwItemCard(n, qty, extra, q, aff) {
   const k = keyByName(n), d = k && productDef(k), sl = slotsOf(n), c = itemCat(n), g = q ?? QDEF, P = propsOf(n) || {};
   const eff = d && d.eff ? Object.assign({}, d.eff, { n: Math.round((d.eff.n || 0) * QMULT[g]) }) : null;
@@ -8121,8 +8128,10 @@ function renderCW() {
     const tools = carriedTools(a), oh = offhandArmor(a), shieldN = oh && oh.item;
     const slot = (id, lb, ic, name, sub, side, dur, g) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" ${name && g != null ? `style="--qc:${qColor(g)}" data-q="1"` : ''} onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
     const HN = ['มือขวา', 'มือซ้าย'];
+    const two = tools[0] && isTwoHand(tools[0]);
     const hand = i => { if (i === 1 && oh) return slot('h1', 'มือซ้าย · โล่', '🛡️', oh.item, `${qName(oh.q)} · ${effText(oh)}`, '', null, oh.q);
-      const t = tools[i]; if (!t) return slot('h' + i, HN[i], '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = toolMaxDur(t); return slot('h' + i, `${HN[i]} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `${qName(t.q)} · ทน ${mx - t.wear}/${mx}${t.aff ? ' · ✨' + affixText(t.aff) : ''}`, '', (mx - t.wear) / mx, t.q); };
+      if (i === 1 && two) return slot('h1', 'มือซ้าย', '✋', tools[0].name, 'ใช้สองมือ ถือของอื่นไม่ได้', '', null, tools[0].q);
+      const t = tools[i]; if (!t) return slot('h' + i, HN[i], '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = toolMaxDur(t); return slot('h' + i, `${HN[i]} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}${isTwoHand(t) ? ' (สองมือ)' : ''}`, '✋', t.name, `${qName(t.q)} · ทน ${mx - t.wear}/${mx}${t.aff ? ' · ✨' + affixText(t.aff) : ''}`, '', (mx - t.wear) / mx, t.q); };
     const gq = n => n ? qBest(a, n) : null, ge = ty => carriedEff(a, ty);
     const acc = carriedAcc(a), accSlot = (i, id, lb) => { const e = acc[i]; return slot(id, lb, '💍', e && e.item, e ? `${qName(e.q)} · ${e.stat.toUpperCase()} +${e.n}` : '', i ? '' : 'r', null, e && e.q); };
     const lg = ge('legs'), ft = ge('feet');
@@ -8133,13 +8142,13 @@ function renderCW() {
     const sumP = [`⚔️ ATK <b>${atkOf(a)}</b>`, `🛡️ DEF <b>${defOf(a)}</b>`, `❤️ HP <b>${maxHp(a)}</b>`, `💨 หลบ <b>${Math.round(dodgeOf(a) * 100)}%</b>`, `🎒 จุ <b>${bagCap(a)}</b> ช่อง`];
     body = `<div class="cw-doll"><div class="cw-eqcol">${L.join('')}</div><canvas id="cw-doll" width="300" height="400"></canvas><div class="cw-eqcol">${R.join('')}</div></div>
       <div class="cw-sum">${sumP.join(' · ')}</div>`;
-    const selName = { h0: tools[0] && tools[0].name, h1: oh ? oh.item : tools[1] && tools[1].name, al: acc[0] && acc[0].item, ar: acc[1] && acc[1].item, lg: lg && lg.item, ft: ft && ft.item, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
-    const selTool = { h0: tools[0], h1: oh ? null : tools[1] }[CW.sel];
+    const selName = { h0: tools[0] && tools[0].name, h1: oh ? oh.item : two ? tools[0].name : tools[1] && tools[1].name, al: acc[0] && acc[0].item, ar: acc[1] && acc[1].item, lg: lg && lg.item, ft: ft && ft.item, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
+    const selTool = { h0: tools[0], h1: oh ? null : two ? tools[0] : tools[1] }[CW.sel];
     const hasSh = !!carriedEff(a, 'armor'), ohPick = CW.sel === 'h1' && a.possessed && hasSh ? `<div class="cw-oh">มือซ้ายถือ: <button class="${oh ? 'on' : ''}" onclick="setOffhand('shield')">🛡️ โล่</button><button class="${oh ? '' : 'on'}" onclick="setOffhand('tool')">🔧 เครื่องมือ</button></div>` : '';
     body += ohPick;
     if (selTool) body += cwItemCard(selTool.name, null, '', selTool.q ?? QDEF, selTool.aff || null);
     else if (selName) body += cwItemCard(selName, null, '', CW.sel === 'h1' && oh ? oh.q : gq(selName));
-    foot = 'มี 2 มือ: มือขวาถือเครื่องมือ มือซ้ายถือเครื่องมืออีกชิ้นหรือโล่ ถือโล่แล้วเหลือเครื่องมือได้ชิ้นเดียว · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
+    foot = 'มี 2 มือ: มือขวาถือเครื่องมือ มือซ้ายถือเครื่องมืออีกชิ้นหรือโล่ · ธนูและหอกใช้สองมือ ถือแล้วถือโล่หรือของอื่นไม่ได้ · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
   } else if (CW.tab === 'bag') {
     const all = [];
     for (const [n, c0] of Object.entries(a.bag || {})) if (c0 > 0) qOf(a, n).forEach((c, g) => { if (c > 0) all.push([n, c, g]); });
