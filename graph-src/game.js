@@ -562,11 +562,11 @@ const PRODUCTS = {
   storage_yard:  { name: 'ลานเก็บวัตถุดิบ', kind: 'station', station: 'yard' },
   warehouse:     { name: 'โกดังเก็บของ', kind: 'station', station: 'warehouse' },
   village_store: { name: 'โกดังกลางหมู่บ้าน', kind: 'station', station: 'storehouse' },
-  // bridges: span water 2 / 4 / 6 / 8 tiles
-  rope_bridge:   { name: 'สะพานเชือก', kind: 'bridge', span: 2, hp: 30, props: { fiber: 1, bridge: 1 } },
-  plank_bridge:  { name: 'สะพานแขวนไม้', kind: 'bridge', span: 4, hp: 60, props: { wood: 1, bridge: 1 } },
-  wood_bridge:   { name: 'สะพานไม้ใหญ่', kind: 'bridge', span: 6, hp: 120, props: { wood: 1, bridge: 1 } },
-  stone_bridge:  { name: 'สะพานหิน', kind: 'bridge', span: 8, hp: 300, props: { hard: 1, bridge: 1 } },
+  // bridges: span water 4 / 8 / 12 / 16 tiles; 2–6 tiles wide (each extra lane costs more material: `lane`, per 4 tiles of length)
+  rope_bridge:   { name: 'สะพานเชือก', kind: 'bridge', span: 4, hp: 30, lane: ['เชือกเกลียว'], props: { fiber: 1, bridge: 1 } },
+  plank_bridge:  { name: 'สะพานแขวนไม้', kind: 'bridge', span: 8, hp: 60, lane: ['ไม้ไผ่ผ่าซีก', 'เชือกเกลียว'], props: { wood: 1, bridge: 1 } },
+  wood_bridge:   { name: 'สะพานไม้ใหญ่', kind: 'bridge', span: 12, hp: 120, lane: ['เสาไม้รั้ว', 'เชือกเกลียว'], props: { wood: 1, bridge: 1 } },
+  stone_bridge:  { name: 'สะพานหิน', kind: 'bridge', span: 16, hp: 300, lane: ['อิฐเผา', 'หินกรวด'], props: { hard: 1, bridge: 1 } },
   raw_tile:      { name: 'กระเบื้องดิบ', kind: 'item', props: { raw: 1, tile: 1 } },
   roof_tile:     { name: 'กระเบื้องดินเผา', kind: 'item', props: { hard: 1, tile: 1 } },
   // homes: places to sleep, from a lean-to up to a tiled brick house (better = warmer and sturdier)
@@ -1260,7 +1260,7 @@ function produce(key, agent) {
     return buildStation(def.station, agent, agent.buildFor ? byId(agent.buildFor) : null) ? `🏗️ สร้าง "${def.name}" ที่โซน ${agent.zone}` : `มี "${def.name}" ของตัวเองอยู่แล้ว/เกาะเต็มแล้ว (วัสดุถูกใช้ไปเปล่าๆ)`;
   }
   if (def.kind === 'home') return buildHome(key, agent);
-  if (def.kind === 'bridge') { const b = placeBridge(agent, key); if (b) return `🌉 สร้าง "${def.name}" ข้ามน้ำ ${b.tiles.length} ช่อง ที่โซน ${agent.zone}`; put(agent, def.name, 1); return `🌉 ได้ชุด "${def.name}" (ยังไม่มีจุดข้ามน้ำที่เหมาะ เก็บไว้ก่อน)`; }
+  if (def.kind === 'bridge') { const b = placeBridge(agent, key); if (b) return `🌉 สร้าง "${def.name}" กว้าง ${b.width} ช่อง ที่โซน ${agent.zone}`; put(agent, def.name, 1); return `🌉 ได้ชุด "${def.name}" (ยังไม่มีจุดข้ามน้ำที่เหมาะ เก็บไว้ก่อน)`; }
   if (def.kind === 'food') { addFood(agent, def.food); return `🍲 ได้ "${def.name}" อาหาร +${def.food}`; }
   if (def.kind === 'tool') { newTool(def.name, agent); return `🔧 ได้ "${def.name}" เป็นของตัวเอง`; }
   put(agent, def.name, 1);
@@ -2345,7 +2345,7 @@ function restoreRealm(st) {
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
     villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq, bridges } = st);
-  bridges = bridges || []; for (const k in BRIDGE_SET) delete BRIDGE_SET[k];
+  bridges = bridges || []; for (const k in BRIDGE_SET) delete BRIDGE_SET[k]; for (const k in REACH) delete REACH[k];
   if (st.START_ZONE) START_ZONE = st.START_ZONE; else START_ZONE = 'E1'; { const z = ZONES[START_ZONE]; if (z && z.res) HOME_BASICS.forEach(n => { if (!z.res.includes(n)) z.res.push(n); }); }
   if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
@@ -3123,36 +3123,96 @@ function isBlocked(zone, x, y) { return blockedSet(zone).has(x * 100 + y); }
 // ===== Bridges: deep water can only be crossed on a bridge =====
 const BRIDGE_SET = {};
 function bridgeSet(zId) { return BRIDGE_SET[zId] || (BRIDGE_SET[zId] = new Set(bridges.filter(b => b.zone === zId && b.hp > 0).flatMap(b => b.tiles.map(([x, y]) => y * 80 + x)))); }
+// which dry area (connected without crossing deep water) a tile belongs to; bridges join areas
+const REACH = {};
+function reachOf(zId) {
+  if (REACH[zId]) return REACH[zId];
+  buildZoneTerrain(zId); const g = zoneTerrainGrid[zId], lab = new Int32Array(6400).fill(-1); let id = 0;
+  for (let i = 0; i < 6400; i++) {
+    if (lab[i] >= 0) continue; const x0 = i % 80, y0 = (i / 80) | 0; if (deepAt(zId, x0, y0)) continue;
+    const Q = [i]; lab[i] = id;
+    for (let h = 0; h < Q.length; h++) { const c = Q[h], x = c % 80, y = (c / 80) | 0;
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + ox, ny = y + oy; if (nx < 0 || ny < 0 || nx > 79 || ny > 79) continue; const k = ny * 80 + nx; if (lab[k] >= 0 || deepAt(zId, nx, ny)) continue; lab[k] = id; Q.push(k); } }
+    id++;
+  }
+  return (REACH[zId] = lab);
+}
+// can this person walk to (x,y) (or right next to it) in their zone?
+// starving, parched or fleeing to the temple: they'll swim across deep water if there's no other way
+function urgentSwim(a) { return !!(a && a.age >= 12 && (a.refuge || a.hunger >= 75 || (a.thirst || 0) >= 75)); }
+function canReach(a, x, y) {
+  if (urgentSwim(a)) return true;
+  const L = reachOf(a.zone), me = L[Math.round(a.y) * 80 + Math.round(a.x)]; if (me < 0) return true;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const tx = Math.round(x) + dx, ty = Math.round(y) + dy; if (tx >= 0 && ty >= 0 && tx < 80 && ty < 80 && L[ty * 80 + tx] === me) return true; }
+  return false;
+}
 function bridgeAt(zId, x, y) { return bridgeSet(zId).has(Math.round(y) * 80 + Math.round(x)); }
 function deepAt(zId, x, y) { const g = zoneTerrainGrid[zId]; x = Math.round(x); y = Math.round(y); return !!(g && g[y] && DEEP.includes(g[y][x]) && !bridgeAt(zId, x, y)); }
-// straight runs of water (along x or y) that start and end on dry land, at most `span` tiles long and with deep water in them
-function bridgeSites(zId, span) {
-  buildZoneTerrain(zId); const g = zoneTerrainGrid[zId], out = [];
-  for (let y = 2; y < 78; y++) for (let x = 2; x < 78; x++) {
-    if (WATER.includes(g[y][x])) continue;
-    for (const [dx, dy, axis] of [[1, 0, 'x'], [0, 1, 'y']]) {
-      const tiles = []; let deep = false, ok = false;
-      for (let k = 1; k <= span + 1; k++) {
-        const tx = x + dx * k, ty = y + dy * k; if (tx > 78 || ty > 78) break;
-        const t = g[ty][tx];
-        if (!WATER.includes(t)) { ok = tiles.length > 0; break; }
-        if (bridgeAt(zId, tx, ty)) break;
-        tiles.push([tx, ty]); if (DEEP.includes(t)) deep = true;
-      }
-      if (ok && deep && tiles.length <= span) out.push({ x, y, axis, tiles });
+// one lane: a straight run of water (along x or y) from dry land to dry land, at most `span` tiles; `ignore` = bridges we may replace
+function bridgeLane(zId, x, y, dx, dy, span, ignore) {
+  const g = zoneTerrainGrid[zId]; if (!g || x < 1 || y < 1 || x > 78 || y > 78 || WATER.includes(g[y][x])) return null;
+  const tiles = []; let deep = false;
+  for (let k = 1; k <= span + 1; k++) {
+    const tx = x + dx * k, ty = y + dy * k; if (tx > 78 || ty > 78) return null;
+    const t = g[ty][tx];
+    if (!WATER.includes(t)) return tiles.length ? { tiles, deep } : null;
+    const on = bridges.find(b => b.zone === zId && b.hp > 0 && b.tiles.some(([bx, by]) => bx === tx && by === ty));
+    if (on && !(ignore && ignore.has(on.id))) return null;        // never build on top of another bridge
+    tiles.push([tx, ty]); if (DEEP.includes(t)) deep = true;
+  }
+  return null;
+}
+// crossings `width` lanes wide (side by side); every lane must reach dry land within the span and at least one has deep water
+function bridgeSites(zId, span, width = 2, ignore = null) {
+  buildZoneTerrain(zId); const out = [];
+  const others = bridges.filter(b => b.zone === zId && b.hp > 0 && !(ignore && ignore.has(b.id))).flatMap(b => b.tiles);
+  for (let y = 2; y < 78; y++) for (let x = 2; x < 78; x++) for (const [dx, dy, axis] of [[1, 0, 'x'], [0, 1, 'y']]) {
+    const lanes = []; let deep = false;
+    for (let w = 0; w < width; w++) {
+      const lx = x + (axis === 'x' ? 0 : w), ly = y + (axis === 'x' ? w : 0);
+      const L = bridgeLane(zId, lx, ly, dx, dy, span, ignore); if (!L) break;
+      lanes.push(L.tiles); deep = deep || L.deep;
     }
+    if (lanes.length !== width || !deep) continue;
+    const tiles = lanes.flat();
+    if (others.some(([bx, by]) => tiles.some(([tx, ty]) => Math.abs(tx - bx) <= 2 && Math.abs(ty - by) <= 2))) continue;   // keep clear of other bridges (no stacking side by side)
+    out.push({ x, y, axis, lanes, tiles });
   }
   return out;
 }
+// material for one extra lane: the kind's lane list, once per 4 tiles of length
+function laneCost(key, len) { const d = PRODUCTS[key], n = Math.max(1, Math.ceil(len / 4)); return d.lane.map(m => [m, n]); }
 function placeBridge(a, key) {
-  const d = PRODUCTS[key], sites = bridgeSites(a.zone, d.span);
-  if (!sites.length) return null;
-  const tz = a.bridgeFor && a.bridgeFor.zone === a.zone ? a.bridgeFor : a;   // prefer the crossing they were stuck at
-  const site = sites.sort((p, q) => Math.hypot(p.x - tz.x, p.y - tz.y) - Math.hypot(q.x - tz.x, q.y - tz.y))[0];
-  const b = { id: 'br' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), kind: key, name: d.name, zone: a.zone, tiles: site.tiles, axis: site.axis, hp: d.hp, maxHp: d.hp, builder: a.name };
-  bridges.push(b); delete BRIDGE_SET[a.zone]; a.bridgeFor = null;
-  addLog(`🌉 [สะพาน] ${a.name} สร้าง "${d.name}" ข้ามน้ำ ${site.tiles.length} ช่องที่ ${a.zone} — ทุกคนเดินข้ามได้แล้ว`, '#7dd3fc');
+  const d = PRODUCTS[key], tz = a.bridgeFor && a.bridgeFor.zone === a.zone ? a.bridgeFor : a;   // prefer the crossing they were stuck at
+  const near = list => list.sort((p, q) => Math.hypot(p.x - tz.x, p.y - tz.y) - Math.hypot(q.x - tz.x, q.y - tz.y))[0];
+  // rebuilding where a weaker bridge stands: take the old one down first
+  let site = near(bridgeSites(a.zone, d.span, 2)), removed = [];
+  if (!site) {
+    const weaker = new Set(bridges.filter(b => b.zone === a.zone && b.hp > 0 && (PRODUCTS[b.kind].span < d.span)).map(b => b.id));
+    if (weaker.size) { site = near(bridgeSites(a.zone, d.span, 2, weaker)); if (site) removed = bridges.filter(b => weaker.has(b.id) && b.tiles.some(([x, y]) => site.tiles.some(([sx, sy]) => sx === x && sy === y))); }
+  }
+  if (!site) return null;
+  removed.forEach(b => destroyBridge(b, a, 'รื้อเพื่อสร้างใหม่'));
+  // widen while there is material for another lane (wider = more material), up to 6 lanes
+  let width = 2;
+  for (let w = 3; w <= 6; w++) {
+    const wide = bridgeSites(a.zone, d.span, w).find(s2 => s2.x === site.x && s2.y === site.y && s2.axis === site.axis); if (!wide) break;
+    const len = Math.max(...wide.lanes.map(l => l.length)), cost = laneCost(key, len);
+    if (!cost.every(([m, n]) => avail(a, m) >= n)) break;
+    cost.forEach(([m, n]) => { for (let i = 0; i < n; i++) take(a, m); });
+    site = wide; width = w;
+  }
+  const b = { id: 'br' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), kind: key, name: d.name, zone: a.zone, axis: site.axis, lanes: site.lanes, tiles: site.tiles, width, hp: d.hp * width / 2, maxHp: d.hp * width / 2, builder: a.name };
+  bridges.push(b); delete BRIDGE_SET[a.zone]; delete REACH[a.zone]; a.bridgeFor = null;
+  addLog(`🌉 [สะพาน] ${a.name} สร้าง "${d.name}" กว้าง ${width} ช่อง ข้ามน้ำ ${Math.max(...site.lanes.map(l => l.length))} ช่องที่ ${a.zone} — ทุกคนเดินข้ามได้แล้ว`, '#7dd3fc');
   return b;
+}
+// bridges can be destroyed (dismantled or broken); dismantling gives back part of the material
+function destroyBridge(b, a, why) {
+  b.hp = 0; bridges = bridges.filter(x => x !== b); delete BRIDGE_SET[b.zone]; delete REACH[b.zone];
+  if (a) { const back = PRODUCTS[b.kind].lane; back.forEach(m => put(a, m, 1)); }
+  aiAgents.filter(o => o.zone === b.zone).forEach(o => { o._mp = null; });
+  addLog(`🪓 [สะพาน] "${b.name}" ที่ ${b.zone} ถูกรื้อ${why ? ` (${why})` : ''}${a ? ` โดย ${a.name}` : ''}`, '#fca5a5');
 }
 // carrying a bridge kit: set it up at a crossing in this zone
 function bridgeKitStep(a) {
@@ -3183,7 +3243,8 @@ function moveToward(a, gx, gy) {
     if (!deepAt(a.zone, nx, ny) && clear(nx, ny) && (inside || !isBlocked(a.zone, nx, ny))) { a.x = nx; a.y = ny; a._stuck = 0; return; }
   }
   // blocked (deep water, buildings): find a real walking path, if there is one
-  if (!deepAt(a.zone, a.x, a.y)) {
+  const swim = urgentSwim(a);
+  if (!deepAt(a.zone, a.x, a.y) || swim) {
     const tx = cw(gx), ty = cw(gy), sx = cw(a.x), sy = cw(a.y);
     const prev = new Int32Array(6400).fill(-1), Q = [sy * 80 + sx]; prev[Q[0]] = Q[0]; let end = -1, best = Q[0], bd = 1e9;
     for (let h = 0; h < Q.length && h < 4000; h++) {
@@ -3191,10 +3252,14 @@ function moveToward(a, gx, gy) {
       if (dd < bd) { bd = dd; best = c; } if (dd <= 1.5) { end = c; break; }
       for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
         const nx = x + ox, ny = y + oy; if (nx < 1 || ny < 1 || nx > 78 || ny > 78) continue;
-        const k = ny * 80 + nx; if (prev[k] >= 0 || deepAt(a.zone, nx, ny) || isBlocked(a.zone, nx, ny)) continue; prev[k] = c; Q.push(k);
+        const k = ny * 80 + nx; if (prev[k] >= 0 || (!swim && deepAt(a.zone, nx, ny)) || isBlocked(a.zone, nx, ny)) continue; prev[k] = c; Q.push(k);
       }
     }
-    if (end < 0 && bd > 3 && !a.bridgeFor) a.bridgeFor = { zone: a.zone, x: best % 80, y: (best / 80) | 0, gx: tx, gy: ty, t: nowH() };   // can't get across: we need a bridge here
+    if (swim && end >= 0) { a.stamina = Math.max(0, (a.stamina ?? 100) - 6); a.bubble = '🏊 ว่ายน้ำข้ามน้ำลึกเอาชีวิตรอด'; }
+    if (end < 0 && bd > 3) {                           // can't get across: remember we need a bridge here, and stop trying for now
+      if (!a.bridgeFor) a.bridgeFor = { zone: a.zone, x: best % 80, y: (best / 80) | 0, gx: tx, gy: ty, t: nowH() };
+      if (++a._unreach >= 3 || isNaN(a._unreach)) { a._unreach = 0; if (a.goal && a.goal.zone === a.zone && !a.goal.gate && !a.goal.refuge) a.goal = null; a.gatherT = null; a.bubble = '🌊 น้ำลึกขวาง ข้ามไม่ได้ ต้องมีสะพาน'; }
+    } else a._unreach = 0;
     const tgt = end >= 0 ? end : best;
     if (tgt !== Q[0]) {
       const path = []; for (let c = tgt; c !== prev[c]; c = prev[c]) path.push({ x: c % 80, y: (c / 80) | 0 });
@@ -4089,7 +4154,7 @@ function agentMove(a, night) {
     const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
     if ((a.thirst || 0) >= 45 && (a.thirst || 0) >= a.hunger - 15 && drinkStep(a, night)) return;
     if ((a.food || 0) < 6 && a.age >= 12) {
-      const fnode = nodes.filter(n => FOODRX.test(n.name)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+      const fnode = nodes.filter(n => FOODRX.test(n.name) && canReach(a, n.x, n.y)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
       if (fnode && (!a.gatherT || !FOODRX.test(a.gatherT.name))) a.gatherT = Object.assign({ zone: a.zone }, fnode);
       // hungry: go straight to the food and stand at it (picking happens within 2 tiles)
       if (a.gatherT && FOODRX.test(a.gatherT.name) && a.gatherT.zone === a.zone) {
@@ -5493,10 +5558,10 @@ const BRIDGE_LOOK = {
   wood_bridge:  { deck: '#8a5a32', edge: '#4f3019', post: '#5e3b1f', rail: '#7a4f2b', railH: 6, posts: 'beam' },
   stone_bridge: { deck: '#b8b2a6', edge: '#6f695f', post: '#8f897d', rail: '#a49d90', railH: 5, posts: 'wall' }
 };
-function drawBridgeTile(ctx, b, x, y, i) {
+function drawBridgeTile(ctx, b, x, y, i, n, firstLane, lastLane) {
   const L = BRIDGE_LOOK[b.kind] || BRIDGE_LOOK.plank_bridge, lift = 3;
   const P = (u, v) => { const [sx, sy] = isoXY(b.axis === 'x' ? x + u : x + v, b.axis === 'x' ? y + v : y + u); return [sx, sy - lift]; };
-  const w0 = 0.18, w1 = 0.82, sag = b.kind === 'rope_bridge' || b.kind === 'plank_bridge' ? Math.sin((i + 0.5) / b.tiles.length * Math.PI) * 2.5 : 0;
+  const w0 = firstLane ? 0.12 : 0, w1 = lastLane ? 0.88 : 1, sag = b.kind === 'rope_bridge' || b.kind === 'plank_bridge' ? Math.sin((i + 0.5) / n * Math.PI) * 2.5 : 0;
   const q = [P(0, w0), P(1, w0), P(1, w1), P(0, w1)].map(([sx, sy]) => [sx, sy + sag]);
   // side face (thickness) then deck
   ctx.fillStyle = L.edge; ctx.beginPath(); ctx.moveTo(q[3][0], q[3][1]); ctx.lineTo(q[2][0], q[2][1]); ctx.lineTo(q[2][0], q[2][1] + 3); ctx.lineTo(q[3][0], q[3][1] + 3); ctx.closePath(); ctx.fill();
@@ -5505,12 +5570,13 @@ function drawBridgeTile(ctx, b, x, y, i) {
   if (b.kind !== 'stone_bridge') for (let k = 1; k < 4; k++) { const a1 = P(k / 4, w0), a2 = P(k / 4, w1); ctx.beginPath(); ctx.moveTo(a1[0], a1[1] + sag); ctx.lineTo(a2[0], a2[1] + sag); ctx.stroke(); }   // planks
   else { ctx.beginPath(); const m1 = P(0.5, w0), m2 = P(0.5, w1); ctx.moveTo(m1[0], m1[1]); ctx.lineTo(m2[0], m2[1]); ctx.stroke(); }
   // rails on both sides
-  for (const v of [w0, w1]) {
+  for (const v of [firstLane ? w0 : null, lastLane ? w1 : null]) {
+    if (v === null) continue;
     const r0 = P(0, v), r1 = P(1, v);
     if (L.posts === 'wall') { ctx.fillStyle = L.rail; ctx.beginPath(); ctx.moveTo(r0[0], r0[1]); ctx.lineTo(r1[0], r1[1]); ctx.lineTo(r1[0], r1[1] - L.railH); ctx.lineTo(r0[0], r0[1] - L.railH); ctx.closePath(); ctx.fill(); ctx.strokeStyle = L.edge; ctx.stroke(); continue; }
     ctx.strokeStyle = L.post; ctx.lineWidth = L.posts === 'beam' ? 1.8 : 1.2;
     ctx.beginPath(); ctx.moveTo(r0[0], r0[1] + sag); ctx.lineTo(r0[0], r0[1] + sag - L.railH); ctx.stroke();
-    if (i === b.tiles.length - 1) { ctx.beginPath(); ctx.moveTo(r1[0], r1[1] + sag); ctx.lineTo(r1[0], r1[1] + sag - L.railH); ctx.stroke(); }
+    if (i === n - 1) { ctx.beginPath(); ctx.moveTo(r1[0], r1[1] + sag); ctx.lineTo(r1[0], r1[1] + sag - L.railH); ctx.stroke(); }
     ctx.strokeStyle = L.rail; ctx.lineWidth = L.posts === 'beam' ? 1.6 : 0.9;
     ctx.beginPath(); ctx.moveTo(r0[0], r0[1] + sag - L.railH); ctx.lineTo(r1[0], r1[1] + sag - L.railH); ctx.stroke();
   }
@@ -6037,12 +6103,12 @@ function buildHut(a) {
 // walk to something that gives `item`: a resource spot here, an object we can harvest, or the nearest zone that has it
 function seekItem(a, re, label) {
   const nodes = zoneNodes[a.zone] || [];
-  const node = nodes.find(n => re.test(n.name));
+  const node = nodes.find(n => re.test(n.name) && canReach(a, n.x, n.y));
   if (node) { a.gatherT = Object.assign({ zone: a.zone }, node); moveToward(a, node.x, node.y); a.bubble = label; return true; }
   const myTools = toolItems.filter(t => t.holder === a.id);
   let best = null, bd = 40;
   for (const o of objsOf(a.zone)) {
-    if (o.dead) continue; const d = WOBJ[o.k];
+    if (o.dead || !canReach(a, o.x, o.y)) continue; const d = WOBJ[o.k];
     const gives = Object.keys(d.yields).some(n => re.test(n)) || (d.fruit && o.fruit && re.test(d.fruit));
     if (!gives) continue;
     if (!(d.fruit && o.fruit && re.test(d.fruit)) && !myTools.some(t => d.tool.includes(t.type) && toolStat(t).tier >= d.tier)) continue;
@@ -6658,7 +6724,7 @@ function drawCanvas() {
     });
     bridges.forEach(b => {
       if (b.zone !== currentZoneId || b.hp <= 0) return;
-      b.tiles.forEach(([x, y], i) => items.push({ y: x + y - 0.4, draw: () => drawBridgeTile(ctx, b, x, y, i) }));
+      (b.lanes || [b.tiles]).forEach((lane, li, all) => lane.forEach(([x, y], i) => items.push({ y: x + y - 0.4, draw: () => drawBridgeTile(ctx, b, x, y, i, lane.length, li === 0, li === all.length - 1) })));
     });
     steles.forEach(sl => {
       if (sl.zone !== currentZoneId || sl.holder || sl.dead) return;
@@ -7279,10 +7345,14 @@ function drinkSpotsOf(zId) {                                         // dry tile
   return (DRINK_SPOT[zId] = out);
 }
 function drinkValue(n) { const P = propsOf(n); return P.drink || (n === 'ลูกมะพร้าว' ? 30 : P.water && !/ทะเล|เค็ม/.test(n) ? 35 : P.food && /แอปเปิล|มะละกอ|เบอร์รี่|ผล|กล้วย/.test(n) ? 10 : 0); }
-function drink(a, amount, why) { a.thirst = Math.max(0, (a.thirst || 0) - amount); if (why) a.bubble = why; }
+function drink(a, amount, why) {
+  a.thirst = Math.max(0, (a.thirst || 0) - amount); if (why) a.bubble = why;
+  aiAgents.forEach(k => { if (k.guardian === a.id && k.age < 12 && k.zone === a.zone) k.thirst = Math.max(0, (k.thirst || 0) - amount); });   // the kids drink too
+}
 function bodyThirst(a, hrs) {
   if (a.thirst === undefined) a.thirst = 0;
-  let rate = 3.5 * ((a.felt ?? 25) > 30 ? 1.5 : 1) * (a.sleeping ? 0.4 : 1) * (a.age < 12 ? 0.7 : 1) * (a.session ? 1.2 : 1);
+  if (a.sleeping && a.thirst >= 80 && a.age >= 12) { a.sleeping = false; a.sleepAt = null; a.bubble = '🥵 คอแห้งจนต้องตื่นมาหาน้ำ'; }
+  let rate = (a.age < 4 ? 0.3 : 1) * 3.5 * ((a.felt ?? 25) > 30 ? 1.5 : 1) * (a.sleeping ? 0.4 : 1) * (a.age < 12 ? 0.7 : 1) * (a.session ? 1.2 : 1);
   a.thirst = Math.min(100, a.thirst + rate * hrs);
   // rain: a few mouthfuls standing outside, and a vessel fills up
   const wz = zoneWeather(a.zone);
@@ -7307,8 +7377,8 @@ function bodyThirst(a, hrs) {
 // thirsty: walk to a spring or a riverbank and drink (within 2 tiles); raw river/swamp water can upset the stomach
 function drinkStep(a, night) {
   if (a.age < 12 || (a.thirst || 0) < 50) return false;
-  const node = (zoneNodes[a.zone] || []).filter(n => WATER_NODE.test(n.name)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
-  const bank = drinkSpotsOf(a.zone).slice().sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+  const node = (zoneNodes[a.zone] || []).filter(n => WATER_NODE.test(n.name) && canReach(a, n.x, n.y)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+  const bank = drinkSpotsOf(a.zone).filter(b => canReach(a, b.x, b.y)).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
   const tgt = [node && { x: node.x, y: node.y, n: node }, bank && { x: bank.x, y: bank.y, b: bank }].filter(Boolean).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
   if (!tgt) {
     if (night && a.thirst < 80) return false;
