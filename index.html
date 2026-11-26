@@ -432,6 +432,12 @@
   .cw-search { width: 100%; padding: 6px 9px; border-radius: 9px; border: 1.5px solid #e2cb9c; background: #fff; margin-bottom: 8px; font-size: 13px; }
   .cw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 6px; }
   .cw-slot { position: relative; aspect-ratio: 1; border-radius: 10px; background: #fff; border: 1.5px solid #e2cb9c; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 22px; }
+  .cw-slot[style*="--qc"] { border-color: var(--qc); box-shadow: inset 0 0 0 1.5px var(--qc); }
+  .cw-slot.q0, .cw-slot.q1 { border-color: #cbb68a; box-shadow: none; }
+  .cw-eq[data-q] { border-color: var(--qc); box-shadow: inset 0 0 0 1.5px var(--qc); }
+  .cw-card[style*="--qc"] .ic { border-color: var(--qc); }
+  .qtag { display: inline-block; font-size: 10.5px; font-weight: 900; border-radius: 6px; padding: 0 6px; margin: 2px 4px 2px 0; background: var(--qc); color: #2a1a0c; border: 1px solid rgba(0,0,0,.25); }
+  .cw-card .tg.q { background: #ede9fe; color: #5b21b6; }
   .cw-slot.sel { border-color: #e0a43a; box-shadow: 0 0 0 2px #f6d58a; background: #fff6df; }
   .cw-slot.free { background: #f6ead0; border-style: dashed; cursor: default; }
   .cw-slot .n { position: absolute; right: 3px; bottom: 1px; font-size: 11px; font-weight: 900; color: #3d2a14; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
@@ -1235,7 +1241,7 @@ function derivedStats(a) {
 }
 function maxHp(a) { return 80 + st(a, 'vit') * 2 + st(a, 'str'); }          // VIT +1 = HP +2, STR +1 = HP +1
 // attack: STR +1 = ATK +2, plus the best weapon carried; defence: VIT +1 = DEF +1, plus armour
-function atkOf(a) { const t = ['sword', 'bow', 'spear', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? toolStat(t).pow * 4 : 0); }
+function atkOf(a) { const t = ['sword', 'bow', 'spear', 'blade', 'axe'].map(k => hasTool(k, a) && getTool(k, a, false)).find(Boolean); return st(a, 'str') * 2 + (t ? Math.round(toolStat(t).pow * 4 * QMULT[t.q ?? QDEF]) : 0); }
 function defOf(a) { const ar = carriedEff(a, 'armor'); return st(a, 'vit') + (ar ? Math.round(ar.n / 4) : 0); }
 function dodgeOf(a) { return Math.min(0.4, st(a, 'agi') * 0.01); }      // AGI +1 = dodge +1% (max 40%)
 function hurt(a, dmg, floor = 0, by) { if (by) a._lastHurt = { by, t: nowH() }; if (!a.sleeping && Math.random() < dodgeOf(a)) { a.bubble = '💨 หลบทัน!'; return 0; } const n = Math.max(1, Math.round(dmg * 40 / (40 + defOf(a)))); a.hp = Math.max(floor, a.hp - n); return n; }   // damage from outside is softened by DEF
@@ -1716,9 +1722,10 @@ function syncToolStock() {
   Object.keys(sharedInventory).forEach(n => { if (productDef(keyByName(n))?.kind === 'tool') sharedInventory[n] = cnt[n] || 0; });
   Object.entries(cnt).forEach(([n, c]) => { sharedInventory[n] = c; });
 }
-function newTool(name, owner) {
+function newTool(name, owner, ql) {
   const def = productDef(keyByName(name));
-  const t = { uid: ++toolSeq, name, type: def.tool, owner: owner ? owner.id : null, ownerName: owner ? owner.name : 'ส่วนรวม', wear: 0, public: owner ? owner.kind >= 0.8 : true };
+  const t = { uid: ++toolSeq, name, type: def.tool, owner: owner ? owner.id : null, ownerName: owner ? owner.name : 'ส่วนรวม', wear: 0, public: owner ? owner.kind >= 0.8 : true, q: ql ?? QDEF };
+  const af = affixRoll(t.q, Math.random); if (af) t.aff = af;
   // a tool is a real object: the maker carries it (or it lies at the camp)
   if (owner && carriedTools(owner).length < TOOL_CARRY) { t.holder = owner.id; t.zone = owner.zone; t.x = owner.x; t.y = owner.y; }
   else { const c = owner || campOf(); t.holder = null; t.zone = c.zone; const p = buildSpot(c.zone, c.x, c.y); t.x = p.x; t.y = p.y; }
@@ -1732,10 +1739,11 @@ function toolNames(type) { return [...new Set(toolsOfType(type).map(t => t.name)
 // or borrow it from someone standing next to you (they may say no).
 const TOOL_CARRY = 3;
 function carriedTools(a) { return toolItems.filter(t => t.holder === a.id); }
+function toolMaxDur(t) { const def = productDef(keyByName(t.name)) || {}; return Math.round((def.dur || 10) * QMULT[t.q ?? QDEF]); }
 function hasTool(type, user) { return user ? toolItems.some(t => t.type === type && t.holder === user.id) : toolsOfType(type).length > 0; }
 function campOf() { const b = templeOf() || shelters.find(x => x.station === 'campfire') || { zone: START_ZONE, x: 40, y: 40 }; return { zone: b.zone, x: b.x, y: b.y }; }
 function getTool(type, user, ask = true) {
-  const list = toolsOfType(type).sort((p, q) => (productDef(keyByName(q.name)).dur - q.wear) - (productDef(keyByName(p.name)).dur - p.wear));
+  const list = toolsOfType(type).sort((p, q) => (toolMaxDur(q) - q.wear) - (toolMaxDur(p) - p.wear));
   if (!user) return list[0] || null;
   const mine = list.find(t => t.holder === user.id);
   if (mine || !ask || carriedTools(user).length >= TOOL_CARRY) return mine || null;
@@ -1784,7 +1792,7 @@ function useTool(type, user, tool) {
   if (user && Math.random() < Math.min(0.5, st(user, 'dex') * 0.015)) return;   // DEX +1 = tools last 1.5% longer
   t.wear++;
   const def = productDef(keyByName(t.name));
-  if (t.wear >= (def.dur || 10)) {
+  if (t.wear >= toolMaxDur(t)) {
     toolItems = toolItems.filter(x => x !== t); syncToolStock();
     addLog(`🔨 [เครื่องมือพัง] "${t.name}" ของ ${t.ownerName} สึกจนใช้ต่อไม่ได้`, '#fb923c');
   }
@@ -1844,7 +1852,7 @@ function itemValue(n, v) {
 }
 function atStore(agent) { const v = villageOf(agent); if (!v || agent.zone !== v.zone) return false; const st = villageStore(v); return !!st && structDist(agent, st) <= 2; }
 function bagValue(agent, except) {
-  return Object.entries(agent.bag || {}).filter(([n]) => n !== except && n !== BAG_NAME && !isGear(n)).reduce((t, [n, q]) => t + itemValue(n) * q, 0);
+  return Object.entries(agent.bag || {}).filter(([n]) => n !== except && n !== BAG_NAME && !isGear(n)).reduce((t, [n]) => t + itemValue(n) * qOf(agent, n).reduce((s, c, g) => s + c * QMULT[g], 0), 0);   // better grades trade for more
 }
 function canTradeFor(agent, n) { const v = villageOf(agent); return atStore(agent) && (v.store[n] || 0) > 0 && bagValue(agent, n) >= itemValue(n, v); }
 // Pay `cost` with bag items (most plentiful first) into the storehouse
@@ -1953,6 +1961,7 @@ function trapStep(a, night) {
   collectTrap(a, t); return true;
 }
 function collectTrap(a, t) {
+  QCTX = rollGatherQ(a, 'dex');
   if (t.station === 'fishtrap') { gainItems(a, t.catchName || 'ปลา', t.catch); a.bubble = `🪤 ได้${t.catchName} ${t.catch} ตัวจากลอบ`; }
   else {                                                 // no animal keeping yet: kill it for meat and materials
     const f = faunaSpecies.find(x => x.id === t.catchId) || faunaSpecies.find(x => x.name === t.catchName), n = t.catch, got = [];
@@ -1980,7 +1989,7 @@ function collectTrap(a, t) {
       addLog(`🪤 [กรงพัง] ${PRODUCTS[fix].name}ของ ${a.name} ใช้ครบ ${t.maxUses} ครั้งแล้ว ต้องเอาไปซ่อมที่โต๊ะช่าง (ใช้${matName})`, '#fb923c');
     }
   }
-  t.catch = 0; gainExp(a, 'int', 0.3);
+  t.catch = 0; gainExp(a, 'int', 0.3); QCTX = null;
 }
 function templeTick() {
   const t = templeOf(); if (!t || t.tStage >= 4) return;
@@ -2230,6 +2239,52 @@ function stashStep(a) {
 }
 function storeKeys(agent) { const v = villageOf(agent); return v && atStore(agent) ? Object.keys(v.store).filter(k => v.store[k] > 0 && canTradeFor(agent, k)) : []; }
 // Take one unit: own bag first, otherwise trade for it at the storehouse
+// ===== Quality: every carried material and made thing has one of 8 grades. Grade affects tools, gear, food, value — and what you make next. =====
+const QUALITY = [
+  { name: 'แย่', color: '#9ca3af' }, { name: 'พอใช้', color: '#e5e7eb' }, { name: 'ดี', color: '#22c55e' }, { name: 'ดีมาก', color: '#38bdf8' },
+  { name: 'ยอดเยี่ยม', color: '#a855f7' }, { name: 'หายาก', color: '#f97316' }, { name: 'สมบัติชาติ', color: '#ef4444' }, { name: 'ตำนาน', color: '#facc15' }];
+const QMULT = [0.6, 0.8, 1, 1.2, 1.45, 1.75, 2.1, 2.6];   // strength of effects, durability, food, trade value
+const QDEF = 2;                                            // things from before grades existed count as "ดี" (old behaviour)
+let QCTX = null;                                           // grade for items being gathered right now (set around gather/hunt code)
+const qClamp = q => Math.max(0, Math.min(7, Math.round(q)));
+function qName(q) { return QUALITY[q ?? QDEF].name; }
+function qColor(q) { return QUALITY[q ?? QDEF].color; }
+function qTag(q) { return `<span class="qtag" style="--qc:${qColor(q)}">${qName(q)}</span>`; }
+// per-grade counts that always add up to the bag count (anything moved around by older code falls back to the default grade)
+function qOf(a, n) {
+  const c = (a.bag || {})[n] || 0; a.bagQ = a.bagQ || {};
+  let Q = a.bagQ[n]; if (!c) { if (Q) delete a.bagQ[n]; return [0, 0, 0, 0, 0, 0, 0, 0]; }
+  if (!Q) Q = a.bagQ[n] = [0, 0, 0, 0, 0, 0, 0, 0];
+  let s = Q.reduce((x, y) => x + y, 0);
+  if (s < c) { Q[QDEF] += c - s; s = c; }
+  for (let q = 0; s > c && q < 8; q++) { const d = Math.min(Q[q], s - c); Q[q] -= d; s -= d; }   // lost items: the worst go first
+  return Q;
+}
+function qAdd(a, n, k, q) { if (k <= 0) return; const Q = qOf(a, n); const d = Math.min(Q[QDEF], k); Q[QDEF] -= d; Q[qClamp(q)] += d; }   // call right after the bag count went up by k
+function qTakeBest(a, n) { if (!((a.bag || {})[n] > 0)) return null; const Q = qOf(a, n); for (let q = 7; q >= 0; q--) if (Q[q] > 0) { Q[q]--; return q; } return null; }   // call right before take(): removes the best one
+function qTakeWorst(a, n) { if (!((a.bag || {})[n] > 0)) return null; const Q = qOf(a, n); for (let q = 0; q < 8; q++) if (Q[q] > 0) { Q[q]--; return q; } return null; }   // eating: the plain stuff goes first, the good stuff is saved
+function qBest(a, n) { const Q = qOf(a, n); for (let q = 7; q >= 0; q--) if (Q[q] > 0) return q; return null; }
+function qPeekBest(a, n) { return (a.bag || {})[n] > 0 ? qBest(a, n) : null; }
+// grade of something picked up from nature: skill, tool and how wild the place is
+function rollGatherQ(a, stat) {
+  const toolUp = ['axe', 'blade', 'sword', 'rod', 'bow'].reduce((m, k) => { const t = getTool(k, a, false); return t ? Math.max(m, ((t.q ?? QDEF) - 2) * 0.15 + (toolStat(t).tier - 1) * 0.12) : m; }, 0);
+  const wild = Math.min(0.7, zoneDist(START_ZONE, a.zone) * 0.12);
+  const mean = 1.3 + (st(a, stat || 'str') + st(a, 'dex')) / 45 + toolUp + wild;
+  const g = (Math.random() + Math.random() + Math.random() - 1.5) * 1.1;
+  return Math.min(5, qClamp(mean + g + (Math.random() < 0.01 ? 1 : 0)));   // nature gives up to "หายาก"; higher grades only come from craft
+}
+// grade of something made: the average of the two inputs, then the maker's hands, practice, workshop and tool
+function rollCraftQ(agent, qa, qb, entry, M) {
+  const base = ((qa ?? QDEF) + (qb ?? QDEF)) / 2;
+  const tool = M && M.tool && getTool(M.tool, agent, false);
+  const skill = (st(agent, 'dex') - 5) * 0.06 + Math.min(1, (entry ? entry.practice || 0 : 0) * 0.04) + (M && M.station ? 0.2 : 0) + (tool ? ((tool.q ?? QDEF) - 2) * 0.1 : 0);
+  const g = (Math.random() + Math.random() + Math.random() - 1.5) * 0.9;
+  return qClamp(base + skill + g + (Math.random() < 0.04 ? 1 : 0));
+}
+// grades from ยอดเยี่ยม up add bonus stats: one more stat per grade, each +(grade-3)
+function affixRoll(q, rnd) { if ((q ?? 0) < 4) return null; const keys = STAT_KEYS.slice(), out = {}; for (let i = 0; i < q - 3 && keys.length; i++) { const k = keys.splice(Math.floor(rnd() * keys.length), 1)[0]; out[k] = q - 3; } return out; }
+function affixFor(n, q) { let h = 2166136261; for (const ch of n + '#' + q) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) / 4294967296); return affixRoll(q, rnd); }
+function affixText(af) { return af ? Object.entries(af).map(([k, v]) => `${STATS[k].short} +${v}`).join(' · ') : ''; }
 function take(agent, n) {
   if (agent && agent.bag && agent.bag[n] > 0) { agent.bag[n]--; if (!agent.bag[n]) delete agent.bag[n]; return 'bag'; }
   for (const st of stashesNear(agent)) if (st.store && st.store[n] > 0) { st.store[n]--; if (!st.store[n]) delete st.store[n]; return 'stash'; }
@@ -2239,21 +2294,21 @@ function take(agent, n) {
 }
 function toStore(v, n, q) { if (v && q > 0 && villageStore(v)) v.store[n] = (v.store[n] || 0) + q; }
 // Put items in an agent's bag; overflow goes to their village storehouse (or is left behind)
-function put(agent, n, q) {
+function put(agent, n, q, ql) {
   if (!agent) return;
   agent.bag = agent.bag || {};
   const room = Math.max(0, bagCap(agent) - bagCount(agent));
   const k = Math.min(Math.floor(room / slotsOf(n)), q);
-  if (k > 0) agent.bag[n] = (agent.bag[n] || 0) + k;
+  if (k > 0) { qOf(agent, n); agent.bag[n] = (agent.bag[n] || 0) + k; const g = ql ?? QCTX; if (g != null) qAdd(agent, n, k, g); }
   if (q - k > 0) toStore(villageOf(agent), n, q - k);
 }
 // Members pay the share their village agreed on; independents keep everything
 function shareRatio(a) { const v = villageOf(a); return v ? v.tax : 0; }
-function gainItems(a, n, q) {
+function gainItems(a, n, q, ql) {
   const v = villageOf(a);
   const tax = v && villageStore(v) ? Math.round(q * v.tax) : 0;
   toStore(v, n, tax);
-  if (q - tax > 0) put(a, n, q - tax);
+  if (q - tax > 0) put(a, n, q - tax, ql);
 }
 function addFood(a, amt) {
   const v = villageOf(a);
@@ -2321,17 +2376,19 @@ function buildStation(type, agent, ownerOverride) {
   return true;
 }
 
-function produce(key, agent) {
+// the grade of an input used for crafting: the best one in the bag (it's taken out now), a tool's own grade, or the default
+function qIn(agent, n) { const t = productDef(keyByName(n))?.kind === 'tool' && toolItems.find(x => x.name === n && (x.holder === agent.id || x.owner === agent.id)); if (t) return t.q ?? QDEF; const q = qTakeBest(agent, n); return q ?? QDEF; }
+function produce(key, agent, ql) {
   const def = productDef(key);
   if (def.kind === 'station') {
     return buildStation(def.station, agent, agent.buildFor ? byId(agent.buildFor) : null) ? `🏗️ สร้าง "${def.name}" ที่โซน ${agent.zone}` : `มี "${def.name}" ของตัวเองอยู่แล้ว/เกาะเต็มแล้ว (วัสดุถูกใช้ไปเปล่าๆ)`;
   }
   if (def.kind === 'home') return buildHome(key, agent);
-  if (def.kind === 'trap') { put(agent, def.name, 1); return `🪤 ได้ "${def.name}" ใส่กระเป๋า (กินที่ ${slotsOf(def.name)} ช่อง${def.uses ? ` · ใช้ได้ ${def.uses} ครั้ง` : ''})`; }
+  if (def.kind === 'trap') { put(agent, def.name, 1, ql); return `🪤 ได้ "${def.name}" ใส่กระเป๋า (กินที่ ${slotsOf(def.name)} ช่อง${def.uses ? ` · ใช้ได้ ${def.uses} ครั้ง` : ''})`; }
   if (def.kind === 'bridge') { const b = placeBridge(agent, key); if (b) return `🌉 สร้าง "${def.name}" กว้าง ${b.width} ช่อง ที่โซน ${agent.zone}`; put(agent, def.name, 1); return `🌉 ได้ชุด "${def.name}" (ยังไม่มีจุดข้ามน้ำที่เหมาะ เก็บไว้ก่อน)`; }
   if (def.kind === 'food') { addFood(agent, def.food); return `🍲 ได้ "${def.name}" อาหาร +${def.food}`; }
-  if (def.kind === 'tool') { newTool(def.name, agent); return `🔧 ได้ "${def.name}" เป็นของตัวเอง`; }
-  put(agent, def.name, 1);
+  if (def.kind === 'tool') { const t = newTool(def.name, agent, ql); return `🔧 ได้ "${def.name}" [${qName(t.q)}] เป็นของตัวเอง${t.aff ? ` · ${affixText(t.aff)}` : ''}`; }
+  put(agent, def.name, 1, ql);
   if (def.props && def.props.synthetic && !discoveredElements.some(e => e.sym === def.props.elem)) {
     discoveredElements.push({ sym: def.props.elem, name: def.name, source: def.origin, isSynthetic: true });
     alchemyLogs.unshift({ formula: def.origin, newElem: def.name, actor: agent.name, day: simDay });
@@ -2449,8 +2506,9 @@ function experiment(agent, forcedMethod, forcedPair) {
     const res = react(a, b, m);
     if (triedEquiv) addLog(res.ok ? `🔁✅ ${agent.name} ลองสูตรเทียบเคียงของ "${triedEquiv.orig}" (${a} + ${b}) ใช้ได้ผล!` : `🔁❌ ${agent.name} ลองสูตรเทียบเคียงของ "${triedEquiv.orig}" แต่ดินแดนนี้ใช้ไม่ได้ (${res.reason})`, res.ok ? '#86efac' : '#fca5a5');
     if (res.ok) {
+      const qa = qIn(agent, a), qb = qIn(agent, b);     // a success uses up the best ones in the bag
       consume(a, b, agent);
-      const note = produce(res.key, agent);
+      const note = produce(res.key, agent, rollCraftQ(agent, qa, qb, null, M));
       agent.know[sig] = { a, b, m, out: res.key, from: 'self', day: simDay, practice: 1 };
       gainExp(agent, 'int', 3);
       markDiscovery(res.key, agent);
@@ -2511,14 +2569,15 @@ function craftKnown(agent, entry) {
   if ((entry.out === 'wood_cage' || entry.out === 'iron_cage') && entry.m !== 'assemble') entry.m = 'assemble';
   if (!methodUsable(agent, entry.m) || !hasMaterials(entry.a, entry.b, agent)) return false;
   const M = METHODS[entry.m];
+  const qa = qIn(agent, entry.a), qb = entry.a === entry.b && !((agent.bag || {})[entry.b] > 0) ? qa : qIn(agent, entry.b), ql = rollCraftQ(agent, qa, qb, entry, M);
   consume(entry.a, entry.b, agent);
   if (M.tool) useTool(M.tool, agent);
   const skill = 0.45 + 0.08 * entry.practice + st(agent, 'dex') * 0.015 + (agent.age >= 55 ? 0.05 : 0) - (agent.age < 15 ? 0.15 : 0);
   entry.practice++;
   gainExp(agent, 'dex', 1.2);
   if (Math.random() < Math.min(0.95, skill)) {
-    const note = produce(entry.out, agent);
-    agent.bubble = `🛠️ ทำ ${outName(entry.out)}`;
+    const note = produce(entry.out, agent, ql);
+    agent.bubble = `🛠️ ทำ ${outName(entry.out)} (${qName(ql)})`;
     godQuestEvent(agent, 'craft'); godQuestEvent(agent, 'recipe', entry.out);
     pushTrial({ title: `ผลิต: ${outName(entry.out)}`, detail: `${entry.a} + ${entry.b} · ${M.name}`, success: true, note: `🛠️ ${note} (ฝึกแล้ว ${entry.practice} ครั้ง)`, actor: agent.name, craft: true });
   } else {
@@ -4515,10 +4574,11 @@ function bodyHunger(a, season, reactorMult, hrs) {
   const foods = a.bag ? Object.keys(a.bag).filter(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel) : [];
   const snack = foods.find(n => !propsOf(n).bad) || ((a.food || 0) <= 0 ? foods[0] : null);
   if (a.hunger >= 45 && snack) {
+    const sq = qTakeWorst(a, snack) ?? QDEF, qm = QMULT[sq];
     take(a, snack);
     const bad = propsOf(snack).bad;
-    a.hunger = Math.max(0, a.hunger - (bad ? 15 : 30));
-    a.hp = Math.min(maxHp(a), a.hp + (bad ? 1 : 3));
+    a.hunger = Math.max(0, a.hunger - (bad ? 15 : 30) * qm);
+    a.hp = Math.min(maxHp(a), a.hp + (bad ? 1 : 3) * qm);
     if (bad) a.bubble = `😖 ${snack}เหนียว ไม่อร่อย`;
     else if (Math.random() < 0.2) a.bubble = `😋 กิน${snack}ของตัวเอง`;
   } else if (a.hunger >= 45 && (a.food || 0) > 0) {
@@ -5163,6 +5223,8 @@ function effBonus(a, k) {
   if (!a._effC || a._effC.h !== h) {          // recomputed once per game hour (st() is called a lot)
     const c = {}; (a.buffs || []).forEach(b => { if (b.until > h) c[b.stat] = (c[b.stat] || 0) + b.n; });
     if (a.bag) { const seen = {}; for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'charm' && !seen[d.eff.stat]) { seen[d.eff.stat] = 1; c[d.eff.stat] = (c[d.eff.stat] || 0) + d.eff.n; } } }
+    try { carriedTools(a).forEach(t => { if (t.aff) for (const s in t.aff) c[s] = (c[s] || 0) + t.aff[s]; }); } catch (e) { /* tools not set up yet (start-up) */ }            // high-grade tools carry bonus stats
+    ['armor', 'warm', 'bag', 'light', 'charm'].forEach(ty => { const e = carriedEff(a, ty); const af = e && affixFor(e.item, e.q); if (af) for (const s in af) c[s] = (c[s] || 0) + af[s]; });
     a._effC = { h, c };
   }
   return a._effC.c[k] || 0;
@@ -5173,7 +5235,7 @@ function effBonusSlow(a, k) {
   if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === 'charm' && d.eff.stat === k) { n += d.eff.n; break; } }
   return n;
 }
-function carriedEff(a, type) { let best = null; if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type && (!best || (d.eff.n || 0) > (best.n || 0))) best = d.eff; } return best; }
+function carriedEff(a, type) { let best = null; if (a.bag) for (const nm in a.bag) { if (a.bag[nm] <= 0) continue; const d = productDef(keyByName(nm)); if (d && d.eff && d.eff.type === type) { const q = qBest(a, nm), e = Object.assign({}, d.eff, { n: Math.round((d.eff.n || 0) * QMULT[q]), q, item: nm }); if (!best || e.n > best.n) best = e; } } return best; }
 function effectsTick() {
   const h = nowH();
   aiAgents.forEach(a => {
@@ -5400,6 +5462,7 @@ function agentGather(a, season) {
       if (!hasTool('vessel', a)) { if (!a.goal) a.bubble = a.bubble || `💧 ดื่ม${t.name}`; return; }
       gain = Math.min(gain, 2);
     }
+    QCTX = rollGatherQ(a, 'str');
     const qDeliver = creditGather(a, t.name, gain);
     if (qDeliver) put(a, t.name, gain);                // carry it; it's handed over face to face
     else if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) { const keep = Math.round(gain * (1 - shareRatio(a))); if (keep) put(a, t.name, keep); }
@@ -5408,7 +5471,8 @@ function agentGather(a, season) {
     if (/ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/.test(t.name)) addFood(a, gain * 3);
     else if (Math.random() < 0.5) { addFood(a, 2); if (!a.goal) a.bubble = '🌿 เจอผักผลไม้ป่าระหว่างทาง'; }
     godQuestEvent(a, 'gather', t.name, gain);
-    if (!a.goal) a.bubble = `เก็บ ${t.name} +${gain}`;
+    if (!a.goal) a.bubble = `เก็บ ${t.name} +${gain}${QCTX >= 3 ? ` (${qName(QCTX)}!)` : ''}`;
+    QCTX = null;
 }
 function wantsHunt(a) {
     if (a.age < 12 || a.questId || a.session || a.sleeping || a.wantRest) return false;
@@ -5469,8 +5533,10 @@ function huntRoll(hunter, target, tz) {
     const vname = variantLabel(target, tz);
     target.zp[tz]--; syncFauna(target);
     if (target.lootFood) addFood(hunter, Math.round(target.lootFood * 2.2));   // a hunt now takes real stalking time, so it pays more
+    QCTX = rollGatherQ(hunter, 'agi');
     for (const [m, q] of Object.entries(target.lootMat)) gainItems(hunter, m, q);
     for (const [m, q] of Object.entries(bonus)) gainItems(hunter, m, q);
+    QCTX = null;
     if (Object.keys(bonus).length) addLog(`🧬 ${hunter.name} ได้ชิ้นส่วนพิเศษจาก ${vname}: ${Object.keys(bonus).join(', ')}`, '#f0abfc');
     if (target.predator) hunter.rep += 3;
     hunter.bubble = target.predator ? `🏆 ล่า${target.name}สำเร็จ!` : `${weapon === 'bow' ? '🏹' : weapon === 'blade' ? '🗡️' : '✋'} ล่า${target.name} (+${target.lootFood})`;
@@ -8569,7 +8635,7 @@ function possessStep(a, night, season, now) {
 function posEat() {
   const a = posAgent(); if (!a) return;
   const foods = Object.keys(a.bag || {}).filter(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel).sort((p, q) => (propsOf(p).bad ? 1 : 0) - (propsOf(q).bad ? 1 : 0));
-  if (foods.length) { const n = foods[0]; take(a, n); a.hunger = Math.max(0, (a.hunger || 0) - (propsOf(n).bad ? 15 : 30)); a.hp = Math.min(maxHp(a), a.hp + 3); a.bubble = `😋 กิน${n}`; }
+  if (foods.length) { const n = foods[0], qm = QMULT[qTakeBest(a, n) ?? QDEF];   /* the possessing god eats the best on purpose */ take(a, n); a.hunger = Math.max(0, (a.hunger || 0) - (propsOf(n).bad ? 15 : 30) * qm); a.hp = Math.min(maxHp(a), a.hp + 3 * qm); a.bubble = `😋 กิน${n}`; }
   else if ((a.food || 0) > 0) { const e = Math.min(a.food, 2); a.food -= e; a.hunger = Math.max(0, (a.hunger || 0) - e * 22); a.bubble = '😋 กินเสบียงติดตัว'; }
   else a.bubble = '😟 ไม่มีอะไรให้กินเลย';
   renderPosHud();
@@ -8756,12 +8822,15 @@ function itemCat(n) {
   return d ? 'made' : 'mat';
 }
 const CAT_TH = { gear: 'อุปกรณ์', trap: 'กับดัก', made: 'ของที่ทำ', mat: 'วัตถุดิบ', food: 'อาหาร' };
-function cwItemCard(n, qty, extra) {
-  const k = keyByName(n), d = k && productDef(k), sl = slotsOf(n), c = itemCat(n);
-  return `<div class="cw-card"><div class="ic">${itemIcon(n, 40)}</div><div style="min-width:0">
-    <div class="nm">${n}${qty != null ? ` <span style="color:#8a6a3a;font-weight:700">×${qty}</span>` : ''}</div>
-    <span class="tg">${CAT_TH[c] || 'ของ'}</span>${sl > 1 ? `<span class="tg o">กิน ${sl} ช่อง</span>` : ''}${d && d.eff ? `<span class="tg g">${effText(d.eff)}</span>` : ''}${d && d.uses ? `<span class="tg">ใช้ได้ ${d.uses} ครั้ง</span>` : ''}${extra || ''}
-    <div class="ds">${itemDesc(n)}</div></div></div>`;
+function cwItemCard(n, qty, extra, q, aff) {
+  const k = keyByName(n), d = k && productDef(k), sl = slotsOf(n), c = itemCat(n), g = q ?? QDEF, P = propsOf(n) || {};
+  const eff = d && d.eff ? Object.assign({}, d.eff, { n: Math.round((d.eff.n || 0) * QMULT[g]) }) : null;
+  const af = aff !== undefined ? aff : (d && d.eff ? affixFor(n, g) : null);
+  const qNote = d && d.kind === 'tool' ? `ทนทาน ×${QMULT[g]} · พลัง ×${QMULT[g]}` : P.food ? `อิ่ม ×${QMULT[g]}` : eff ? `ผลของ ×${QMULT[g]}` : `ทำของต่อได้ระดับดีขึ้น · มูลค่า ×${QMULT[g]}`;
+  return `<div class="cw-card" style="--qc:${qColor(g)}"><div class="ic">${itemIcon(n, 40)}</div><div style="min-width:0">
+    <div class="nm" style="color:${g >= 2 ? qColor(g) : '#3d2a14'};text-shadow:${g >= 2 ? '0 0 1px #3d2a14' : 'none'}">${n}${qty != null ? ` <span style="color:#8a6a3a;font-weight:700;text-shadow:none">×${qty}</span>` : ''}</div>
+    ${qTag(g)}<span class="tg">${CAT_TH[c] || 'ของ'}</span>${sl > 1 ? `<span class="tg o">กิน ${sl} ช่อง</span>` : ''}${eff ? `<span class="tg g">${effText(eff)}</span>` : ''}${af ? `<span class="tg q">✨ ${affixText(af)}</span>` : ''}<span class="tg">${qNote}</span>${d && d.uses ? `<span class="tg">ใช้ได้ ${d.uses} ครั้ง</span>` : ''}${extra || ''}
+    <div class="ds">${eff ? (d.desc || '') : itemDesc(n)}</div></div></div>`;
 }
 function renderCW() {
   const win = document.getElementById('cw-win'), a = aiAgents.find(x => x.id === CW.who);
@@ -8795,32 +8864,36 @@ function renderCW() {
     const camp = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).camp || 0) > bv) { bv = propsOf(nm).camp; bn = nm; } return bn; })();
     const carry = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).carry || 0) > bv) { bv = propsOf(nm).carry; bn = nm; } return bn; })();
     const tools = carriedTools(a), shield = shieldKey(a), shieldN = shield && PRODUCTS[shield].name;
-    const slot = (id, lb, ic, name, sub, side, dur) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
-    const hand = i => { const t = tools[i]; if (!t) return slot('h' + i, `มือ ${i + 1}`, '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = D.dur || 10; return slot('h' + i, `มือ ${i + 1} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `ทน ${mx - t.wear}/${mx}`, '', (mx - t.wear) / mx); };
+    const slot = (id, lb, ic, name, sub, side, dur, g) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" ${name && g != null ? `style="--qc:${qColor(g)}" data-q="1"` : ''} onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
+    const hand = i => { const t = tools[i]; if (!t) return slot('h' + i, `มือ ${i + 1}`, '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = toolMaxDur(t); return slot('h' + i, `มือ ${i + 1} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `${qName(t.q)} · ทน ${mx - t.wear}/${mx}${t.aff ? ' · ✨' + affixText(t.aff) : ''}`, '', (mx - t.wear) / mx, t.q); };
     const L = [hand(0), hand(1), hand(2), slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : '')];
-    const R = [slot('sh', 'มือรอง · โล่', '🛡️', shieldN, shieldN ? effText(PRODUCTS[shield].eff) : '', 'r'), slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
+    const gq = n => n ? qBest(a, n) : null, ge = ty => carriedEff(a, ty);
+    const R = [slot('sh', 'มือรอง · โล่', '🛡️', shieldN, shieldN ? `${qName(gq(shieldN))} · ${effText(Object.assign({}, PRODUCTS[shield].eff, { n: Math.round(PRODUCTS[shield].eff.n * QMULT[gq(shieldN)]) }))}` : '', 'r', null, gq(shieldN)), slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
       slot('wm', 'เสื้อผ้าเสริม', '🧥', best('warm'), '', 'r'), slot('bg', 'ย่าม/ตะกร้า', '👜', carry || best('bag'), carry ? `ความจุ +${propsOf(carry).carry}` : '', 'r'),
       slot('lt', 'แสงไฟ', '🔦', best('light'), '', 'r'), slot('ch', 'เครื่องราง', '📿', best('charm'), '', 'r')];
     const sumP = [`⚔️ ATK <b>${atkOf(a)}</b>`, `🛡️ DEF <b>${defOf(a)}</b>`, `❤️ HP <b>${maxHp(a)}</b>`, `💨 หลบ <b>${Math.round(dodgeOf(a) * 100)}%</b>`, `🎒 จุ <b>${bagCap(a)}</b> ช่อง`];
     body = `<div class="cw-doll"><div class="cw-eqcol">${L.join('')}</div><canvas id="cw-doll" width="300" height="400"></canvas><div class="cw-eqcol">${R.join('')}</div></div>
       <div class="cw-sum">${sumP.join(' · ')}</div>`;
     const selName = { h0: tools[0] && tools[0].name, h1: tools[1] && tools[1].name, h2: tools[2] && tools[2].name, cs: camp, sh: shieldN, wm: best('warm'), bg: carry || best('bag'), lt: best('light'), ch: best('charm') }[CW.sel];
-    if (selName) body += cwItemCard(selName, null);
+    const selTool = { h0: tools[0], h1: tools[1], h2: tools[2] }[CW.sel];
+    if (selTool) body += cwItemCard(selTool.name, null, '', selTool.q ?? QDEF, selTool.aff || null);
+    else if (selName) body += cwItemCard(selName, null, '', gq(selName));
     foot = 'ถือเครื่องมือได้ 3 อย่าง · ของสวมใส่ใช้ชิ้นที่ดีที่สุดในกระเป๋าให้อัตโนมัติ';
   } else if (CW.tab === 'bag') {
-    const all = Object.entries(a.bag || {}).filter(([, n]) => n > 0);
+    const all = [];
+    for (const [n, c0] of Object.entries(a.bag || {})) if (c0 > 0) qOf(a, n).forEach((c, g) => { if (c > 0) all.push([n, c, g]); });
     const cnt = c => c === 'all' ? all.length : all.filter(([n]) => itemCat(n) === c).length;
     const q = (CW.q || '').trim();
-    const list = all.filter(([n]) => (CW.cat === 'all' || itemCat(n) === CW.cat) && (!q || n.includes(q))).sort((p, r) => itemCat(p[0]).localeCompare(itemCat(r[0])) || r[1] - p[1]);
+    const list = all.filter(([n]) => (CW.cat === 'all' || itemCat(n) === CW.cat) && (!q || n.includes(q))).sort((p, r) => itemCat(p[0]).localeCompare(itemCat(r[0])) || p[0].localeCompare(r[0]) || r[2] - p[2]);
     const cap = bagCap(a), used = bagCount(a), pct = used / Math.max(1, cap) * 100;
-    const cells = list.map(([n, c]) => `<div class="cw-slot ${CW.sel === n ? 'sel' : ''}" onclick="cwSet('sel','${n.replace(/'/g, "\\'")}')" title="${n}">${itemIcon(n, 34)}${slotsOf(n) > 1 ? `<span class="big">${slotsOf(n)}ช่อง</span>` : ''}${propsOf(n).broken ? '<span class="br">⚠️</span>' : ''}<span class="n">${c}</span></div>`).join('')
+    const cells = list.map(([n, c, g]) => `<div class="cw-slot q${g} ${CW.sel === n + '#' + g ? 'sel' : ''}" style="--qc:${qColor(g)}" onclick="cwSet('sel','${n.replace(/'/g, "\\'")}#${g}')" title="${n} [${qName(g)}]">${itemIcon(n, 34)}${slotsOf(n) > 1 ? `<span class="big">${slotsOf(n)}ช่อง</span>` : ''}${propsOf(n).broken ? '<span class="br">⚠️</span>' : ''}<span class="n">${c}</span></div>`).join('')
       + (CW.cat === 'all' && !q ? Array.from({ length: Math.max(0, Math.min(cap - used, 30 - list.length)) }, () => '<div class="cw-slot free"></div>').join('') : '');
     body = `<div class="cw-bag"><div class="cw-cats">${CW_CATS.map(([k, ic, lb]) => `<button class="${CW.cat === k ? 'on' : ''}" onclick="CW.cat='${k}';CW.sel=null;renderCW()">${uiIcon('cat', k, 22, ic)} ${lb}<span>${cnt(k)}</span></button>`).join('')}</div>
       <div><input id="cw-q" class="cw-search" placeholder="🔍 ค้นหาชื่อของ" value="${q.replace(/"/g, '&quot;')}" oninput="CW.q=this.value" onchange="CW.q=this.value;this.blur();renderCW()" onkeydown="if(event.key==='Enter'){CW.q=this.value;this.blur();renderCW()}">
       <div class="cw-grid">${cells || '<div class="ac-sub">ไม่มีของในหมวดนี้</div>'}</div>
       <div class="cw-cap"><div class="bar"><i style="width:${Math.min(100, pct)}%;background:${pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : '#16a34a'}"></i><u style="left:75%"></u></div>
         <div class="row"><span>🎒 ใช้ไป ${used}/${cap} ช่อง (${Math.round(pct)}%)</span><span>🍖 อาหารติดตัว ${Math.round(a.food || 0)}</span></div></div>
-      ${CW.sel && (a.bag || {})[CW.sel] > 0 ? cwItemCard(CW.sel, a.bag[CW.sel]) : ''}</div></div>`;
+      ${(() => { if (!CW.sel) return ''; const [sn, sg] = CW.sel.split('#'), g = +sg; const c = (a.bag || {})[sn] > 0 ? qOf(a, sn)[g] : 0; return c > 0 ? cwItemCard(sn, c, '', g) : ''; })()}</div></div>`;
     foot = pct >= 75 ? '⚠️ กระเป๋าเกือบเต็ม: คนในหมู่บ้านจะเอาของไปฝากโกดัง ของใหญ่อย่างกรงกินที่ 4 ช่อง' : 'แตะช่องเพื่อดูรายละเอียด · ของใหญ่อย่างกรงดักสัตว์กินที่ 4 ช่อง';
   } else {
     const ents = Object.entries(a.know || {}), good = ents.filter(([, e]) => e.out), bad = ents.filter(([, e]) => !e.out);
