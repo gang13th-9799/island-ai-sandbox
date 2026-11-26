@@ -639,6 +639,7 @@
 <script src="assets/camp.js"></script>
 <script src="assets/storage.js"></script>
 <script src="assets/bridges.js"></script>
+<script src="assets/gate.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -1812,6 +1813,24 @@ function groundShadow(ctx, cx, fy, rx, ry, a = 0.2) {
   const y = fy - ry * 0.35, g = ctx.createRadialGradient(cx, y, 0, cx, y, rx);
   g.addColorStop(0, `rgba(30,26,18,${a})`); g.addColorStop(0.55, `rgba(30,26,18,${a * 0.55})`); g.addColorStop(1, 'rgba(30,26,18,0)');
   ctx.save(); ctx.translate(cx, y); ctx.scale(1, ry / rx); ctx.translate(-cx, -y); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, y, rx, 0, 7); ctx.fill(); ctx.restore();
+}
+// the Gods' gate: same size and placement as the temple; glows while someone is crossing
+const GATE_IMG = {};
+function gateImg(k) { const A = window.GATE_ART && GATE_ART[k]; if (!A) return null; const im = GATE_IMG[k] || (GATE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
+function drawGate(ctx, s, cx, fy, now) {
+  const active = (s.activeUntil || 0) > simDay * 24 * 60 + simMinutes, A = GATE_ART[active ? 'active' : 'dormant'], im = gateImg(active ? 'active' : 'dormant') || gateImg('dormant');
+  const TA = window.TEMPLE_ART && TEMPLE_ART.s4, hhT = HUMAN_H * 4.6, w = TA ? hhT * TA.w / TA.h : hhT * 1.1, h = w * A.h / A.w;
+  if (active) {                                        // soft pulsing glow behind the ring
+    const g = ctx.createRadialGradient(cx, fy - h * 0.55, 2, cx, fy - h * 0.55, w * 0.5), p = 0.55 + 0.25 * Math.sin(now * 3);
+    g.addColorStop(0, `rgba(196,160,255,${p})`); g.addColorStop(1, 'rgba(196,160,255,0)'); ctx.fillStyle = g; ctx.fillRect(cx - w / 2, fy - h, w, h);
+  }
+  ctx.drawImage(im, cx - w / 2, fy - h * 0.96, w, h);
+  if (active) for (let k = 0; k < 6; k++) {               // sparks drifting up
+    const ph = (now * 0.35 + k / 6) % 1; ctx.globalAlpha = 1 - ph; ctx.fillStyle = k % 2 ? '#fde68a' : '#c4b5fd';
+    ctx.beginPath(); ctx.arc(cx + Math.sin(k * 2.1 + now) * w * 0.18, fy - h * (0.45 + ph * 0.5), 1.6, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return { h: h * 0.96 };
 }
 function drawTemple(ctx, t, cx, fy) {
   const i = templeArtIdx(t), A = window.TEMPLE_ART && TEMPLE_ART['s' + i];
@@ -3222,6 +3241,7 @@ function realmTravelTick(i) {
 function crossRealm(a, j, i) {
   const target = realms[j].state;
   const tg = gateOf(target);
+  { const here = gateOf({ shelters }); const until = simDay * 24 * 60 + simMinutes + 180; if (here) here.activeUntil = until; if (tg) tg.activeUntil = until; }   // the portal lights up for a few hours
   // family follows: devoted partner + small children
   const partner = aiAgents.find(o => o !== a && o.age >= 18 && o.gender !== a.gender && rel(a, o) >= 50 && rel(o, a) >= 40 && !o.journey);
   const group = [a].concat(partner ? [partner] : []);
@@ -3814,7 +3834,7 @@ function huntSpot(f, z, h) {
 function footprint(s) {
   if (s.station === 'temple') return { x0: s.x - 1, y0: s.y - 1, x1: s.x + 3, y1: s.y + 3 };
   if (s.station === 'campfire') return { x0: s.x + 1, y0: s.y + 1, x1: s.x + 1, y1: s.y + 1 };
-  if (s.station === 'gate') return { x0: s.x + 1, y0: s.y + 1, x1: s.x + 1, y1: s.y + 1 };
+  if (s.station === 'gate') return { x0: s.x - 1, y0: s.y - 1, x1: s.x + 3, y1: s.y + 3 };   // as big as the temple
   if (!s.station) return (s.kind === 'leaf_hut' || /เพิง/.test(s.name)) ? { x0: s.x + 1, y0: s.y + 1, x1: s.x + 2, y1: s.y + 2 } : { x0: s.x, y0: s.y, x1: s.x + 2, y1: s.y + 2 };
   return { x0: s.x + 1, y0: s.y + 1, x1: s.x + 2, y1: s.y + 2 };
 }
@@ -7413,6 +7433,7 @@ function drawCanvas() {
     let d;
     const hk = s.station === 'temple' ? null : homeArtKey(s), HA = hk && window.HOME_ART && HOME_ART[hk], him = HA && homeImg(hk);
     if (s.station === 'temple') { d = drawTemple(ctx, s, cx, fy); }
+    else if (s.station === 'gate' && gateImg('dormant')) { d = drawGate(ctx, s, cx, fy, now); }
     else if (him) {
       const hh = HUMAN_H * (hk === 'leaf_hut' ? 1.45 : 2.0), hw = hh * HA.w / HA.h;
       const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
