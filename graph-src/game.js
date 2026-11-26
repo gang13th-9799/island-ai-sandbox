@@ -554,7 +554,10 @@ const PRODUCTS = {
   rope:         { name: 'เชือกเกลียว', kind: 'item', props: { fiber: 2, rope: 1 } },
   stone_axe:    { name: 'ขวานหิน', kind: 'tool', tool: 'axe', dur: 50, pow: 1, tier: 1, props: { hard: 1 } },
   workbench:    { name: 'โต๊ะช่างไม้', kind: 'station', station: 'workbench' },
-  bow:          { name: 'ธนูไม้ไผ่', kind: 'tool', tool: 'bow', dur: 20, props: { wood: 1 } },
+  bow:          { name: 'ธนูไม้ไผ่', kind: 'tool', tool: 'bow', dur: 20, pow: 1, tier: 1, props: { wood: 1 } },
+  bow_hard:     { name: 'ธนูไม้เนื้อแข็ง', kind: 'tool', tool: 'bow', dur: 35, pow: 2, tier: 2, props: { wood: 1 } },        // a long self-bow carved from a hardwood post
+  bow_horn:     { name: 'ธนูเขาสัตว์', kind: 'tool', tool: 'bow', dur: 50, pow: 3, tier: 3, props: { wood: 1 } },           // short recurve backed with horn
+  bow_iron:     { name: 'ธนูเหล็ก', kind: 'tool', tool: 'bow', dur: 70, pow: 4, tier: 4, props: { wood: 1, metal: 1 } },  // horn recurve with iron tips and grip
   campfire:     { name: 'กองไฟ', kind: 'station', station: 'campfire' },
   clay_paste:   { name: 'ดินปั้นเนื้อเนียน', kind: 'item', props: { paste: 1 } },
   raw_pot:      { name: 'หม้อดินดิบ', kind: 'item', props: { raw: 1 } },
@@ -698,6 +701,7 @@ function natureLaw(a, b, m) {
       if (A.hard || B.hard) return near('ทุบแล้วแค่แตกละเอียด ไม่ได้อะไร');
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
     case 'bind':
+      if (either(N('bow_hard'), (P, n) => /^เขา/.test(n))) return ok('bow_horn');       // glue horn to the belly: a short, strong recurve
       if (either(N('vine_net'), is('rope'))) return ok('rope_bridge');            // net walkway on rope lines
       if (either(N('split_bamboo'), N('vine_net'))) return ok('plank_bridge');   // slats hung from a rope net
       if (either(N('fence_posts'), N('vine_net'))) return ok('wood_bridge');     // heavy timbers lashed together
@@ -752,6 +756,7 @@ function natureLaw(a, b, m) {
     }
     case 'cut':
       if (either(is('bamboo'), is('rope'))) return ok('fishing_rod');                   // trim a bamboo pole, tie a line
+      if (either(N('fence_posts'), is('rope'))) return ok('bow_hard');                  // carve a hardwood post into a long bow stave, string it
       if (either(N('stone_blade'), P => P.wood && !P.bamboo && !P.fence && (!P.dry || P.forked))) return ok('wood_sword');   // carve a sword from hard wood
       if (A.bamboo && B.bamboo) return ok('bamboo_tube');
       if (A.wood && B.wood && !A.bamboo && !B.bamboo && !A.fence && !B.fence) return ok('fence_posts');
@@ -761,6 +766,7 @@ function natureLaw(a, b, m) {
       if (either(N('wood_cage_broken'), P => (P.wood || P.fence || P.rope) && !P.broken)) return ok('wood_cage');
       if (either(N('iron_cage_broken'), N('iron_ingot'))) return ok('iron_cage');
       if (either(N('fence_posts'), is('forked'))) return ok('wood_cage');             // hardwood posts lashed into a guillotine-door cage
+      if (either(N('bow_horn'), N('iron_ingot'))) return ok('bow_iron');             // iron tips and grip on a horn bow
       if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');           // iron bars
       return fail('ประกอบแล้วไม่เข้ากัน ไม่ได้อะไร');
     case 'knead11':
@@ -4629,7 +4635,8 @@ function agentHunt(hunter) {
       }
       if (hunter._hunt) { hunter._hunt.ttl = Math.min(hunter._hunt.ttl, 3); hunter._hunt.d = undefined; }   // missed? try again right here for a bit
       const weapon = hasTool('bow', hunter) ? 'bow' : (hasTool('blade', hunter) ? 'blade' : null);
-      const base = target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25);
+      const bowUp = weapon === 'bow' ? ((usableToolTier(hunter, 'bow') || { tier: 1 }).tier - 1) * 0.06 : 0;   // better bows: +6% per tier
+      const base = (target.predator ? (weapon === 'bow' ? 0.45 : weapon === 'blade' ? 0.25 : 0.08) : (weapon === 'bow' ? 0.7 : weapon === 'blade' ? 0.45 : 0.25)) + bowUp;
       const chance = Math.max(0.03, Math.min(0.95, base + atkOf(hunter) * 0.006 + st(hunter, 'agi') * 0.015 - huntPenalty(target, tz)));
       if (weapon) useTool(weapon, hunter);
       gainExp(hunter, 'str', target.predator ? 2 : 1); gainExp(hunter, 'agi', target.predator ? 2 : 1);
@@ -5781,7 +5788,8 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
     [ang.upN, ang.foN] = hd < 0.04 ? pupArmIK(rig, 'shN', 'elN', 'fist', { x: sn.x + Math.sin(0.66) * rN, y: sn.y + Math.cos(0.66) * rN })
                                    : pupArmIK(rig, 'shN', 'elN', 'fist', hand, ad);
     build();
-    bowInfo = { gripL: grip, adL: ad, handL: hand, dl: p.draw, hold };
+    const bt = usableToolTier(a, 'bow');
+    bowInfo = { gripL: grip, adL: ad, handL: hand, dl: p.draw, hold, key: bt && ITEM_HELD_IMG[bt.key] ? bt.key : 'bow' };
   }
   // two-handed items (spear): far hand grips further along the shaft
   if (p.two != null && item && item !== 'bow') {
@@ -5876,7 +5884,7 @@ function drawBow(ctx, m, b, s, part) {
   const K = 0.3125, bend = b.dl * 22;
   const P = (a, n) => [g.x + (ad.x * a + an.x * n) * K, g.y + (ad.y * a + an.y * n) * K];
   const top = P(-(10 + bend * 0.4), -118), bot = P(-(10 + bend * 0.4), 118);
-  const art = ITEM_HELD_IMG.bow, ea = window.ITEM_ART && ITEM_ART.bow && ITEM_ART.bow.held;
+  const bk = b.key || 'bow', art = ITEM_HELD_IMG[bk], ea = window.ITEM_ART && ITEM_ART[bk] && ITEM_ART[bk].held;
   if (art && art.complete && art.naturalWidth && ea) {
     // static bow art (no limb bend); art is drawn with the belly to the left, so mirror it so the belly faces the aim
     const phi = Math.atan2(ad.y, ad.x);
