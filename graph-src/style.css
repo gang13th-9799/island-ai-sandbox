@@ -325,6 +325,28 @@
   .ac-sub { color: #6b5a3e; font-size: 11px; margin-top: 2px; }
   .ac-btns { display: flex; gap: 8px; margin-top: 8px; }
   .ac-btns .gbtn { flex: 1; padding: 8px 6px; font-size: 13px; }
+  /* ===== possession bar ===== */
+  .pos-hud { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 64px); transform: translateX(-50%); z-index: 24; width: min(460px, 96vw); display: none; flex-direction: column; gap: 6px; }
+  .pos-hud.open { display: flex; }
+  .pos-top { display: flex; gap: 8px; align-items: center; padding: 7px 9px; border-radius: 16px; background: linear-gradient(180deg, rgba(76,52,130,.96), rgba(50,32,92,.96)); color: #f5f0ff; border: 2px solid #c4b5fd; box-shadow: 0 0 18px rgba(167,139,250,.55); }
+  .pos-top canvas { width: 46px; height: 52px; border-radius: 10px; background: radial-gradient(circle at 50% 80%, #e9e3ff, #b9a8f5); flex-shrink: 0; }
+  .pos-st { flex: 1; min-width: 0; }
+  .pos-st .pn { font-family: var(--head); font-weight: 800; font-size: 14px; }
+  .pos-st .pp { background: #fde68a; color: #7c2d12; border-radius: 8px; padding: 0 6px; font-size: 11px; cursor: pointer; }
+  .pos-st .pb { display: grid; grid-template-columns: 18px 1fr; gap: 4px; align-items: center; margin-top: 2px; }
+  .pos-st .b { height: 7px; background: rgba(255,255,255,.2); border-radius: 5px; overflow: hidden; } .pos-st .b i { display: block; height: 100%; border-radius: 5px; }
+  .pos-st .pd { font-size: 11px; opacity: .9; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pos-out { align-self: flex-start; border: 2px solid #ede9fe; background: #f5f3ff; color: #5b21b6; border-radius: 10px; font-weight: 800; font-size: 11px; padding: 5px 7px; cursor: pointer; }
+  .pos-acts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .pos-acts button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 2px; border-radius: 12px; border: 2px solid #e2c48a; background: linear-gradient(180deg, #fffaf0, #f3dfb6); box-shadow: 0 3px 0 #c9a56a; font-size: 18px; color: #5b3b12; cursor: pointer; }
+  .pos-acts button span { font-size: 10.5px; font-weight: 800; }
+  .pos-craft { max-height: 42vh; overflow: auto; background: #fffaf0; border: 2px solid #c4b5fd; border-radius: 14px; padding: 8px; color: #3d2a14; }
+  .pos-craft .pt { display: flex; justify-content: space-between; font-weight: 800; font-size: 13px; margin-bottom: 4px; } .pos-craft .pt button { border: none; background: none; font-size: 14px; cursor: pointer; }
+  .pos-craft .pr { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 9px; cursor: pointer; font-size: 12.5px; font-weight: 700; }
+  .pos-craft .pr:hover { background: #fff0cf; } .pos-craft .pr.no { opacity: .5; }
+  .pos-craft .pr small { display: block; font-size: 10.5px; color: #8a6a3a; font-weight: 600; }
+  .cw-plus { width: 22px; height: 22px; border-radius: 6px; border: none; background: #16a34a; color: #fff; font-weight: 900; cursor: pointer; margin-left: 4px; }
+  .ac-possess { width: 100%; margin-top: 6px; padding: 8px; border-radius: 12px; border: 2px solid #c4b5fd; background: linear-gradient(180deg, #8b5cf6, #6d28d9); color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: 0 3px 0 #4c1d95; }
   /* ===== Character window (สถานะ / สวมใส่ / กระเป๋า / ความรู้) — ready for the possession mode ===== */
   .cw { position: fixed; inset: 0; z-index: 62; display: none; align-items: center; justify-content: center; background: rgba(28,18,8,.42); }
   .cw.open { display: flex; }
