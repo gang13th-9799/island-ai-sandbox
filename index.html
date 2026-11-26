@@ -8426,7 +8426,7 @@ function renderCW() {
         <span class="v">${base}${bonus ? `<span class="p">+${bonus}</span>` : ''}</span><span class="g ${tg}" title="พรสวรรค์">${tg}</span></div>`;
     }).join('');
     const D = derivedStats(a);
-    const tiles = D.map(([ic, n, val], i) => `<div class="cw-tile ${CW.sel === 'd:' + i ? 'sel' : ''}" onclick="cwSet('sel','d:${i}')"><div class="l">${ic} ${n}</div><div class="v">${val}</div></div>`).join('');
+    const tiles = D.map(([ic, n, val], i) => `<div class="cw-tile ${CW.sel === 'd:' + i ? 'sel' : ''}" onclick="cwSet('sel','d:${i}')"><div class="l">${uiIcon('der', 'd' + i, 16, ic)} ${n}</div><div class="v">${val}</div></div>`).join('');
     body = `${vit}<div class="cw-cols"><div><div class="cw-sec"><span>ค่าสถานะ</span><span>ตัวเลขเขียว = จากของ/บัฟ · ตัวอักษร = พรสวรรค์</span></div>${rows}
       <div class="ac-sub" style="margin-top:8px">ค่าสถานะโตขึ้นเองจากการลงมือทำ: ใช้แรง = STR · วิ่ง/หลบ = AGI · ทนลำบาก = VIT · ทดลอง/เรียน = INT · ประดิษฐ์ = DEX · พูดคุย/สอน = CHA</div></div>
       <div><div class="cw-sec"><span>ค่าที่คำนวณได้</span></div><div class="cw-tiles">${tiles}</div></div></div>`;
@@ -8438,7 +8438,7 @@ function renderCW() {
     const camp = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).camp || 0) > bv) { bv = propsOf(nm).camp; bn = nm; } return bn; })();
     const carry = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).carry || 0) > bv) { bv = propsOf(nm).carry; bn = nm; } return bn; })();
     const tools = carriedTools(a), shield = shieldKey(a), shieldN = shield && PRODUCTS[shield].name;
-    const slot = (id, lb, ic, name, sub, side, dur) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
+    const slot = (id, lb, ic, name, sub, side, dur) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
     const hand = i => { const t = tools[i]; if (!t) return slot('h' + i, `มือ ${i + 1}`, '✋', null); const D = productDef(keyByName(t.name)) || {}; const mx = D.dur || 10; return slot('h' + i, `มือ ${i + 1} · ${TOOL_LABEL[D.tool] || 'เครื่องมือ'}`, '✋', t.name, `ทน ${mx - t.wear}/${mx}`, '', (mx - t.wear) / mx); };
     const L = [hand(0), hand(1), hand(2), slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : '')];
     const R = [slot('sh', 'มือรอง · โล่', '🛡️', shieldN, shieldN ? effText(PRODUCTS[shield].eff) : '', 'r'), slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
