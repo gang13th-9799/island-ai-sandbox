@@ -347,7 +347,17 @@
   .pos-st .b { height: 7px; background: rgba(255,255,255,.2); border-radius: 5px; overflow: hidden; } .pos-st .b i { display: block; height: 100%; border-radius: 5px; }
   .pos-st .pd { font-size: 11px; opacity: .9; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pos-out { align-self: flex-start; border: 2px solid #ede9fe; background: #f5f3ff; color: #5b21b6; border-radius: 10px; font-weight: 800; font-size: 11px; padding: 5px 7px; cursor: pointer; }
-  .pos-acts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .pos-acts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .pos-st .pd.q { color: #fde68a; cursor: pointer; }
+  .pos-craft .ps { font-size: 11.5px; font-weight: 800; color: #8a6a3a; margin: 6px 0 3px; } .pos-craft .warn { color: #dc2626; }
+  .pos-craft .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .pos-craft .chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 9px; border: 1.5px solid #e2cb9c; background: #fff; font-size: 11.5px; font-weight: 700; color: #5b3b12; cursor: pointer; }
+  .pos-craft .chip.on { background: #ede9fe; border-color: #8b5cf6; } .pos-craft .chip.no { opacity: .5; } .pos-craft .chip small { color: #a0845a; margin-left: 2px; }
+  .pos-craft .res { margin-top: 6px; padding: 5px 8px; background: #f8ecd2; border-radius: 8px; font-size: 12px; }
+  .pos-craft .go { margin-top: 8px; width: 100%; padding: 8px; border-radius: 10px; border: none; background: linear-gradient(180deg, #8b5cf6, #6d28d9); color: #fff; font-weight: 800; cursor: pointer; }
+  .pos-craft .go:disabled { opacity: .45; cursor: default; }
+  .pos-craft .qq { padding: 5px 2px; font-size: 12.5px; } .pos-craft .qb { display: flex; gap: 6px; margin-top: 4px; }
+  .pos-craft .qb button { flex: 1; padding: 7px; border-radius: 10px; border: 1.5px solid #e2cb9c; background: #fff; font-weight: 800; cursor: pointer; margin-top: 0; }
   .pos-acts button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 2px; border-radius: 12px; border: 2px solid #e2c48a; background: linear-gradient(180deg, #fffaf0, #f3dfb6); box-shadow: 0 3px 0 #c9a56a; font-size: 18px; color: #5b3b12; cursor: pointer; }
   .pos-acts button span { font-size: 10.5px; font-weight: 800; }
   .pos-craft { max-height: 42vh; overflow: auto; background: #fffaf0; border: 2px solid #c4b5fd; border-radius: 14px; padding: 8px; color: #3d2a14; }
@@ -2347,7 +2357,7 @@ function pushTrial(t) { rndTrials.unshift(Object.assign({ day: simDay }, t)); if
 // ==========================================
 // 5. EXPERIMENT, CRAFT, TEACH
 // ==========================================
-function experiment(agent, forcedMethod) {
+function experiment(agent, forcedMethod, forcedPair) {
   let methods = (forcedMethod ? [forcedMethod] : Object.keys(METHODS)).filter(m => methodUsable(agent, m));
   if (!methods.length) methods = Object.keys(METHODS).filter(m => methodUsable(agent, m));
   let items = [...new Set(storeKeys(agent).concat(Object.keys(agent.bag || {}), toolItems.filter(t => t.owner === agent.id).map(t => t.name)))].filter(n => avail(agent, n) > 0 && !isGear(n) && !((propsOf(n).carry || propsOf(n).camp) && avail(agent, n) < 2));
@@ -2412,6 +2422,11 @@ function experiment(agent, forcedMethod) {
     if (!useRv && hunch && tries < 30 && Math.random() < 0.3 + st(agent, 'int') * 0.03) {
       if (Math.random() < 0.5 && methods.includes(hunch.m)) { m = hunch.m; a = pick(hunch.items); }
       else { a = hunch.items[0]; b = hunch.items[1]; }
+    }
+    if (forcedPair) {                                // the possessing god picked exactly what to try
+      m = forcedMethod; a = forcedPair.a; b = forcedPair.b;
+      if (!hasMaterials(a, b, agent)) { agent.bubble = '🧺 ของไม่พอจะลอง'; return; }
+      if (agent.know[sigOf(a, b, m)]) { agent.bubble = '🤔 เคยลองแบบนี้แล้ว'; return; }
     }
     if (!hasMaterials(a, b, agent)) continue;
     const sig = sigOf(a, b, m);
@@ -2780,7 +2795,7 @@ function assignQuests() {
       }
       return;
     } else if (q.visitor) q.visitor = null;
-    const cands = aiAgents.filter(h => canHelp(h, q) && !h.qVisit && rel(h, giver) > -30 && !h.session);
+    const cands = aiAgents.filter(h => canHelp(h, q) && !h.possessed && !h.qVisit && rel(h, giver) > -30 && !h.session);
     for (const h of cands) {
       const chance = 0.05 + h.kind * 0.08 + rel(h, giver) / 400 + (h.zone === giver.zone ? 0.08 : 0) + rewardValue(q.offer) * 0.01;
       if (Math.random() > chance) continue;
@@ -2816,7 +2831,10 @@ function creditGather(a, name, gain) {
 }
 
 function runQuests() {
-  quests.filter(q => q.status === 'accepted').forEach(q => {
+  quests.filter(q => q.status === 'accepted').forEach(runQuestOne);
+  questExpiry();
+}
+function runQuestOne(q) {
     const giver = byId(q.giverId), h = byId(q.helperId);
     if (!giver) { q.status = 'cancelled'; if (h) h.questId = null; return; }
     if (!h) { q.status = 'open'; q.helperId = null; q.helperName = null; return; }
@@ -2867,7 +2885,8 @@ function runQuests() {
       }
       completeQuest(q, giver, h);
     }
-  });
+}
+function questExpiry() {
   quests.filter(q => (q.status === 'open' || q.status === 'accepted') && nowH() > q.deadlineH).forEach(q => {
     const giver = byId(q.giverId), h = byId(q.helperId);
     if (q.status === 'accepted' && h) failQuest(q, giver, h, 'ทำไม่ทันกำหนด');
@@ -7923,7 +7942,7 @@ function drawCanvas() {
         }
       d = { h: A.ay };
     } else d = drawSized(ctx, key, cx, fy);
-    if (s.station === 'storehouse' || STASH_CAP[s.station]) { const hw = Math.max(24, d.h * 0.6); s._hit = { x: cx - hw, y: fy - d.h, w: hw * 2, h: d.h + 6 }; }   // tap to look inside
+    if (s.station) { const hw = Math.max(24, d.h * 0.6); s._hit = { x: cx - hw, y: fy - d.h, w: hw * 2, h: d.h + 6 }; }   // tap: look inside storage (or, possessed, walk over and use it)
     if (s.station === 'temple') labels.push({ x: cx, y: fy - d.h - 2, text: `🏛️ วิหารเทพ ${templePct(s)}%`, color: '#7c4a03', bg: 'rgba(255,240,200,.95)' });
     else if (showLabels) labels.push({ x: cx, y: fy - d.h - 2, text: s.name.split(' (')[0] + (s.station && s.station !== 'storehouse' && s.station !== 'gate' ? (s.owner ? ` ${s.public ? '🔓' : '🔒'}${s.ownerName}` : '') : ''), color: '#7c4a03', bg: 'rgba(255,248,230,.92)' });
   } }));
@@ -8347,7 +8366,7 @@ function mapTap(e) {
   const hit = aiAgents.filter(a => a.zone === currentZoneId && a._hit && wx >= a._hit.x && wx <= a._hit.x + a._hit.w && wy >= a._hit.y && wy <= a._hit.y + a._hit.h)
     .sort((p, q) => (q._rx + q._ry) - (p._rx + p._ry))[0];
   if (hit) { openAgentCard(hit.id); return; }
-  const store = shelters.filter(s => s.zone === currentZoneId && s._hit && wx >= s._hit.x && wx <= s._hit.x + s._hit.w && wy >= s._hit.y && wy <= s._hit.y + s._hit.h)
+  const store = shelters.filter(s => s.zone === currentZoneId && (s.station === 'storehouse' || STASH_CAP[s.station]) && s._hit && wx >= s._hit.x && wx <= s._hit.x + s._hit.w && wy >= s._hit.y && wy <= s._hit.y + s._hit.h)
     .sort((p, q) => (q.x + q.y) - (p.x + p.y))[0];
   if (store) { closeAgentCard(); openStorePop(store); return; }
   closeAgentCard();
@@ -8480,7 +8499,10 @@ function posTap(wx, wy, sx, sy) {
   if (hit && hit.id === a.id) { cardAgentId = a.id; openCW('stat'); return true; }
   if (hit) { posCmd({ type: 'talk', who: hit.id, x: hit.x, y: hit.y }); return true; }
   const store = shelters.filter(s => s.zone === currentZoneId && s._hit && wx >= s._hit.x && wx <= s._hit.x + s._hit.w && wy >= s._hit.y && wy <= s._hit.y + s._hit.h).sort((p, q) => (q.x + q.y) - (p.x + p.y))[0];
-  if (store) { posCmd({ type: 'store', name: store.name, x: store.x, y: store.y }); return true; }
+  if (store) {
+    const ap = approachOf(store, a), kind = store.station === 'temple' ? 'temple' : TRAP_ST.includes(store.station) ? (store.owner === a.id ? 'trap' : null) : (store.station === 'storehouse' || STASH_CAP[store.station]) ? 'store' : 'station';
+    if (kind) { posCmd({ type: kind, name: store.name, x: ap.x, y: ap.y }); return true; }
+  }
   const [tx, ty] = tileOf(wx, wy);
   const an = ANIM_HITS.map(h => ({ h, d: Math.hypot(h.tx - tx + 0.5, h.ty - ty + 0.5) })).filter(o => o.d < 1.6).sort((p, q) => p.d - q.d)[0];
   if (an) { posCmd({ type: 'hunt', f: an.h.f.id, x: an.h.tx, y: an.h.ty }); return true; }
@@ -8503,7 +8525,7 @@ function possessStep(a, night, season, now) {
   if (!a.sleeping) insectAct(a, night, 0.2);
   if (C && !a.sleeping) {
     if (C.type === 'hunt') { const live = ANIM_HITS.filter(h => h.f.id === C.f).sort((p, q) => Math.hypot(p.tx - a.x, p.ty - a.y) - Math.hypot(q.tx - a.x, q.ty - a.y))[0]; if (live) { C.x = live.tx; C.y = live.ty; } }
-    const reach = { move: 0.6, gather: 0.6, hunt: 2, talk: 2, store: 2.5, drink: 1.5 }[C.type] || 1;
+    const reach = { move: 0.6, gather: 0.6, hunt: 2, talk: 2, store: 1.5, station: 1.5, temple: 1.5, trap: 1.5, drink: 1.5 }[C.type] || 1;
     const d = Math.hypot(C.x - a.x, C.y - a.y);
     if (d > reach) { moveToward(a, C.x, C.y); if (a.zone === z0 && Math.hypot(a.x - x0, a.y - y0) < 0.01) { if (++C.stuck >= 4) { a.bubble = '🤔 ไปทางนั้นไม่ได้'; POS.cmd = null; } } else C.stuck = 0; }
     else if (C.type === 'move') POS.cmd = null;
@@ -8514,7 +8536,10 @@ function possessStep(a, night, season, now) {
       else { a.gatherCd = 0; agentGather(a, season); actMin = /ไม้|ต้น/.test(n.name) ? 28 : 22; }   // keeps picking until it runs out or the bag is full
     }
     else if (C.type === 'hunt') { const f = faunaSpecies.find(x => x.id === C.f); if (!f || (f.zp[a.zone] || 0) <= 0) { a.bubble = '🐾 ไม่เห็นตัวแล้ว'; POS.cmd = null; } else { const ok = huntRoll(a, f, a.zone); actMin = 14; if (ok || a.hp < maxHp(a) * 0.3) POS.cmd = null; } }
-    else if (C.type === 'talk') { const b = aiAgents.find(o => o.id === C.who); if (b && b.zone === a.zone) { talkEvent(a, b); addRel(a, b, 2); addRel(b, a, 2); transferKnowledge(a, b, 'share'); transferKnowledge(b, a, 'share'); gainExp(a, 'cha', 1); a.bubble = `💬 คุยกับ${b.name}`; } POS.cmd = null; actMin = 10; }
+    else if (C.type === 'talk') { const b = aiAgents.find(o => o.id === C.who); if (b && b.zone === a.zone) { talkEvent(a, b); addRel(a, b, 2); addRel(b, a, 2); transferKnowledge(a, b, 'share'); transferKnowledge(b, a, 'share'); gainExp(a, 'cha', 1); a.bubble = `💬 คุยกับ${b.name}`; posMeet(a, b); } POS.cmd = null; actMin = 10; }
+    else if (C.type === 'temple') { POS.cmd = null; posPanel('temple'); }
+    else if (C.type === 'station') { const s = shelters.find(x => x.name === C.name); POS.cmd = null; a.bubble = s ? `🏭 มาถึง${s.name.split(' (')[0]}แล้ว` : ''; if (s && STATION_METHODS[s.station]) posPanel('exp'); }
+    else if (C.type === 'trap') { const t = shelters.find(x => x.name === C.name); POS.cmd = null; if (t && (t.catch || 0) > 0) { collectTrap(a, t); actMin = 15; } else a.bubble = '🪤 ยังไม่มีอะไรติดกับดัก'; }
     else if (C.type === 'store') { const s = shelters.find(x => x.name === C.name); POS.cmd = null; if (s) { cardAgentId = null; openStorePop(s); } }
     else if (C.type === 'drink') { drink(a, 60, '💧 ดื่มน้ำ อึกใหญ่'); gainExp(a, 'vit', 0.2); POS.cmd = null; actMin = 8; }
   }
@@ -8548,8 +8573,117 @@ function posSleep() {
   a.sleepKind = near ? spot.kind : gear || 'ground'; a.sleepAt = near && spot.kind === 'bed' ? spot.s.name : null;
   a.bubble = SLEEP_LABEL(a); renderPosHud();
 }
-let POS_CRAFT = false;
-function posCraftList() { POS_CRAFT = !POS_CRAFT; renderPosHud(); }
+let POS_PANEL = null, POS_EXP = { m: null, a: null, b: null, last: '' }, POS_DEAL = null;
+function posPanel(k) { POS_PANEL = POS_PANEL === k ? null : k; if (k === 'exp') POS_EXP.last = ''; renderPosHud(); }
+function posCraftList() { posPanel('craft'); }
+// meeting someone face to face: hand in an accepted quest, or hear about their request
+function posMeet(a, b) {
+  const mine = a.questId && quests.find(q => q.id === a.questId && q.status === 'accepted');
+  if (mine && mine.giverId === b.id) { runQuestOne(mine); renderPosHud(); return; }
+  const q = quests.find(x => x.status === 'open' && x.giverId === b.id);
+  if (q && !a.questId && canHelp(a, q)) { POS_DEAL = { q: q.id, offer: q.offer.slice(), round: 0 }; posPanel('quest'); POS_PANEL = 'quest'; renderPosHud(); }
+}
+function posQuest(act) {
+  const a = posAgent(), d = POS_DEAL, q = d && quests.find(x => x.id === d.q && x.status === 'open'), giver = q && byId(q.giverId);
+  if (!a || !q || !giver) { POS_DEAL = null; POS_PANEL = null; renderPosHud(); return; }
+  const say = (w, t) => { q.talk.push(`${w.name}: ${t}`); talkSay(a, giver, `${w.name}: ${t}`); };
+  if (act === 'no') { say(a, 'ขอโทษนะ คราวนี้ช่วยไม่ได้'); q.refused.push(a.id); addRel(giver, a, -1); POS_DEAL = null; POS_PANEL = null; renderPosHud(); return; }
+  if (act === 'ask') {                               // bargain once: ask a little more, the giver may meet you halfway
+    const ask = rewardPackage(Math.ceil(rewardValue(d.offer) + 1.5)), limit = q.difficulty * giver.generous * q.urgency + rel(giver, a) / 30;
+    say(a, `ขอเป็น ${rewardText(ask)} ได้ไหม`);
+    if (rewardValue(ask) <= limit) { d.offer = ask; say(giver, 'ได้ ตกลงตามนั้น'); }
+    else { const mid = rewardPackage(Math.round((rewardValue(d.offer) + Math.min(limit, rewardValue(ask))) / 2)); d.offer = mid; say(giver, `ให้ได้มากสุด ${rewardText(mid)}`); addRel(giver, a, -1); }
+    d.round = 1; renderPosHud(); return;
+  }
+  q.status = 'accepted'; q.agreed = d.offer; q.helperId = a.id; q.helperName = a.name; a.questId = q.id;
+  say(a, d.round ? 'ตกลง' : `ได้เลย รับ ${rewardText(d.offer)}`); addRel(giver, a, 2);
+  a.bubble = `📜 รับเควสช่วย ${giver.name}`; addLog(`🤝 [รับเควส] ${a.name} (พระเจ้าสิงอยู่) ตกลงช่วย ${giver.name} "${q.title}" แลกกับ ${rewardText(q.agreed)}`, '#86efac');
+  POS_DEAL = null; POS_PANEL = null; renderPosHud();
+}
+function posQuestDrop() { const a = posAgent(), q = a && a.questId && quests.find(x => x.id === a.questId); if (!q) return; failQuest(q, byId(q.giverId) || a, a, 'ขอถอนตัว'); renderPosHud(); }
+function posGoTo(id) { const b = byId(id), a = posAgent(); if (!a || !b) return; if (b.zone !== a.zone) { a.bubble = `🗺️ ${b.name} อยู่โซน ${b.zone} (ยังเดินข้ามโซนไม่ได้)`; renderPosHud(); return; } POS_PANEL = null; posCmd({ type: 'talk', who: b.id, x: b.x, y: b.y }); renderPosHud(); }
+function posGoTemple() { const a = posAgent(), t = templeOf(); if (!a || !t) return; if (t.zone !== a.zone) { a.bubble = `🗺️ วิหารอยู่โซน ${t.zone}`; renderPosHud(); return; } const ap = approachOf(t, a); POS_PANEL = null; posCmd({ type: 'temple', name: t.name, x: ap.x, y: ap.y }); renderPosHud(); }
+// temple jobs, face to face at the temple
+function posTemple(act, id) {
+  const a = posAgent(), t = templeOf(); if (!a || !t) return;
+  const at = a.zone === t.zone && structDist(a, t) <= 2;
+  if (!at) { a.bubble = '🏛️ ต้องไปที่วิหารก่อน'; renderPosHud(); return; }
+  if (act === 'take') { const q = (t.tQ || []).find(x => x.id === id && !x.helper && !x.done); if (q && !a.templeQ) { q.helper = a.id; q.since = nowH(); a.templeQ = q.id; a.bubble = `🏛️ รับงาน: ${templeQuestText(q)}`; addLog(`🏛️ [วิหารเทพ] ${a.name} (พระเจ้าสิงอยู่) รับงาน "${templeQuestText(q)}"`, '#fde68a'); } }
+  const q = a.templeQ && (t.tQ || []).find(x => x.id === a.templeQ && !x.done);
+  if (act === 'give' && q && q.type === 'bring' && avail(a, q.mat) >= q.qty) { for (let i = 0; i < q.qty; i++) take(a, q.mat); templeDone(a, t, q); }
+  if (act === 'work' && q && q.type === 'labor') { q.prog += 1; gainExp(a, 'str', 0.4); gainExp(a, 'dex', 0.3); a.lit = Math.min(1.5, (a.lit || 0) + 0.02); a.stamina = Math.max(0, (a.stamina ?? 100) - 3); a.bubble = `🛠️ ช่วยซ่อมวิหาร (${Math.min(q.prog, q.hrs)}/${q.hrs} ชม.)`; a.busyUntil = gameNow() + 60; if (q.prog >= q.hrs) templeDone(a, t, q); }
+  if (act === 'drop' && q) { q.helper = null; a.templeQ = null; a.bubble = '🏛️ วางมือจากงานวิหาร'; }
+  renderPosHud();
+}
+function posTryExp() {
+  const a = posAgent(), E = POS_EXP; if (!a || !E.m || !E.a || !E.b) return;
+  if (!methodUsable(a, E.m)) { E.last = '⛔ ใช้วิธีนี้ตรงนี้ไม่ได้'; renderPosHud(); return; }
+  experiment(a, E.m, { a: E.a, b: E.b }); E.last = a.bubble || ''; a.busyUntil = gameNow() + 40;
+  if (!hasMaterials(E.a, E.b, a)) { if (!avail(a, E.a)) E.a = null; if (!avail(a, E.b) || (E.a === E.b && avail(a, E.b) < 2)) E.b = null; }
+  renderPosHud();
+}
+function posSetTrap(k) { const a = posAgent(); if (!a) return; const d = PRODUCTS[k];
+  if (shelters.some(x => x.station === d.station && x.owner === a.id)) a.bubble = `🪤 วาง${d.name}ไว้แล้ว 1 อัน (เก็บของจากอันเดิมก่อน)`;
+  else if (!setTrap(a, k)) a.bubble = d.station === 'fishtrap' ? '🌊 ต้องอยู่ใกล้น้ำตื้นที่มีปลา' : '🐾 แถวนี้ไม่มีสัตว์ที่กับดักนี้จับได้';
+  renderPosHud(); }
+function posPanelHTML(a) {
+  const close = `<button onclick="posPanel(null)">✕</button>`;
+  if (POS_PANEL === 'craft') {
+    const ents = Object.entries(a.know || {}).filter(([, e]) => e.out);
+    return `<div class="pos-craft"><div class="pt">🛠️ ทำของจากสูตรที่รู้ ${close}</div>${ents.length ? ents.map(([sig, e]) => { const ok = hasMaterials(e.a, e.b, a), mu = methodUsable(a, e.m);
+      return `<div class="pr ${ok && mu ? '' : 'no'}" onclick="posCraft('${sig.replace(/'/g, "\\'")}')">${itemIcon(outName(e.out), 24)}<span>${outName(e.out)}<small>${e.a} + ${e.b}${!ok ? ' · ของไม่ครบ' : !mu ? ' · ' + (METHODS[e.m].station ? 'ต้องอยู่ที่' + (STATION_LABEL[METHODS[e.m].station] || '') : 'ต้องถือเครื่องมือ') : ''}</small></span></div>`; }).join('') : '<div class="ac-sub">ยังไม่รู้สูตรอะไรเลย</div>'}</div>`;
+  }
+  if (POS_PANEL === 'exp') {
+    const E = POS_EXP, items = Object.keys(a.bag || {}).filter(n => a.bag[n] > 0 && !isGear(n));
+    const ms = Object.entries(METHODS).map(([k, M]) => { const ok = methodUsable(a, k); return `<button class="chip ${E.m === k ? 'on' : ''} ${ok ? '' : 'no'}" onclick="POS_EXP.m='${k}';renderPosHud()" title="${M.station ? 'ต้องอยู่ที่' + (STATION_LABEL[M.station] || M.station) : M.tool ? 'ต้องถือ' + (TOOL_LABEL[M.tool] || M.tool) : 'มือเปล่า'}">${M.name}${ok ? '' : ' 🔒'}</button>`; }).join('');
+    const chip = (slot) => items.map(n => `<button class="chip it ${E[slot] === n ? 'on' : ''}" onclick="POS_EXP['${slot}']='${n.replace(/'/g, "\\'")}';renderPosHud()">${itemIcon(n, 18)}${n}<small>${a.bag[n]}</small></button>`).join('');
+    const known = E.m && E.a && E.b && a.know[sigOf(E.a, E.b, E.m)];
+    const ready = E.m && E.a && E.b && methodUsable(a, E.m) && hasMaterials(E.a, E.b, a) && !known;
+    const Mh = E.m && METHODS[E.m];
+    return `<div class="pos-craft"><div class="pt">🧪 ทดลองหาสูตรใหม่ ${close}</div>
+      <div class="ps">1. วิธี${Mh && !methodUsable(a, E.m) ? ` <span class="warn">(${Mh.station ? 'ต้องไปที่' + (STATION_LABEL[Mh.station] || '') : 'ต้องถือ' + (TOOL_LABEL[Mh.tool] || '')})</span>` : ''}</div><div class="chips">${ms}</div>
+      <div class="ps">2. ของชิ้นที่ 1</div><div class="chips">${chip('a') || '<span class="ac-sub">กระเป๋าว่าง</span>'}</div>
+      <div class="ps">3. ของชิ้นที่ 2</div><div class="chips">${chip('b')}</div>
+      ${known ? `<div class="res">${known.out ? `✅ เคยลองแล้ว ได้ "${outName(known.out)}"` : `❌ เคยลองแล้ว: ${known.reason || 'ไม่ได้ผล'}`}</div>` : ''}
+      ${E.last ? `<div class="res">${E.last}</div>` : ''}
+      <button class="go" ${ready ? '' : 'disabled'} onclick="posTryExp()">🧪 ลองเลย</button></div>`;
+  }
+  if (POS_PANEL === 'quest' && POS_DEAL) {
+    const q = quests.find(x => x.id === POS_DEAL.q), g = q && byId(q.giverId); if (!q || !g) return '';
+    return `<div class="pos-craft"><div class="pt">📜 ${g.name} ขอความช่วยเหลือ ${close}</div>
+      <div class="qq">${QUEST_TYPES[q.type].icon} <b>${q.title}</b><br><span class="ac-sub">ความยาก ${q.difficulty} · เหลือเวลา ${Math.max(0, Math.round(q.deadlineH - nowH()))} ชม.</span></div>
+      <div class="qq">🎁 ตอบแทน: <b>${rewardText(POS_DEAL.offer)}</b></div>${q.talk.length ? `<div class="ac-sub">💬 ${q.talk.slice(-2).join('<br>💬 ')}</div>` : ''}
+      <div class="qb"><button class="go" onclick="posQuest('yes')">🤝 รับ</button>${POS_DEAL.round ? '' : `<button onclick="posQuest('ask')">💬 ขอเพิ่ม</button>`}<button onclick="posQuest('no')">ไม่รับ</button></div></div>`;
+  }
+  if (POS_PANEL === 'quests') {
+    const mine = a.questId && quests.find(x => x.id === a.questId);
+    const open = quests.filter(q => q.status === 'open' && canHelp(a, q) && byId(q.giverId)).slice(0, 10);
+    const t = templeOf(), tq = a.templeQ && t && (t.tQ || []).find(x => x.id === a.templeQ && !x.done);
+    return `<div class="pos-craft"><div class="pt">📜 เควส ${close}</div>
+      ${mine ? `<div class="qq">⏳ <b>${mine.title}</b> ให้ ${mine.giverName}${mine.qty ? ` · ${mine.progress || 0}/${mine.qty}` : ''}<br><span class="ac-sub">ทำเสร็จแล้วเดินไปหา ${mine.giverName} (ไม่เกิน 2 ช่อง) เพื่อส่ง · ตอบแทน ${rewardText(mine.agreed || ['thanks'])}</span>
+        <div class="qb"><button class="go" onclick="posGoTo('${mine.giverId}')">🚶 ไปหา ${mine.giverName}</button><button onclick="posQuestDrop()">ถอนตัว</button></div></div>` : ''}
+      ${tq ? `<div class="qq">🏛️ <b>${templeQuestText(tq)}</b>${tq.type === 'bring' ? ` · มี ${avail(a, tq.mat)}/${tq.qty}` : ` · ${tq.prog}/${tq.hrs} ชม.`}<div class="qb"><button class="go" onclick="posGoTemple()">🚶 ไปวิหาร</button></div></div>` : ''}
+      <div class="ps">คำขอของชาวเกาะที่รับได้</div>
+      ${open.length ? open.map(q => { const g = byId(q.giverId); return `<div class="pr" onclick="posGoTo('${g.id}')">${QUEST_TYPES[q.type].icon}<span>${q.title}<small>${g.name} · โซน ${g.zone} · ตอบแทน ${rewardText(q.offer)}</small></span></div>`; }).join('') : '<div class="ac-sub">ตอนนี้ยังไม่มีใครขอความช่วยเหลือ</div>'}
+      ${t && t.tStage < 4 && !tq ? `<div class="pr" onclick="posGoTemple()">🏛️<span>งานซ่อมวิหาร<small>${(t.tQ || []).filter(x => !x.helper && !x.done).length} งานว่าง · รับงานที่วิหาร</small></span></div>` : ''}</div>`;
+  }
+  if (POS_PANEL === 'temple') {
+    const t = templeOf(); if (!t) return '';
+    const q = a.templeQ && (t.tQ || []).find(x => x.id === a.templeQ && !x.done), open = (t.tQ || []).filter(x => !x.helper && !x.done);
+    return `<div class="pos-craft"><div class="pt">🏛️ วิหารเทพ ${templePct(t)}% ${close}</div>
+      ${q ? `<div class="qq">กำลังทำ: <b>${templeQuestText(q)}</b><div class="qb">${q.type === 'bring' ? `<button class="go" ${avail(a, q.mat) >= q.qty ? '' : 'disabled'} onclick="posTemple('give')">📦 ส่ง${q.mat} (${avail(a, q.mat)}/${q.qty})</button>` : `<button class="go" onclick="posTemple('work')">🛠️ ช่วยแรง 1 ชม. (${q.prog}/${q.hrs})</button>`}<button onclick="posTemple('drop')">วางมือ</button></div></div>`
+        : open.length ? `<div class="ps">งานที่เปิดรับ</div>${open.map(x => `<div class="pr" onclick="posTemple('take','${x.id}')">${x.type === 'bring' ? itemIcon(x.mat, 22) : '🛠️'}<span>${templeQuestText(x)}<small>แตะเพื่อรับงาน</small></span></div>`).join('')}` : '<div class="ac-sub">ตอนนี้ไม่มีงานว่าง</div>'}
+      <div class="ac-sub">ซ่อมวิหารได้ศรัทธา ได้อ่านอักษรเทพ และได้เรียนวิธีทำของใหม่</div></div>`;
+  }
+  if (POS_PANEL === 'trap') {
+    const traps = Object.keys(a.bag || {}).filter(n => a.bag[n] > 0 && PRODUCTS[keyByName(n)] && PRODUCTS[keyByName(n)].kind === 'trap');
+    const set = shelters.filter(x => TRAP_ST.includes(x.station) && x.owner === a.id);
+    return `<div class="pos-craft"><div class="pt">🪤 กับดัก ${close}</div>
+      ${traps.length ? traps.map(n => `<div class="pr" onclick="posSetTrap('${keyByName(n)}')">${itemIcon(n, 24)}<span>วาง${n}ตรงนี้<small>${PRODUCTS[keyByName(n)].desc || ''}</small></span></div>`).join('') : '<div class="ac-sub">ไม่มีกับดักในกระเป๋า</div>'}
+      ${set.length ? `<div class="ps">กับดักที่วางไว้ (แตะกับดักบนแผนที่เพื่อเดินไปเก็บ)</div>${set.map(x => `<div class="pr" style="cursor:default">🪤<span>${x.name.split(' (')[0]}<small>โซน ${x.zone}${x.catch ? ` · ติดแล้ว ${x.catchName || ''}` : ' · ยังว่าง'}${x.maxUses ? ` · ใช้ได้อีก ${x.uses}/${x.maxUses}` : ''}</small></span></div>`).join('')}` : ''}</div>`;
+  }
+  return '';
+}
 function posCraft(sig) {
   const a = posAgent(); if (!a) return; const e = a.know[sig]; if (!e) return;
   if (!hasMaterials(e.a, e.b, a)) { a.bubble = `🧺 ของไม่ครบ: ต้องมี ${e.a} + ${e.b}`; renderPosHud(); return; }
@@ -8559,23 +8693,21 @@ function posCraft(sig) {
 function renderPosHud() {
   const el = document.getElementById('pos-hud'); if (!el) return;
   const a = posAgent();
-  if (!a) { el.classList.remove('open'); el.innerHTML = ''; POS_CRAFT = false; return; }
+  if (!a) { el.classList.remove('open'); el.innerHTML = ''; POS_PANEL = null; POS_DEAL = null; return; }
   el.classList.add('open');
   el.dataset.sleep = String(!!a.sleeping); el.dataset.pts = String(a.statPts || 0);
   const bar = (k, pct, col) => `<div class="pb" data-k="${k}">${uiIcon('vit', k, 16, '')}<div class="b"><i style="width:${Math.max(0, Math.min(100, pct))}%;background:${col}"></i></div></div>`;
   const hp = a.hp / maxHp(a) * 100, full = 100 - (a.hunger || 0), water = 100 - (a.thirst || 0), sta = a.stamina ?? 100;
   const C = POS.cmd, doing = posDoing(a, C);
-  let craft = '';
-  if (POS_CRAFT) {
-    const ents = Object.entries(a.know || {}).filter(([, e]) => e.out);
-    craft = `<div class="pos-craft"><div class="pt">🛠️ ทำของจากสูตรที่รู้ <button onclick="posCraftList()">✕</button></div>${ents.length ? ents.map(([sig, e]) => { const ok = hasMaterials(e.a, e.b, a), mu = methodUsable(a, e.m);
-      return `<div class="pr ${ok && mu ? '' : 'no'}" onclick="posCraft('${sig.replace(/'/g, "\\'")}')">${itemIcon(outName(e.out), 24)}<span>${outName(e.out)}<small>${e.a} + ${e.b}${!ok ? ' · ของไม่ครบ' : !mu ? ' · ' + (METHODS[e.m].station ? 'ต้องอยู่ที่' + (STATION_LABEL[METHODS[e.m].station] || '') : 'ต้องถือเครื่องมือ') : ''}</small></span></div>`; }).join('') : '<div class="ac-sub">ยังไม่รู้สูตรอะไรเลย</div>'}</div>`;
-  }
+  const craft = POS_PANEL ? posPanelHTML(a) : '';
+  const mq = a.questId && quests.find(x => x.id === a.questId), tq = a.templeQ && templeOf() && (templeOf().tQ || []).find(x => x.id === a.templeQ && !x.done);
+  const qline = mq ? `📜 ${mq.title}${mq.qty ? ` ${mq.progress || 0}/${mq.qty}` : ''} → ${mq.giverName}` : tq ? `🏛️ ${templeQuestText(tq)}` : '';
   el.innerHTML = `${craft}<div class="pos-top"><canvas id="pos-av" width="64" height="72"></canvas><div class="pos-st"><div class="pn">👻 ${a.name}${a.statPts ? ` <span class="pp" onclick="cardAgentId='${a.id}';openCW('stat')">+${a.statPts} แต้ม</span>` : ''}</div>
       ${bar('hp', hp, hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171')}${bar('food', full, full < 25 ? '#ef4444' : '#f5a524')}${bar('water', water, water < 25 ? '#ef4444' : '#38bdf8')}${bar('sta', sta, sta < 25 ? '#ef4444' : '#a78bfa')}
-      <div class="pd">${doing}</div></div><button class="pos-out" onclick="unpossess()">ออกจากร่าง</button></div>
+      <div class="pd">${doing}</div>${qline ? `<div class="pd q" onclick="posPanel('quests')">${qline}</div>` : ''}</div><button class="pos-out" onclick="unpossess()">ออกจากร่าง</button></div>
     <div class="pos-acts"><button onclick="posEat()">${uiIcon('vit', 'food', 22, '🍖')}<span>กิน</span></button><button onclick="posDrink()">${uiIcon('vit', 'water', 22, '💧')}<span>ดื่ม</span></button>
-      <button onclick="posSleep()">${a.sleeping ? '🌅' : '😴'}<span>${a.sleeping ? 'ตื่น' : 'นอน'}</span></button><button onclick="posCraftList()">🛠️<span>ทำของ</span></button>
+      <button onclick="posSleep()">${a.sleeping ? '🌅' : '😴'}<span>${a.sleeping ? 'ตื่น' : 'นอน'}</span></button><button onclick="posPanel('craft')">🛠️<span>ทำของ</span></button><button onclick="posPanel('exp')">🧪<span>ทดลอง</span></button>
+      <button onclick="posPanel('quests')">📜<span>เควส</span></button><button onclick="posPanel('trap')">🪤<span>กับดัก</span></button>
       <button onclick="cardAgentId='${a.id}';openCW('bag')">${uiIcon('tabs', 'bag', 22, '🎒')}<span class="bagn">${bagCount(a)}/${bagCap(a)}</span></button><button onclick="cardAgentId='${a.id}';openCW('stat')">${uiIcon('tabs', 'stat', 22, '📊')}<span>ตัวละคร</span></button></div>`;
   const cv = document.getElementById('pos-av'); if (cv && PUP.ready) { const c = cv.getContext('2d'); const sf = a._face; a._face = 1; drawPuppet(c, a, 32, 70, 60, 'idle', performance.now() / 1000); a._face = sf; c.setTransform(1, 0, 0, 1, 0, 0); }
 }
