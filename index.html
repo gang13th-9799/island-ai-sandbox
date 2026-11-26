@@ -843,6 +843,7 @@ const FAUNA_HABITAT = { f_deer: ['open_grassland', 'hill_grassland', 'river_gras
   f_fish: ['river_grassland', 'waterfall_river', 'river_beach', 'wetland', 'beach_ocean'], f_leopard: ['mountain_cliff', 'deep_forest'], f_wolf: ['rocky_beach', 'wetland', 'mountain_peak'],
   f_monitor: ['deep_forest', 'hill_forest', 'hill_grassland'], f_turtle: ['beach_ocean', 'rocky_beach'], f_frog: ['wetland', 'river_grassland'], f_cobra: ['deep_forest', 'open_grassland'], f_croc: ['wetland', 'river_beach'] };
 let START_ZONE = 'E1';
+const HOME_BASICS = ['กิ่งไม้แห้ง', 'หินกรวด', 'เถาวัลย์เล็ก', 'ใบไม้สด', 'ใบตองสด', 'กอไผ่สด', 'ตะไคร่แห้ง'];
 function rollLayout(seed) {
   const R = wobjRng((seed % 2147483000) + 7), pk = a => a[Math.floor(R() * a.length)];
   const cells = []; for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) cells.push([r, c]);
@@ -914,6 +915,8 @@ function applyLayout(seed) {
   Object.values(ZONES).forEach(z => { if (/forest|grassland|wetland|river/.test(z.geo) && !z.res.includes('ใบไม้สด')) z.res.push('ใบไม้สด'); });
   ISLE.riverZones = L.river.map(([r, c]) => [r, c]);
   START_ZONE = getZoneAt(L.start[0], L.start[1]);
+  // the home zone (where the temple stands) always has the basics, so nobody has to roam for sticks and stones
+  { const z = ZONES[START_ZONE]; if (z) HOME_BASICS.forEach(n => { if (!z.res.includes(n)) z.res.push(n); }); }
   return true;
 }
 // animals move to the land that suits them
@@ -2923,7 +2926,7 @@ function restoreRealm(st) {
     faunaSpecies, animalLogs, foodStock, activeDisaster, aiCrisisProposals, rndTrials, huntLogs, teachLogs, alchemyLogs, toolWear, dynamicProducts,
     novelCount, usedNames, sharedInventory, discoveredElements, shelters, families, government, currentGeneration, aiAgents, toolItems, toolSeq,
     villages, villageSeq, quests, questSeq, souls, logBuffer, steles, steleSeeded, steleSeq } = st);
-  if (st.START_ZONE) START_ZONE = st.START_ZONE; else START_ZONE = 'E1';
+  if (st.START_ZONE) START_ZONE = st.START_ZONE; else START_ZONE = 'E1'; { const z = ZONES[START_ZONE]; if (z && z.res) HOME_BASICS.forEach(n => { if (!z.res.includes(n)) z.res.push(n); }); }
   if (st.riverZones) ISLE.riverZones = st.riverZones; else ISLE.riverZones = null; ISLE.seed = null;
   steles = steles || []; steleSeeded = !!steleSeeded; steleSeq = steleSeq || 0;
   zoneTerrainGrid = zoneTerrainGrid || {}; zoneNodes = zoneNodes || {}; logBuffer = logBuffer || [];
@@ -3072,7 +3075,12 @@ function realmTravelTick(i) {
   // 3) Travellers walk to the gate and cross
   aiAgents.filter(a => a.journey).slice().forEach(a => {
     if (a.zone === gate.zone && Math.hypot(a.x - gate.x, a.y - gate.y) <= 10) crossRealm(a, a.journey.to, i);
-    else if (!a.goal || !a.goal.gate) a.goal = { zone: gate.zone, x: gate.x, y: gate.y, ttl: 80, quest: true, gate: true };
+    else if (!a.goal || !a.goal.gate) {
+      // set out only when ready: fed, rested, carrying food, and early in the day (or with camping gear to sleep on the way)
+      const bagFood = Object.keys(a.bag || {}).some(n => a.bag[n] > 0 && propsOf(n).food && !propsOf(n).fuel);
+      if (!canTrip(a) || !((a.food || 0) >= 3 || bagFood)) { if (!a.goal) a.bubble = `🎒 เตรียมเสบียงก่อนออกเดินทางไปเกจ`; return; }
+      a.goal = { zone: gate.zone, x: gate.x, y: gate.y, ttl: 80, quest: true, gate: true };
+    }
   });
   // 4) Beasts wander through the gate (once a day)
   if (simMinutes === 0) faunaSpecies.filter(f => f.predator && (f.zp[gate.zone] || 0) > 0).forEach(f => {
@@ -4582,7 +4590,7 @@ function agentMove(a, night) {
       }
       const fruit = !fnode && objsOf(a.zone).filter(o => !o.dead && o.fruit).sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
       if (fruit && Math.hypot(fruit.x - a.x, fruit.y - a.y) < 40) { for (let k = 0; k < 2; k++) moveToward(a, Math.round(fruit.x - 0.5), Math.round(fruit.y - 0.5)); a.bubble = '🍎 ไปเก็บผลไม้กิน'; return; }
-      if (!fnode && !night && Math.random() < 0.35) {
+      if (!fnode && !night && Math.random() < 0.35 && canTrip(a)) {
         const nb = getAdjacentZones(a.zone).filter(z => ZONES[z].res.some(r => FOODRX.test(r)) || faunaSpecies.some(f => isPrey(f) && (f.zp[z] || 0) > 0));
         if (nb.length) { a.goal = { zone: pick(nb), x: 40, y: 40, ttl: 12, enter: true }; a.gatherT = null; a.bubble = '🍃 ออกหาของกิน'; travelToGoal(a); return; }
       }
@@ -4669,6 +4677,7 @@ function agentHunt(hunter) {
       if (!z) return;
       // Predators are only hunted by bold/strong hunters
       const w = f.predator ? ((hunter.role.includes('ล่า') || st(hunter, 'str') + st(hunter, 'agi') >= 12) ? 1 : 0) : 4;
+      if (z !== hunter.zone && (!canTrip(hunter) || zoneDist(homeZone(hunter), z) > 1)) return;   // don't chase far from home
       for (let i = 0; i < w * (z === hunter.zone ? 4 : 1); i++) options.push([f, z]);
     });
     // keep chasing the same quarry for a few hours instead of re-rolling every hour
@@ -6493,7 +6502,10 @@ function seekItem(a, re, label) {
     const dist = Math.hypot(o.x - a.x, o.y - a.y); if (dist < bd) { bd = dist; best = o; }
   }
   if (best) { a.objT = best.id; moveToward(a, Math.round(best.x - 0.5), Math.round(best.y - 0.5)); a.bubble = label; return true; }
-  const zs = Object.keys(ZONES).filter(z => z !== a.zone && ZONES[z].res.some(r => re.test(r))).sort((p, q) => zoneDist(a.zone, p) - zoneDist(a.zone, q));
+  const hz = homeZone(a);
+  if (a.zone !== hz && ZONES[hz] && ZONES[hz].res.some(r => re.test(r))) { const p = findValidTile(hz, false); a.goal = { zone: hz, x: p.x, y: p.y, ttl: 30, enter: true }; a.bubble = `${label} (กลับไปหาที่บ้าน)`; travelToGoal(a); return true; }
+  if (!canTrip(a)) return false;                       // not now: too late, too hungry/tired, no camping gear
+  const zs = Object.keys(ZONES).filter(z => z !== a.zone && ZONES[z].res.some(r => re.test(r))).sort((p, q) => zoneDist(hz, p) - zoneDist(hz, q));
   if (zs.length) { const p = findValidTile(zs[0], false); a.goal = { zone: zs[0], x: p.x, y: p.y, ttl: 12 }; a.bubble = `${label} (ไปโซน ${zs[0]})`; travelToGoal(a); return true; }
   return false;
 }
@@ -6535,6 +6547,10 @@ function needStep(a, night) {
     for (const e of homes) {
       const step = planFor(a, e.out);
       if (step && methodUsable(a, step.m) && hasMaterials(step.a, step.b, a)) {
+        if (PRODUCTS[step.out] && PRODUCTS[step.out].kind === 'home' && a.zone !== homeZone(a)) {   // build at home, not out on a trip
+          const hz = homeZone(a); if (!a.goal) { const p = findValidTile(hz, false); a.goal = { zone: hz, x: p.x, y: p.y, ttl: 30, enter: true }; }
+          travelToGoal(a); a.bubble = `🏠 ปัจจัย 4: แบกของกลับไปสร้าง${outName(step.out)}ที่บ้าน`; return true;
+        }
         const r = craftKnown(a, step); a.bubble = `🏠 ปัจจัย 4: ลงมือทำ${outName(step.out)}`; return true;
       }
     }
@@ -7638,6 +7654,29 @@ function agentsCatchUp() {
   }
 }
 // one free moment for one person: decide, walk, act. How long it takes decides when they think again.
+// ===== Staying close to home: trips to other maps only when it's safe to go =====
+function homeZone(a) { return a.home || (templeOf() || {}).zone || START_ZONE; }
+function gameHour() { return Math.floor((simMinutes + (RT_ON() ? rtMin : 0)) / 60) % 24; }
+// an outing to another sub-map: early enough to come back before dark, fed and rested — or carrying camping gear
+function canTrip(a) {
+  if (a.refuge || (a.stamina ?? 100) < 50 || a.hunger >= 50 || (a.warmth ?? 100) < 60) return false;
+  if (campGear(a)) return true;
+  const h = gameHour(); return h >= 6 && h < 13;
+}
+// late in the day and away from home with no camping gear: head back
+function homeStep(a) {
+  if (a.age < 12 || a.sleeping || a.refuge || campGear(a)) { if (a.goal && a.goal.home) a.goal = null; return false; }
+  const hz = homeZone(a), h = gameHour();
+  if (a.zone === hz) { if (a.goal && a.goal.home) a.goal = null; return false; }
+  if (!(h >= 16 || h < 5) || (a.stamina ?? 100) < 12) return false;
+  if (!a.goal || !a.goal.home) {
+    const T = templeOf(), my = homesOf(a).find(x => x.zone === hz), tgt = my || (T && T.zone === hz ? T : null);
+    a.goal = { zone: hz, x: tgt ? tgt.x + 1 : 40, y: tgt ? tgt.y + 4 : 40, ttl: 60, enter: true, home: true };
+  }
+  a.wantRest = false; a.coldSeek = false; a.session = null; a.gatherT = null; a._hunt = null;
+  a.bubble = '🌇 ใกล้ค่ำแล้ว รีบเดินกลับบ้าน';
+  return true;
+}
 // ===== Love of life: starving, freezing or overheating with no help nearby → run back to the temple's sacred zone =====
 function refugeDanger(a) {
   const FOODRX = /ปลา|กุ้ง|กล้วย|มะละกอ|เบอร์รี่|เห็ด|หอย|ปู|รังนก|รังผึ้ง/;
@@ -7687,6 +7726,7 @@ function agentStep(a, night, season, now) {
   const z0 = a.zone, x0 = a.x, y0 = a.y;
   buildZoneTerrain(a.zone);
   if (refugeStep(a)) { /* in danger: everything else waits until they reach the temple */ }
+  else if (homeStep(a)) { /* evening: walking home */ }
   else if (!a.sleeping && a.age >= 12) { if (a.wantRest) restMove(a, 2); else coldMove(a, 2); }
   agentMove(a, night);
   agentGather(a, season);
