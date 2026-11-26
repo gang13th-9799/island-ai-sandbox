@@ -606,6 +606,7 @@
 <script src="assets/homes.js"></script>
 <script src="assets/temple.js"></script>
 <script src="assets/mats.js"></script>
+<script src="assets/banana.js"></script>
 <script>
 // ==========================================
 // 1. PIXEL SPRITES
@@ -5969,6 +5970,7 @@ function drawSized(ctx, key, cx, footY, recolor, rel) {
 // WORLD OBJECTS: trees, bushes, grass, rocks & ores you can harvest with the right tool (art: assets/world.js)
 // natural ones respawn somewhere else in the same zone; durability for both tools and objects
 // ==========================================
+if (window.WORLD_ART && window.BANANA_ART) WORLD_ART.sprites.banana = BANANA_ART;   // wild banana plant: full / harvested / stump
 const WA = { ready: false, img: {}, tex: {}, wall: {} };
 (function loadWorldArt() {
   const A = window.WORLD_ART; if (!A) return;
@@ -6869,7 +6871,7 @@ function drawCanvas() {
     if (tall) {
       const hidden = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < n.x + n.y && Math.abs(a._feet[0] - cx) < HUMAN_H * 1.1 && a._feet[1] < fy && a._feet[1] > fy - HUMAN_H * 2.6);
       if (hidden) ctx.globalAlpha = 0.45;
-      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว|ต้นจาก/.test(n.name) ? 1 : 0, cx, fy, 1, (n.x + n.y) % 2 === 0))
+      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /กล้วย/.test(n.name) ? 'banana' : /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว|ต้นจาก/.test(n.name) ? 1 : 0, cx, fy, 1, (n.x + n.y) % 2 === 0))
         drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
       ctx.globalAlpha = 1;
     }
