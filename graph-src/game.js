@@ -7720,7 +7720,7 @@ function renderCW() {
     const cap = bagCap(a), used = bagCount(a), pct = used / Math.max(1, cap) * 100;
     const cells = list.map(([n, c]) => `<div class="cw-slot ${CW.sel === n ? 'sel' : ''}" onclick="cwSet('sel','${n.replace(/'/g, "\\'")}')" title="${n}">${itemIcon(n, 34)}${slotsOf(n) > 1 ? `<span class="big">${slotsOf(n)}ช่อง</span>` : ''}${propsOf(n).broken ? '<span class="br">⚠️</span>' : ''}<span class="n">${c}</span></div>`).join('')
       + (CW.cat === 'all' && !q ? Array.from({ length: Math.max(0, Math.min(cap - used, 30 - list.length)) }, () => '<div class="cw-slot free"></div>').join('') : '');
-    body = `<div class="cw-bag"><div class="cw-cats">${CW_CATS.map(([k, ic, lb]) => `<button class="${CW.cat === k ? 'on' : ''}" onclick="CW.cat='${k}';CW.sel=null;renderCW()">${ic} ${lb}<span>${cnt(k)}</span></button>`).join('')}</div>
+    body = `<div class="cw-bag"><div class="cw-cats">${CW_CATS.map(([k, ic, lb]) => `<button class="${CW.cat === k ? 'on' : ''}" onclick="CW.cat='${k}';CW.sel=null;renderCW()">${uiIcon('cat', k, 22, ic)} ${lb}<span>${cnt(k)}</span></button>`).join('')}</div>
       <div><input id="cw-q" class="cw-search" placeholder="🔍 ค้นหาชื่อของ" value="${q.replace(/"/g, '&quot;')}" oninput="CW.q=this.value" onchange="CW.q=this.value;this.blur();renderCW()" onkeydown="if(event.key==='Enter'){CW.q=this.value;this.blur();renderCW()}">
       <div class="cw-grid">${cells || '<div class="ac-sub">ไม่มีของในหมวดนี้</div>'}</div>
       <div class="cw-cap"><div class="bar"><i style="width:${Math.min(100, pct)}%;background:${pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : '#16a34a'}"></i><u style="left:75%"></u></div>

@@ -381,7 +381,7 @@
   .cw-sum { margin-top: 10px; padding: 7px 9px; background: #f8ecd2; border-radius: 10px; font-size: 12px; }
   .cw-sum b { color: #16a34a; }
   /* bag */
-  .cw-bag { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; }
+  .cw-bag { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
   .cw-cats { display: flex; flex-direction: column; gap: 4px; }
   @media (max-width: 600px) { .cw-bag { grid-template-columns: 1fr; } .cw-cats { flex-direction: row; overflow-x: auto; } }
   .cw-cats button { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 6px 7px; border-radius: 9px; border: 1.5px solid #e2cb9c; background: #fff; font-weight: 700; color: #6b4a22; cursor: pointer; font-size: 12px; white-space: nowrap; }
