@@ -607,6 +607,8 @@ const PRODUCTS = {
   fishing_rod:   { name: 'เบ็ดตกปลาไม้ไผ่', kind: 'tool', tool: 'rod', dur: 40, pow: 1, tier: 1, props: { wood: 1 } },
   fish_trap:     { name: 'ลอบดักปลา', kind: 'station', station: 'fishtrap' },
   animal_trap:   { name: 'กับดักสัตว์', kind: 'station', station: 'snare' },
+  wood_cage:     { name: 'กรงดักสัตว์ไม้เนื้อแข็ง', kind: 'station', station: 'cage' },        // big square cage: deer, boar...
+  iron_cage:     { name: 'กรงดักสัตว์เหล็ก', kind: 'station', station: 'cage_iron' },       // strong enough for predators too
   iron_pick:    { name: 'อีเต้อเหล็ก', kind: 'tool', tool: 'pick', dur: 250, pow: 3, tier: 3, props: { hard: 1, metal: 1 } },
   reactor_core: { name: 'หอปฏิกรณ์พลังงาน', kind: 'station', station: 'reactor' },
   // bamboo: the island's basic plant, good for many things
@@ -632,7 +634,7 @@ const PRODUCTS = {
   tile_house:  { name: 'บ้านอิฐหลังคากระเบื้อง', kind: 'home', tier: 6, warm: 18, hp: 300 }
 };
 
-const STATION_SPRITE = { fishtrap: 'st_store', snare: 'st_store', chest: 'st_store', yard: 'st_store', warehouse: 'st_store', campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
+const STATION_SPRITE = { fishtrap: 'st_store', snare: 'st_store', cage: 'st_store', cage_iron: 'st_store', chest: 'st_store', yard: 'st_store', warehouse: 'st_store', campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
 const STATION_LABEL = { chest: 'กล่องเก็บของ', yard: 'ลานเก็บวัตถุดิบ', warehouse: 'โกดังเก็บของ', temple: 'วิหารเทพ', campfire: 'กองไฟ', workbench: 'โต๊ะช่าง', kiln: 'เตาเผา', smelter: 'เตาถลุง', wall: 'กำแพงอิฐ', farm: 'คอกสัตว์', lab: 'ห้องแล็บ', reactor: 'หอปฏิกรณ์' };
 const TOOL_LABEL = { blade: 'ของมีคม', vessel: 'ภาชนะใส่น้ำ', crucible: 'เบ้าหลอม', axe: 'ขวาน', bow: 'ธนู', pick: 'อีเต้อ', sickle: 'เคียว', hammer: 'ค้อน' };
 
@@ -712,6 +714,8 @@ function natureLaw(a, b, m) {
       if (either(N('copper_ingot'), N('wood_sword'))) return ok('copper_sword');       // copper sheathing on a wooden sword
       if (either(N('split_bamboo'), N('bamboo_basket'))) return ok('fish_trap');      // a funnel basket that fish swim into
       if (either(is('forked'), N('vine_net'))) return ok('animal_trap');              // a net snare on a forked stick
+      if (either(N('fence_posts'), is('forked'))) return ok('wood_cage');              // hardwood posts lashed into a drop-door cage
+      if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');            // iron bars
       if (either(N('copper_ingot'), N('split_bamboo'))) return ok('copper_sickle');
       if (either(N('iron_ingot'), N('split_bamboo'))) return ok('iron_sickle');
       if (either(N('copper_ingot'), N('fence_posts'))) return ok('copper_hammer');
@@ -1089,19 +1093,28 @@ function templePct(t) { t = t || templeOf(); if (!t) return 0; return t.tStage >
 function auraR(t) { return 5 + templePct(t) * 0.15; }            // 5 tiles when ruined → 20 tiles when whole
 function inAura(a) { const t = templeOf(); return !!(t && a && a.zone === t.zone && Math.hypot(a.x - t.x - 2, a.y - t.y - 2) <= auraR(t)); }
 // traps work on their own: a fish trap fills with fish, a snare catches small game; the owner walks over (≤2 tiles) to empty it
+const TRAP_ST = ['fishtrap', 'snare', 'cage', 'cage_iron'];
 function trapTick() {
-  shelters.filter(s => s.station === 'fishtrap' || s.station === 'snare').forEach(s => {
+  shelters.filter(s => TRAP_ST.includes(s.station)).forEach(s => {
     s.catch = s.catch || 0; if (s.catch >= 3) return;
     if (s.station === 'fishtrap') { const fish = (ZONES[s.zone].res || []).find(r => /ปลา|กุ้ง|ปู/.test(r)); if (fish && Math.random() < 0.18) { s.catch++; s.catchName = fish; } }
-    else { const prey = faunaSpecies.find(f => !f.predator && (f.zp[s.zone] || 0) > 1 && !/ปลา|กุ้ง|ปู/.test(f.name)); if (prey && Math.random() < 0.08) { s.catch++; s.catchName = prey.name; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); } }
+    else if (s.station === 'cage' || s.station === 'cage_iron') {
+      if (s.catch >= 1) return;                        // one big animal at a time
+      const big = f => { const art = animalArt(f); return (art && ANIM_REL[art] ? ANIM_REL[art] : (f.sizeRel || 0.6)) > 0.7; };
+      const prey = faunaSpecies.find(f => (f.zp[s.zone] || 0) > 1 && animalArt(f) && animalArt(f) !== 'fish' && (big(f) || f.predator) && (!f.predator || s.station === 'cage_iron'));
+      if (prey && Math.random() < (s.station === 'cage_iron' ? 0.07 : 0.05)) { s.catch = 1; s.catchName = prey.name; s.catchId = prey.id; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); }
+    }
+    else { const small = f => { const art = animalArt(f); return (art && ANIM_REL[art] ? ANIM_REL[art] : (f.sizeRel || 0.6)) <= 0.7; };   // snares only hold small game
+      const prey = faunaSpecies.find(f => !f.predator && (f.zp[s.zone] || 0) > 1 && !/ปลา|กุ้ง|ปู/.test(f.name) && animalArt(f) !== 'fish' && small(f)); if (prey && Math.random() < 0.08) { s.catch++; s.catchName = prey.name; s.catchId = prey.id; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); } }
   });
 }
 function trapStep(a, night) {
   if (night || a.age < 12) return false;
-  const t = shelters.find(s => (s.station === 'fishtrap' || s.station === 'snare') && s.owner === a.id && s.zone === a.zone && (s.catch || 0) > 0);
+  const t = shelters.find(s => TRAP_ST.includes(s.station) && s.owner === a.id && s.zone === a.zone && (s.catch || 0) > 0);
   if (!t) return false;
   if (structDist(a, t) > 2) { const p = approachOf(t, a); for (let k = 0; k < 2; k++) moveToward(a, p.x, p.y); a.bubble = `🪤 ไปเก็บของจาก${t.name.split(' (')[0]}`; return true; }
   if (t.station === 'fishtrap') { gainItems(a, t.catchName || 'ปลา', t.catch); a.bubble = `🪤 ได้${t.catchName} ${t.catch} ตัวจากลอบ`; }
+  else if (t.station === 'cage' || t.station === 'cage_iron') { const f = faunaSpecies.find(x => x.id === t.catchId); const n = f && f.predator ? 15 : 22; a.food = (a.food || 0) + n; a.bubble = `🪤 กรงจับ${t.catchName}ได้ (อาหาร +${n})`; addLog(`🪤 [กรงดักสัตว์] ${a.name} ได้${t.catchName}จากกรง`, '#fbbf24'); gainExp(a, 'str', 0.5); }
   else { a.food = (a.food || 0) + 6 * t.catch; a.bubble = `🪤 กับดักจับ${t.catchName}ได้ ${t.catch} ตัว (อาหาร +${6 * t.catch})`; addLog(`🪤 [กับดัก] ${a.name} เก็บ${t.catchName} ${t.catch} ตัวจากกับดัก`, '#fbbf24'); }
   t.catch = 0; gainExp(a, 'int', 0.3);
   return true;
@@ -1227,6 +1240,31 @@ function gateImg(k) { const A = window.GATE_ART && GATE_ART[k]; if (!A) return n
 function trapKey(s) { return (s.station === 'fishtrap' ? 'fishtrap' : 'snare') + ((s.catch || 0) > 0 ? '_full' : ''); }
 const TRAP_IMG = {};
 function trapImg(s) { const k = trapKey(s), A = window.TRAP_ART && (TRAP_ART[k] || TRAP_ART[k.replace('_full', '')]); if (!A) return null; const kk = TRAP_ART[k] ? k : k.replace('_full', ''); const im = TRAP_IMG[kk] || (TRAP_IMG[kk] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
+// the game's own animal art in its sleeping pose, lying in the snare
+function drawSnareCatch(ctx, s, cx, fy, now) {
+  const f = faunaSpecies.find(x => x.id === s.catchId) || faunaSpecies.find(x => x.name === s.catchName); if (!f || !window.WORLD_ART || !WORLD_ART.animals) return;
+  const art = animalArt(f); if (!art || !WORLD_ART.animals[art] || art === 'fish') return;
+  const rel = ANIM_REL[art] || f.sizeRel || 0.6, sc = rel / (WORLD_ART.animals[art][0].h / HUMAN_H);
+  drawAnimal(ctx, art, 3, cx, fy, 1, sc, null, now);
+}
+// big square cage: the caught animal sleeps inside (drawn first), bars over it; code-drawn until cage art arrives
+function drawCage(ctx, s, cx, fy, now) {
+  const H = HUMAN_H, iron = s.station === 'cage_iron', k = iron ? 'cage_iron' : 'cage';
+  const A = window.TRAP_ART && TRAP_ART[k], im = A && (TRAP_IMG[k] || (TRAP_IMG[k] = Object.assign(new Image(), { src: A.img })));
+  if (A && im.complete && im.naturalWidth) {
+    const w = H * 1.6, h = w * A.h / A.w;
+    if ((s.catch || 0) > 0) drawSnareCatch(ctx, s, cx, fy - h * 0.12, now);
+    ctx.drawImage(im, cx - w / 2, fy - h * 0.85, w, h); return { h: h * 0.85 };
+  }
+  const w = H * 0.75, h = H * 0.85, dep = H * 0.25, col = iron ? '#6b7280' : '#7a4f2b', dark = iron ? '#374151' : '#4a2e16';
+  if ((s.catch || 0) > 0) drawSnareCatch(ctx, s, cx, fy - H * 0.05, now);
+  ctx.strokeStyle = dark; ctx.lineWidth = iron ? 1.6 : 2.6; ctx.lineCap = 'round';
+  const box = (ox, oy) => { ctx.strokeRect(cx - w + ox, fy - h + oy, w * 2, h); };
+  box(dep, -dep * 0.5); ctx.strokeStyle = col; box(0, 0);
+  for (let i = 1; i < 7; i++) { const x = cx - w + i * w * 2 / 7; ctx.beginPath(); ctx.moveTo(x, fy - h); ctx.lineTo(x, fy); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(cx - w, fy - h); ctx.lineTo(cx - w + dep, fy - h - dep * 0.5); ctx.moveTo(cx + w, fy - h); ctx.lineTo(cx + w + dep, fy - h - dep * 0.5); ctx.stroke();
+  return { h: h + dep * 0.5 };
+}
 function drawTrapCode(ctx, s, cx, fy) {
   const H = HUMAN_H;
   if (s.station === 'fishtrap') {                      // a cone basket lying in the water
@@ -6912,8 +6950,13 @@ function drawCanvas() {
     const hk = s.station === 'temple' ? null : homeArtKey(s), HA = hk && window.HOME_ART && HOME_ART[hk], him = HA && homeImg(hk);
     if (s.station === 'temple') { d = drawTemple(ctx, s, cx, fy); }
     else if (s.station === 'gate' && gateImg('dormant')) { d = drawGate(ctx, s, cx, fy, now); }
+    else if (s.station === 'cage' || s.station === 'cage_iron') { d = drawCage(ctx, s, cx, fy, now); }
     else if ((s.station === 'fishtrap' || s.station === 'snare') && !(window.TRAP_ART && trapImg(s))) { d = drawTrapCode(ctx, s, cx, fy); }
-    else if (s.station === 'fishtrap' || s.station === 'snare') { const im = trapImg(s), A = TRAP_ART[trapKey(s)], w = HUMAN_H * (s.station === 'fishtrap' ? 0.9 : 0.8), h = w * A.h / A.w; ctx.drawImage(im, cx - w / 2, fy - h * 0.8, w, h); d = { h: h * 0.8 }; }
+    else if (s.station === 'fishtrap' || s.station === 'snare') {
+      const im = trapImg(s), A = TRAP_ART[trapKey(s)] || TRAP_ART[trapKey(s).replace('_full', '')], w = HUMAN_H * (s.station === 'fishtrap' ? 0.9 : 0.8), h = w * A.h / A.w;
+      ctx.drawImage(im, cx - w / 2, fy - h * 0.8, w, h); d = { h: h * 0.8 };
+      if (s.station === 'snare' && (s.catch || 0) > 0) drawSnareCatch(ctx, s, cx + w * 0.12, fy - h * 0.12, now);   // the caught animal lies asleep in the loop
+    }
     else if (him) {
       const hh = HUMAN_H * (hk === 'leaf_hut' ? 1.45 : 2.0), hw = hh * HA.w / HA.h;
       const sx = s.hitT && now - s.hitT < 0.35 ? Math.sin((now - s.hitT) * 60) * 1.5 : 0;
