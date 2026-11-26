@@ -5558,6 +5558,36 @@ const BRIDGE_LOOK = {
   wood_bridge:  { deck: '#8a5a32', edge: '#4f3019', post: '#5e3b1f', rail: '#7a4f2b', railH: 6, posts: 'beam' },
   stone_bridge: { deck: '#b8b2a6', edge: '#6f695f', post: '#8f897d', rail: '#a49d90', railH: 5, posts: 'wall' }
 };
+// Gemini bridge art: each picture is a 2-lane section running along the iso y axis (bottom-left → top-right); x-axis bridges use it mirrored.
+// A bridge is drawn as strips 2 lanes wide, each strip as 1+ sections in a row from bank to bank (long bridges get extra posts/arches).
+const BRIDGE_SEG = { rope_bridge: 4, plank_bridge: 4, wood_bridge: 3, stone_bridge: 4 };   // tiles of length one picture shows
+const BRIDGE_IMG = {};
+function bridgeImg(k) { const A = window.BRIDGE_ART && BRIDGE_ART[k]; if (!A) return null; const im = BRIDGE_IMG[k] || (BRIDGE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
+function bridgePieces(b) {
+  const lanes = b.lanes || [b.tiles], ax = b.axis === 'x', out = [];
+  const along = ([x, y]) => ax ? x : y, perp = ([x, y]) => ax ? y : x;
+  for (let j = 0; j < lanes.length; j += 2) {
+    const strip = lanes.slice(Math.min(j, Math.max(0, lanes.length - 2)), Math.min(j, Math.max(0, lanes.length - 2)) + 2).flat();
+    const a0 = Math.min(...strip.map(along)) - 1, a1 = Math.max(...strip.map(along)) + 1, pc = strip.reduce((t, q) => t + perp(q), 0) / strip.length;
+    const len = a1 - a0, k = Math.max(1, Math.round((len - 1) / BRIDGE_SEG[b.kind]));
+    const pt = t => ax ? [t + 0.5, pc + 0.5] : [pc + 0.5, t + 0.5];
+    const [sx0, sy0] = groundAt(...pt(a0)), [sx1, sy1] = groundAt(...pt(a1));   // bank to bank
+    for (let i = 0; i < k; i++) {
+      const f = (i + 0.5) / k, t = a0 + len * f;
+      out.push({ cx: sx0 + (sx1 - sx0) * f, cy: sy0 + (sy1 - sy0) * f, horiz: Math.abs(sx1 - sx0) / k, depth: ax ? t + pc : pc + t });
+    }
+  }
+  return out;
+}
+function drawBridgePiece(ctx, b, pc) {
+  const A = BRIDGE_ART[b.kind], im = bridgeImg(b.kind), seg = BRIDGE_SEG[b.kind];
+  const s = pc.horiz / (A.w * seg / (seg + 2)) * 1.08;     // fit the section's length between its ends (a little overlap between sections)
+  const w = A.w * s, h = A.h * s;
+  ctx.save(); ctx.translate(pc.cx, pc.cy - 3);
+  if (b.axis === 'x') ctx.scale(-1, 1);
+  ctx.drawImage(im, -w / 2, -h * 0.62, w, h);
+  ctx.restore();
+}
 function drawBridgeTile(ctx, b, x, y, i, n, firstLane, lastLane) {
   const L = BRIDGE_LOOK[b.kind] || BRIDGE_LOOK.plank_bridge, lift = 3;
   const P = (u, v) => { const [sx, sy] = isoXY(b.axis === 'x' ? x + u : x + v, b.axis === 'x' ? y + v : y + u); return [sx, sy - lift]; };
@@ -6724,6 +6754,7 @@ function drawCanvas() {
     });
     bridges.forEach(b => {
       if (b.zone !== currentZoneId || b.hp <= 0) return;
+      if (bridgeImg(b.kind)) { bridgePieces(b).forEach(pc => items.push({ y: pc.depth, draw: () => drawBridgePiece(ctx, b, pc) })); return; }
       (b.lanes || [b.tiles]).forEach((lane, li, all) => lane.forEach(([x, y], i) => items.push({ y: x + y - 0.4, draw: () => drawBridgeTile(ctx, b, x, y, i, lane.length, li === 0, li === all.length - 1) })));
     });
     steles.forEach(sl => {
