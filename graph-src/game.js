@@ -1498,6 +1498,7 @@ function computeNeeds(forAgent) {
   if (aiAgents.some(a => a.hp < maxHp(a) * 0.5) && avail(forAgent, 'ยาต้มสมุนไพร') < 2) needs.push('herbal_medicine');
   if (forAgent) { const t = bestHomeTier(forAgent); Object.entries(PRODUCTS).filter(([, d]) => d.kind === 'home' && d.tier > t).sort((p, q) => p[1].tier - q[1].tier).slice(0, 2).forEach(([k]) => needs.push(k)); }
   if (forAgent && villageOf(forAgent) && !villageStore(villageOf(forAgent))) needs.unshift('village_store');
+  if (forAgent && forAgent.journey && forAgent.journey.prep && !campGear(forAgent)) ['travel_tent', 'sleep_mat'].forEach(k => needs.unshift(k));
   if (forAgent && forAgent.bridgeFor && nowH() - forAgent.bridgeFor.t < 72) ['stone_bridge', 'wood_bridge', 'plank_bridge', 'rope_bridge'].forEach(k => needs.unshift(k));
   else if (forAgent) forAgent.bridgeFor = null;
   Object.entries(PRODUCTS).forEach(([k, d]) => { if (d.kind === 'station' && d.station !== 'storehouse' && (stationsOf(d.station).length === 0 || (forAgent && !accessibleStations(forAgent, d.station).length))) needs.push(k); });
@@ -2504,34 +2505,52 @@ function realmTravelTick(i) {
   const def = realms[i].def;
   const gate = gateOf(captureRealm());
   if (!gate) return;
-  // 1) Saviors answer God's call (only from realms that can spare people)
+  // 1) Rescue missions: only a strong realm (temple fully restored, more than 50 people) plans to save a fallen one.
+  //    The people meet, pick a balanced team with a leader, prepare food and camping gear, then leave together.
   const meBeingSaved = godRequests.some(q => q.realm === i && q.status !== 'done');
+  const T = templeOf(), strong = !!T && templePct(T) >= 100 && aiAgents.length > 50;
   godRequests.filter(q => q.status !== 'done' && q.realm !== i && !meBeingSaved).forEach(q => {
-    const target = realms[q.realm].state;
-    const heading = aiAgents.filter(a => a.journey && a.journey.to === q.realm).length;
-    // A realm only sends people it can spare
-    if (target.aiAgents.length + heading >= 8 || aiAgents.length - heading < 10) return;
-    const want = { 'ชาย': 0, 'หญิง': 0 };
-    target.aiAgents.concat(aiAgents.filter(a => a.journey && a.journey.to === q.realm)).forEach(a => { if (a.age >= 15) want[a.gender]++; });
-    const lacking = want['ชาย'] <= want['หญิง'] ? 'ชาย' : 'หญิง';
-    aiAgents.filter(a => a.age >= 18 && a.age <= 55 && !a.journey && !a.questId && a.saviorOf === undefined && !(villageOf(a) && villageOf(a).chiefId === a.id)).forEach(a => {
-      const called = a.homeRealm === q.realm;
-      const willing = called || a.kind >= 0.45 || a.rep >= 3;
-      if (!willing) return;
-      const p = (called ? 0.06 : 0.008) * (a.gender === lacking ? 2 : 1);
-      if (Math.random() > p) return;
-      a.journey = { to: q.realm, savior: q.id };
-      a.bubble = called ? `🌫️ เสียงในฝันเรียกให้กลับไปบ้านเกิด ${realms[q.realm].def.name}` : `🙏 ได้ยินคำขอพระเจ้า จะไปกอบกู้ ${realms[q.realm].def.name}`;
-      addLog(`🙏 [ผู้กอบกู้] ${a.name} ตอบรับคำขอของพระเจ้า ออกเดินทางไปเกจเพื่อกอบกู้ "${realms[q.realm].def.name}"${called ? ' (วิญญาณเคยอยู่ที่นั่นในชาติก่อน)' : ''}`, '#e9d5ff');
+    q.plans = q.plans || {};
+    let plan = q.plans[i];
+    if (!plan) {
+      if (!strong || Object.values(q.plans).some(pl => pl.status !== 'done')) return;   // one mission at a time per fallen realm
+      if (godRequests.some(o => o !== q && o.plans && o.plans[i] && o.plans[i].status !== 'done')) return;   // and this realm runs one mission at a time
+      const fit = aiAgents.filter(a => a.age >= 18 && a.age <= 45 && !a.journey && !a.questId && a.saviorOf === undefined && a.hp >= maxHp(a) * 0.7 && !(villageOf(a) && villageOf(a).chiefId === a.id))
+        .map(a => [a, STAT_KEYS.reduce((t, k) => t + st(a, k), 0) + (a.kind || 0) * 5 + (a.rep || 0) * 0.5 + (a.homeRealm === q.realm ? 6 : 0)]).sort((x, y) => y[1] - x[1]).map(x => x[0]);
+      const size = Math.min(8, aiAgents.length - 45);                       // never weaken the home realm below 45
+      if (size < 4) return;
+      const men = fit.filter(a => a.gender === 'ชาย').slice(0, Math.ceil(size / 2)), women = fit.filter(a => a.gender === 'หญิง').slice(0, Math.floor(size / 2));
+      const team = men.concat(women);
+      if (team.length < 4 || !men.length || !women.length) return;
+      const leader = team.slice().sort((x, y) => st(y, 'cha') - st(x, 'cha'))[0];
+      plan = q.plans[i] = { team: team.map(a => a.id), leader: leader.id, made: nowH(), status: 'prep' };
+      team.forEach(a => { a.journey = { to: q.realm, savior: q.id, prep: true }; a.bubble = `🗺️ ได้รับเลือกเข้าคณะกอบกู้ ${realms[q.realm].def.name} เตรียมเสบียง`; });
+      addLog(`🗺️ [แผนกอบกู้] ชาวเกาะประชุมกันที่วิหารเทพ ตกลงส่งคณะ ${team.length} คน นำโดย ${leader.name} ไปกอบกู้ดินแดน "${realms[q.realm].def.name}" — สมาชิก: ${team.map(a => a.name).join(', ')} · เตรียมอาหารและอุปกรณ์ตั้งแคมป์ก่อนออกเดินทาง`, '#fde68a');
+      return;
+    }
+    if (plan.status !== 'prep') return;
+    const team = plan.team.map(byId).filter(Boolean).filter(a => a.journey && a.journey.to === q.realm);
+    if (!team.length) { plan.status = 'done'; return; }
+    team.forEach(a => {                                                       // getting ready: food in hand, a way to sleep on the road
+      const ready = (a.food || 0) >= 5 && !!campGear(a);
+      a._prepReady = ready;
+      if (!ready && !a.goal && Math.random() < 0.3) a.bubble = (a.food || 0) < 5 ? '🎒 สะสมเสบียงก่อนออกเดินทางกอบกู้' : '⛺ หาอุปกรณ์ตั้งแคมป์ก่อนออกเดินทาง';
     });
+    if (team.every(a => a._prepReady) || nowH() - plan.made >= 72) {          // everyone ready (or 3 days passed): set out together
+      plan.status = 'go';
+      team.forEach(a => { a.journey.prep = false; a.bubble = `🚶 ออกเดินทางไปกอบกู้ ${realms[q.realm].def.name}`; });
+      addLog(`🚩 [ออกเดินทาง] คณะกอบกู้ ${team.length} คน นำโดย ${(byId(plan.leader) || team[0]).name} มุ่งหน้าสู่เกจ เพื่อไปฟื้นฟู "${realms[q.realm].def.name}"`, '#fde68a');
+    }
   });
   // 2) Crowded people may emigrate through the gate when the whole realm is packed
-  if (aiAgents.length >= 40) aiAgents.filter(a => a.age >= 18 && (a.crowd || 0) >= 3 && !a.journey && a.saviorOf === undefined && Math.random() < 0.05).forEach(a => {
-    const to = realms.map((r, j) => [j, r.state.aiAgents.length]).filter(([j]) => j !== i).sort((x, y) => x[1] - y[1])[0];
-    if (to) { a.journey = { to: to[0] }; a.bubble = `🧳 จะย้ายไปดินแดน ${realms[to[0]].def.name}`; }
-  });
+  //    (only to realms where people still live — fallen realms are saved by planned missions, not by stray emigrants — and a few at a time)
+  { const leaving = aiAgents.filter(a => a.journey).length;
+    if (aiAgents.length - leaving > 45) aiAgents.filter(a => a.age >= 18 && (a.crowd || 0) >= 3 && !a.journey && a.saviorOf === undefined && Math.random() < 0.01).slice(0, 1).forEach(a => {
+      const to = realms.map((r, j) => [j, r.state.aiAgents.length]).filter(([j, n]) => j !== i && n > 0 && !godRequests.some(q => q.realm === j && q.status !== 'done')).sort((x, y) => x[1] - y[1])[0];
+      if (to) { a.journey = { to: to[0] }; a.bubble = `🧳 จะย้ายไปดินแดน ${realms[to[0]].def.name}`; }
+    }); }
   // 3) Travellers walk to the gate and cross
-  aiAgents.filter(a => a.journey).slice().forEach(a => {
+  aiAgents.filter(a => a.journey && !a.journey.prep).slice().forEach(a => {
     if (a.zone === gate.zone && Math.hypot(a.x - gate.x, a.y - gate.y) <= 10) crossRealm(a, a.journey.to, i);
     else if (!a.goal || !a.goal.gate) {
       // set out only when ready: fed, rested, carrying food, and early in the day (or with camping gear to sleep on the way)
@@ -7528,7 +7547,7 @@ function canTrip(a) {
 }
 // late in the day and away from home with no camping gear: head back
 function homeStep(a) {
-  if (a.age < 12 || a.sleeping || a.refuge || campGear(a)) { if (a.goal && a.goal.home) a.goal = null; return false; }
+  if (a.age < 12 || a.sleeping || a.refuge || campGear(a) || (a.journey && !a.journey.prep)) { if (a.goal && a.goal.home) a.goal = null; return false; }   // travellers on their way to the gate sleep on the road
   const hz = homeZone(a), h = gameHour();
   if (a.zone === hz) { if (a.goal && a.goal.home) a.goal = null; return false; }
   if (!(h >= 16 || h < 5) || (a.stamina ?? 100) < 12) return false;
