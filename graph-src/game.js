@@ -2825,7 +2825,18 @@ function buildZoneTerrain(zId) {
   const nodes = [];
   z.res.forEach(rName => {
     const isWaterRes = /ปลา|กุ้ง|ปะการัง|หอยมือเสือ/.test(rName);
-    const sp = isWaterRes ? 'fish' : (rName.includes('ไผ่') ? 'res_bamboo' : (/ไม้|กล้วย|มะพร้าว/.test(rName) ? 'res_tree' : 'res_rock'));
+    const sp = isWaterRes ? 'fish' : (rName.includes('ไผ่') ? 'res_bamboo' : (/ไม้|กล้วย|มะพร้าว|ต้นจาก|ต้นสน|กิ่งสน/.test(rName) ? 'res_tree' : /ต้นกก/.test(rName) ? 'res_reed' : 'res_rock'));
+    if (/กล้วย/.test(rName)) {                         // banana plants grow in clumps: 2 clumps of 3-4 within 2-3 tiles
+      for (let c = 0; c < 2; c++) {
+        const ctr = findValidTile(zId, false), n = 3 + (Math.random() < 0.5 ? 1 : 0), used = new Set();
+        for (let k = 0, tries = 0; k < n && tries < 40; tries++) {
+          const x = k === 0 ? ctr.x : ctr.x + Math.round((Math.random() - 0.5) * 5), y = k === 0 ? ctr.y : ctr.y + Math.round((Math.random() - 0.5) * 5);
+          if (x < 2 || y < 2 || x > 77 || y > 77 || WATER.includes(grid[y][x]) || used.has(x * 100 + y) || nodes.some(o => o.x === x && o.y === y)) continue;
+          used.add(x * 100 + y); nodes.push({ name: rName, sprite: sp, x, y, clump: c, head: k === 0 }); k++;
+        }
+      }
+      return;
+    }
     for (let i = 0; i < 3; i++) { const pos = isWaterRes ? shallowTile(zId) : findValidTile(zId, false); nodes.push({ name: rName, sprite: sp, x: pos.x, y: pos.y }); }
   });
   zoneNodes[zId] = nodes;
@@ -6261,14 +6272,16 @@ function drawCanvas() {
     if (tall) {
       const hidden = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < n.x + n.y && Math.abs(a._feet[0] - cx) < HUMAN_H * 1.1 && a._feet[1] < fy && a._feet[1] > fy - HUMAN_H * 2.6);
       if (hidden) ctx.globalAlpha = 0.45;
-      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /กล้วย/.test(n.name) ? 'banana' : /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว|ต้นจาก/.test(n.name) ? 1 : 0, cx, fy, /กล้วย/.test(n.name) ? 0.55 : 1, (n.x + n.y) % 2 === 0))   // a banana plant is a big herb, not a tree
+      if (n.sprite === 'res_bamboo' || !drawProp(ctx, /กล้วย/.test(n.name) ? 'banana' : /มะพร้าว|ต้นจาก/.test(n.name) ? 'palm' : /สน/.test(n.name) ? 'pine' : 'oak', /มะพร้าว/.test(n.name) ? 1 : 0, cx, fy, /กล้วย/.test(n.name) ? 0.55 : /ต้นจาก/.test(n.name) ? 0.6 : 1, (n.x + n.y) % 2 === 0))   // a banana plant is a big herb, not a tree
         drawTreeV(ctx, cx, fy, n.sprite === 'res_bamboo' ? 'bamboo' : 'tree', n.x * 7 + n.y);
       ctx.globalAlpha = 1;
     }
+    if (n.sprite === 'res_reed') drawProp(ctx, 'grass_reed', 0, cx, fy, 1.2);
     if (n.sprite === 'res_rock' && /หิน|แร่|กำมะถัน/.test(n.name)) drawProp(ctx, /แร่เหล็ก/.test(n.name) ? 'rock_iron' : 'rock_gray', 0, cx, fy, 0.8);
     const isz = HUMAN_H * 0.36;
     const mim = matIconImg(n.name);
-    if (mim) { const sz = isz * 1.6; ctx.drawImage(mim, cx + (tall ? WT * 0.9 : 0) - sz / 2, fy - sz * 0.92, sz, sz); }
+    if (n.clump !== undefined && !n.head) {}            // one icon per clump is enough
+    else if (mim) { const sz = isz * 1.6; ctx.drawImage(mim, cx + (tall ? WT * 0.9 : 0) - sz / 2, fy - sz * 0.92, sz, sz); }
     else {
       ctx.font = `${isz}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       ctx.fillText(ic, cx + (tall ? WT * 0.9 : 0), fy);
