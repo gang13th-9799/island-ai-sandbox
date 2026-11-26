@@ -7637,6 +7637,7 @@ function renderAgentCard() {
       <button class="gbtn ghost round close" onclick="closeAgentCard()">✕</button></div>
     <div class="ac-bars"><span>❤️</span><div class="bar-wrap"><div class="bar-hp" style="width:${hp}%;background:${hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171'}"></div></div><span>${hp}%</span>
       <span>🍖</span><div class="bar-wrap"><div class="bar-hg" style="width:${hg}%;background:#f5a524"></div></div><span>${hg}%</span>
+      <span>💧</span><div class="bar-wrap"><div class="bar-hg" style="width:${Math.round(a.thirst || 0)}%;background:${(a.thirst || 0) > 75 ? '#ef4444' : '#38bdf8'}"></div></div><span>${Math.round(a.thirst || 0)}%</span>
       <span>⚡</span><div class="bar-wrap"><div class="bar-hp" style="width:${sta}%;background:${sta < 25 ? '#ef4444' : '#38bdf8'}"></div></div><span>${sta}%</span>
       <span>🌡️</span><div class="bar-wrap"><div class="bar-hp" style="width:${Math.round(a.warmth ?? 100)}%;background:${(a.warmth ?? 100) < 50 ? '#60a5fa' : '#fb923c'}"></div></div><span>${a.felt ?? '-'}°</span>
       <span>${a.sleeping ? '😴' : '🏃'}</span><div class="ac-sub" style="grid-column: span 2">${a.sleeping ? ({ bed: 'นอนในที่พัก', tent: 'นอนในเต็นท์', mat: 'นอนบนเสื่อ', fire: 'นอนข้างกองไฟ' }[a.sleepKind] || 'นอนกับพื้น') : a.wantRest ? 'กำลังไปพัก' : 'ตื่นอยู่'}</div></div>
