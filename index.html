@@ -6177,25 +6177,27 @@ const BRIDGE_LOOK = {
 const BRIDGE_SEG = { rope_bridge: 4, plank_bridge: 4, wood_bridge: 3, stone_bridge: 4 };   // tiles of length one picture shows
 const BRIDGE_IMG = {};
 function bridgeImg(k) { const A = window.BRIDGE_ART && BRIDGE_ART[k]; if (!A) return null; const im = BRIDGE_IMG[k] || (BRIDGE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
+// a wide picture (4 or 6 lanes, made by widening the 2-lane art) covers the whole width; otherwise 2-lane strips side by side
+function bridgeVariant(b) { const lanes = (b.lanes || [b.tiles]).length; if (lanes <= 2) return { key: b.kind, lanes: 2 }; const w = lanes <= 4 ? 4 : 6; const k = b.kind + '_w' + w; return window.BRIDGE_ART && BRIDGE_ART[k] ? { key: k, lanes: w } : { key: b.kind, lanes: 2 }; }
 function bridgePieces(b) {
-  const lanes = b.lanes || [b.tiles], ax = b.axis === 'x', out = [];
+  const lanes = b.lanes || [b.tiles], ax = b.axis === 'x', out = [], V = bridgeVariant(b), stripN = V.lanes === 2 ? 2 : lanes.length;
   const along = ([x, y]) => ax ? x : y, perp = ([x, y]) => ax ? y : x;
-  for (let j = 0; j < lanes.length; j += 2) {
-    const strip = lanes.slice(Math.min(j, Math.max(0, lanes.length - 2)), Math.min(j, Math.max(0, lanes.length - 2)) + 2).flat();
+  for (let j = 0; j < lanes.length; j += stripN) {
+    const j0 = Math.min(j, Math.max(0, lanes.length - stripN)), strip = lanes.slice(j0, j0 + stripN).flat();
     const a0 = Math.min(...strip.map(along)) - 1, a1 = Math.max(...strip.map(along)) + 1, pc = strip.reduce((t, q) => t + perp(q), 0) / strip.length;
     const len = a1 - a0, k = Math.max(1, Math.round((len - 1) / BRIDGE_SEG[b.kind]));
     const pt = t => ax ? [t + 0.5, pc + 0.5] : [pc + 0.5, t + 0.5];
     const [sx0, sy0] = groundAt(...pt(a0)), [sx1, sy1] = groundAt(...pt(a1));   // bank to bank
     for (let i = 0; i < k; i++) {
       const f = (i + 0.5) / k, t = a0 + len * f;
-      out.push({ cx: sx0 + (sx1 - sx0) * f, cy: sy0 + (sy1 - sy0) * f, horiz: Math.abs(sx1 - sx0) / k, depth: ax ? t + pc : pc + t });
+      out.push({ cx: sx0 + (sx1 - sx0) * f, cy: sy0 + (sy1 - sy0) * f, horiz: Math.abs(sx1 - sx0) / k, depth: ax ? t + pc : pc + t, key: V.key, wl: V.lanes });
     }
   }
   return out;
 }
 function drawBridgePiece(ctx, b, pc) {
-  const A = BRIDGE_ART[b.kind], im = bridgeImg(b.kind), seg = BRIDGE_SEG[b.kind];
-  const s = pc.horiz / (A.w * seg / (seg + 2)) * 1.08;     // fit the section's length between its ends (a little overlap between sections)
+  const A = BRIDGE_ART[pc.key], im = bridgeImg(pc.key) || bridgeImg(b.kind), seg = BRIDGE_SEG[b.kind];
+  const s = pc.horiz / (A.w * seg / (seg + pc.wl)) * 1.08;     // fit the section's length between its ends (a little overlap between sections)
   const w = A.w * s, h = A.h * s;
   ctx.save(); ctx.translate(pc.cx, pc.cy - 3);
   if (b.axis === 'x') ctx.scale(-1, 1);
