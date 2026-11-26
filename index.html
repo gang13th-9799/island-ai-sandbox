@@ -1250,8 +1250,8 @@ const PRODUCTS = {
   // fishing and trapping
   fishing_rod:   { name: 'เบ็ดตกปลาไม้ไผ่', kind: 'tool', tool: 'rod', dur: 40, pow: 1, tier: 1, props: { wood: 1 } },
   // traps are carried in the bag, then set where the prey is; the big cages take 4 bag slots, wear out and are fixed at a workbench
-  fish_trap:     { name: 'ลอบดักปลา', kind: 'trap', station: 'fishtrap', props: { slots: 1 }, desc: 'กับดักเล็ก: วางในน้ำตื้น ดักปลา กุ้ง ปู · กินที่กระเป๋า 1 ช่อง' },
-  animal_trap:   { name: 'กับดักสัตว์', kind: 'trap', station: 'snare', props: { slots: 1 }, desc: 'กับดักเล็ก: จับได้แต่สัตว์ตัวเล็ก · กินที่กระเป๋า 1 ช่อง' },
+  fish_trap:     { name: 'ลอบดักปลา', kind: 'trap', station: 'fishtrap', uses: 3, props: { slots: 1 }, desc: 'กับดักเล็ก: วางในน้ำตื้น ดักปลา กุ้ง ปู · ใช้ได้ 3 ครั้งแล้วพัง ทำใหม่ได้ทุกที่ · กินที่กระเป๋า 1 ช่อง' },
+  animal_trap:   { name: 'กับดักสัตว์', kind: 'trap', station: 'snare', uses: 3, props: { slots: 1 }, desc: 'กับดักเล็ก: จับได้แต่สัตว์ตัวเล็ก · ใช้ได้ 3 ครั้งแล้วพัง ทำใหม่ได้ทุกที่ · กินที่กระเป๋า 1 ช่อง' },
   wood_cage:     { name: 'กรงดักสัตว์ไม้เนื้อแข็ง', kind: 'trap', station: 'cage', uses: 20, props: { slots: 4 }, desc: 'กับดักใหญ่: จับสัตว์กินพืช ใช้ได้ 20 ครั้ง · กินที่กระเป๋า 4 ช่อง · สร้าง/ซ่อมที่โต๊ะช่าง' },
   wood_cage_broken: { name: 'กรงดักสัตว์ไม้ชำรุด', kind: 'item', fixTo: 'wood_cage', props: { slots: 4, broken: 1 }, desc: 'กรงไม้ที่ใช้จนพัง เอาไปซ่อมที่โต๊ะช่างด้วยไม้ · กินที่กระเป๋า 4 ช่อง' },        // big square cage: deer, boar...
   iron_cage:     { name: 'กรงดักสัตว์เหล็ก', kind: 'trap', station: 'cage_iron', uses: 30, props: { slots: 4 }, desc: 'กับดักใหญ่: จับได้ทุกชนิด รวมสัตว์นักล่า ใช้ได้ 30 ครั้ง · กินที่กระเป๋า 4 ช่อง · สร้าง/ซ่อมที่โต๊ะช่าง' },
@@ -1773,7 +1773,7 @@ function trapTick() {
   });
   shelters.filter(s => TRAP_ST.includes(s.station)).forEach(s => {
     s.catch = s.catch || 0;
-    if ((s.station === 'cage' || s.station === 'cage_iron') && !s.maxUses) s.uses = s.maxUses = s.station === 'cage' ? 20 : 30;   // cages set before wear existed
+    if (!s.maxUses) s.uses = s.maxUses = ({ cage: 20, cage_iron: 30 })[s.station] || 3;   // traps set before wear existed
     if (s.catch >= 3) return;
     if (s.station === 'fishtrap') { const fish = (ZONES[s.zone].res || []).find(r => /ปลา|กุ้ง|ปู/.test(r)); if (fish && Math.random() < 0.18) { s.catch++; s.catchName = fish; } return; }
     if (s.station !== 'snare' && s.catch >= 1) return;                       // a cage holds one animal at a time
@@ -1820,18 +1820,22 @@ function collectTrap(a, t) {
     a.bubble = `🔪 ชำแหละ${t.catchName}จาก${what} (อาหาร +${food}${got.length ? ' · ' + got.join(', ') : ''})`;
     addLog(`🪤 [${what}ดักสัตว์] ${a.name} ได้${t.catchName}${n > 1 ? ` ${n} ตัว` : ''} ชำแหละได้อาหาร +${food}${got.length ? ' · ' + got.join(', ') : ''}`, '#fbbf24');
     gainExp(a, 'str', 0.4); gainExp(a, 'dex', 0.3);
-    if (t.maxUses) {
-      t.uses = Math.max(0, (t.uses == null ? t.maxUses : t.uses) - 1);
-      if (t.uses <= 0) {                                 // worn out: pack the broken cage up to mend it at a workbench
-        const bk = t.station === 'cage_iron' ? 'iron_cage_broken' : 'wood_cage_broken', fix = PRODUCTS[bk].fixTo, mat = fix === 'iron_cage' ? 'เหล็กแท่ง' : 'กิ่งง่ามไม้แข็ง';
-        shelters.splice(shelters.indexOf(t), 1);
-        put(a, PRODUCTS[bk].name, 1);
-        const matName = (PRODUCTS.iron_ingot && fix === 'iron_cage') ? PRODUCTS.iron_ingot.name : mat;
-        const sig = sigOf(PRODUCTS[bk].name, matName, 'assemble');
-        if (!a.know[sig]) a.know[sig] = { a: PRODUCTS[bk].name, b: matName, m: 'assemble', out: fix, from: 'self', day: simDay, practice: 1 };
-        a.bubble = `🪤 ${PRODUCTS[fix].name}พังแล้ว เก็บไปซ่อมที่โต๊ะช่าง`;
-        addLog(`🪤 [กรงพัง] ${PRODUCTS[fix].name}ของ ${a.name} ใช้ครบ ${t.maxUses} ครั้งแล้ว ต้องเอาไปซ่อมที่โต๊ะช่าง (ใช้${matName})`, '#fb923c');
-      }
+  }
+  if (t.maxUses) {
+    t.uses = Math.max(0, (t.uses == null ? t.maxUses : t.uses) - 1);
+    if (t.uses <= 0 && (t.station === 'snare' || t.station === 'fishtrap')) {     // small traps are cheap: they just fall apart, make a new one anywhere
+      shelters.splice(shelters.indexOf(t), 1);
+      a.bubble = `🪤 ${t.name.split(' (')[0]}พังแล้ว ต้องทำใหม่`;
+      addLog(`🪤 [กับดักพัง] ${t.name.split(' (')[0]}ของ ${a.name} ใช้ครบ ${t.maxUses} ครั้งแล้ว (ทำใหม่ได้ด้วยวัสดุหาง่าย ไม่ต้องใช้โต๊ะช่าง)`, '#fb923c');
+    } else if (t.uses <= 0) {                          // worn out: pack the broken cage up to mend it at a workbench
+      const bk = t.station === 'cage_iron' ? 'iron_cage_broken' : 'wood_cage_broken', fix = PRODUCTS[bk].fixTo, mat = fix === 'iron_cage' ? 'เหล็กแท่ง' : 'กิ่งง่ามไม้แข็ง';
+      shelters.splice(shelters.indexOf(t), 1);
+      put(a, PRODUCTS[bk].name, 1);
+      const matName = (PRODUCTS.iron_ingot && fix === 'iron_cage') ? PRODUCTS.iron_ingot.name : mat;
+      const sig = sigOf(PRODUCTS[bk].name, matName, 'assemble');
+      if (!a.know[sig]) a.know[sig] = { a: PRODUCTS[bk].name, b: matName, m: 'assemble', out: fix, from: 'self', day: simDay, practice: 1 };
+      a.bubble = `🪤 ${PRODUCTS[fix].name}พังแล้ว เก็บไปซ่อมที่โต๊ะช่าง`;
+      addLog(`🪤 [กรงพัง] ${PRODUCTS[fix].name}ของ ${a.name} ใช้ครบ ${t.maxUses} ครั้งแล้ว ต้องเอาไปซ่อมที่โต๊ะช่าง (ใช้${matName})`, '#fb923c');
     }
   }
   t.catch = 0; gainExp(a, 'int', 0.3);
