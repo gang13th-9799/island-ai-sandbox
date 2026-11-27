@@ -26,3 +26,8 @@ Glyph stroke paths: `glyphs.json` (60×60 box). Number glyphs are keys `#0`–`#
 ## Examples
 - `มัด• หิน— 2 ไม้— 1 เส้นใย— กลายเป็น เครื่องมือ—` = tie 2 stones and 1 wood with fiber, you get a tool.
 - `ถ้า ไฟ• หิน— แล้ว หิน— ร้อน´` = if you burn the stone, the stone becomes hot.
+
+## Popup-title glyphs (added)
+19 glyphs were added for popup titles, in the same 60×60 stroke style: รู้ มาก ลอง จด ธาตุ ภารกิจ ผูกพัน ภัย ภาวนา เทพ ตาย กฎ ประตู แดน สิง สวม ช่วย แลก กับดัก.
+Titles are spelled with `godWord('word:mark ...')` in index.html (mark n/v/a/d), e.g. ประชากร = `มนุษย์— มาก´`, วิหารเทพ = `บ้าน— เทพ—`.
+Full table: god_script_table.png.

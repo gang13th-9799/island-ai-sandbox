@@ -170,8 +170,8 @@
   .sidebar.open { transform: translate(-50%, 0); }
   .sheet-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px 10px; border-bottom: 1px solid var(--line); }
   .grabber { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 44px; height: 5px; border-radius: 5px; background: var(--line-strong); }
-  .god { display: inline-flex; margin-left: 8px; vertical-align: -2px; opacity: .9; cursor: help; }
-  .god svg { fill: none; stroke: #c8902c; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 2px rgba(255,200,90,.55)); }
+  .god { display: inline-flex; gap: 2px; margin-left: 8px; vertical-align: -2px; opacity: .9; cursor: help; }
+  .god svg { fill: none; stroke: #c8902c; stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 2px rgba(255,200,90,.55)); } .god svg .dot { fill: #c8902c; stroke: none; }
   #sheet-title { font-family: var(--head); font-weight: 800; font-size: 17px; margin-top: 8px; color: var(--amber-2); text-shadow: 0 0 14px rgba(245,165,36,.4); }
   .sheet-head .close { margin-left: auto; margin-top: 6px; width: 34px; height: 34px; font-size: 15px; }
   .backdrop { position: absolute; inset: 0; z-index: 25; background: rgba(8,6,22,.5); opacity: 0; pointer-events: none; transition: opacity .3s; }
@@ -6008,47 +6008,17 @@ function toggleGrid() { showGrid = !showGrid; document.getElementById('btn-grid'
 function toggleSim() { isRunning = !isRunning; const b = document.getElementById('btn-toggle-sim'); b.innerText = isRunning ? '⏸️ หยุด' : '▶️ เล่นต่อ'; b.className = 'gbtn ' + (isRunning ? 'moss' : 'ember'); }
 function cycleSpeed() { simSpeed = { 1: 2, 2: 4, 4: 10, 10: 1 }[simSpeed] || 1; document.getElementById('btn-speed').innerText = `⏩ ${simSpeed}x`; startSimLoop(); }
 let openTab = null;
-// ===== God script (อักษรของพระเจ้า): one glyph per meaning, drawn as strokes on a 12x16 grid =====
-const GOD_GLYPH = {
-  person:  ['คน', 'M5 1v9M5 4L1.5 7.5M5 4l3.5 3.5M5 10l-3 5M5 10l3 5'],
-  god:     ['เทพ', 'M5 1v14M2 3l3 3l3-3M3 11h4M1 1.5l1.2 1.5M9 1.5L7.8 3'],
-  know:    ['รู้', 'M1 6l4-3l4 3l-4 3zM5 9v6M3 15h4'],
-  make:    ['ทำ', 'M3 1v14M3 3h5l1 3H3'],
-  thing:   ['ของ', 'M2 4h6v6H2zM5 1v3M5 10v5'],
-  many:    ['มาก', 'M2 1v14M5 1v10M8 1v6'],
-  station: ['ที่ทำ', 'M5 1v3M1 9l4-5l4 5M2 8v7M8 8v7M4 15v-3h2v3'],
-  tool:    ['เครื่องมือ', 'M3 1v14M3 4l5 3l-5 3'],
-  test:    ['ลอง', 'M4 1v5l-3 9h8l-3-9V1M2.3 11h5.4'],
-  record:  ['จด', 'M2 1v14M2 4h6M2 7.5h6M2 11h4'],
-  change:  ['แปร', 'M5 1v4M1 5h8M1 5l8 6M9 5l-8 6M1 11h8M5 11v4'],
-  element: ['ธาตุ', 'M5 1l4 7l-4 7l-4-7zM5 1v14'],
-  quest:   ['ภารกิจ', 'M5 4v11M5 4L1 8M5 4l4 4M3 12h4'],
-  bond:    ['ผูกพัน', 'M2 1v14M8 1v14M2 6l6 4M8 6l-6 4'],
-  danger:  ['ภัย', 'M5 1v3M1 15l4-11l4 11M5 8.5v2.5M5 13.2v.01'],
-  beast:   ['สัตว์', 'M2 1q-1 7 1 14M5 1v14M8 1q1 7-1 14'],
-  pray:    ['ภาวนา', 'M5 15V3M2 6l3-3l3 3M2 10.5l3-3l3 3'],
-  death:   ['ตาย', 'M5 1v10M2 4.5h6M1 15q4-6 8 0'],
-  law:     ['กฎ', 'M1 1v14M9 1v14M1 8h8M5 8v7'],
-  gate:    ['ประตู', 'M2 15V6l3-3l3 3v9M5 1v2M4 15v-5h2v5'],
-  world:   ['แดน', 'M5 1v14M1 8h8M2 4l6 8M8 4l-6 8'],
-  self:    ['ตัวตน', 'M5 6v9M5 6L2 2.5M5 6l3-3.5M3 15h4'],
-  wear:    ['สวม', 'M5 1v2M1 3l4 3l4-3M2 4v10h6V4'],
-  store:   ['เก็บ', 'M5 1v4M2 5h6l-1 9H3z'],
-  temple:  ['วิหาร', 'M5 1L1 5h8zM2 5v9M5 5v9M8 5v9M1 15h8'],
-  trap:    ['กับดัก', 'M5 1v3M1 4h8v10H1zM1 4l4 5l4-5'],
-  trade:   ['แลก', 'M5 1v3M1 6h8L7 4M9 11H1l2 2'],
-  help:    ['ช่วย', 'M5 1v14M1 9l4 3l4-3M2 5h6'],
-  possess: ['สิง', 'M5 1v14M2 4l3 3l3-3M2 11h6M3 14h4']
-};
-// a word = glyphs hanging from one top bar (each title spelled by meaning; 'help' and 'possess' were made up for titles with no fitting glyph)
-function godWord(keys, sz = 15) {
-  const ks = keys.split(' ').filter(k => GOD_GLYPH[k]); if (!ks.length) return '';
-  const tip = 'อักษรพระเจ้า: ' + ks.map(k => GOD_GLYPH[k][0]).join(' · '), W = ks.length * 11 + 1;
-  return `<span class="god" title="${tip}"><svg viewBox="-.5 0 ${W} 16.5" width="${Math.round(sz * W / 16.5)}" height="${sz}"><path d="M0 1H${W - 1}"/>${ks.map((k, i) => `<path transform="translate(${i * 11},0)" d="${GOD_GLYPH[k][1]}"/>`).join('')}</svg></span>`;
+// ===== God script on popup titles: the same pictograph script as the knowledge steles (window.GLYPHS, 60x60 strokes)
+// a title is spelled as "word:mark" — mark n = noun bar, v = verb dot, a = adjective tick, d = adverb tick, none for และ/กลายเป็น
+function godWord(spec, sz = 16) {
+  const G = window.GLYPHS || {}, ws = spec.split(' ').map(w => w.split(':')).filter(([k]) => G[k]); if (!ws.length) return '';
+  const MK = { n: '<path d="M22 4 L38 4"/>', a: '<path d="M26 8 L34 1"/>', d: '<path d="M26 1 L34 8"/>', v: '<circle cx="30" cy="4" r="3.6" class="dot"/>' };
+  const tip = 'อักษรเทพ: ' + ws.map(([k]) => k).join(' ');
+  return `<span class="god" title="${tip}">${ws.map(([k, m]) => `<svg viewBox="2 -2 56 58" width="${sz}" height="${Math.round(sz * 58 / 56)}"><path d="${G[k]}"/>${MK[m] || ''}</svg>`).join('')}</span>`;
 }
-const GOD_TAB = { techtree: 'know make', civ: 'person many', rnd: 'station tool', rndlog: 'test record', alchemy: 'change element', quest: 'quest bond', crisis: 'danger beast', prayer: 'pray god', grave: 'death', settings: 'law' };
-const GOD_CW = { stat: 'self', equip: 'wear', bag: 'store', know: 'know' };
-try { const gl = document.getElementById('god-lobby'); if (gl) gl.outerHTML = godWord('gate world', 17); } catch (e) {}
+const GOD_TAB = { techtree: 'รู้:n เครื่องมือ:n', civ: 'มนุษย์:n มาก:a', rnd: 'โต๊ะช่าง:n และ เครื่องมือ:n', rndlog: 'จด:v ลอง:v', alchemy: 'ธาตุ:n กลายเป็น ธาตุ:n', quest: 'ภารกิจ:n และ ผูกพัน:n', crisis: 'ภัย:n และ สัตว์:n', prayer: 'ภาวนา:v เทพ:n', grave: 'มนุษย์:n ตาย:a', settings: 'กฎ:n' };
+const GOD_CW = { stat: 'ลำตัว:n', equip: 'สวม:v', bag: 'ภาชนะ:n', know: 'รู้:n' };
+try { const gl = document.getElementById('god-lobby'); if (gl) gl.outerHTML = godWord('ประตู:n แดน:n', 17); } catch (e) {}
 function switchTab(tabId, btnEl) {
   if (openTab === tabId && document.getElementById('sheet').classList.contains('open')) { closeSheet(); return; }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -8598,7 +8568,7 @@ function renderStorePop() {
       <span style="color:#8a6a3a">ฝากของที่ล้นกระเป๋าไว้ คนที่มีสิทธิ์ยืนห่างไม่เกิน 2 ช่องหยิบไปใช้ทำของได้</span>`;
   }
   const info = SP.sel && store[SP.sel] > 0 ? `${itemIcon(SP.sel, 20)} <b>${SP.sel}</b> ×${store[SP.sel]}<br><span style="color:#8a6a3a">${itemDesc(SP.sel)}</span>` : '<span style="color:#a0845a">แตะที่ช่องเพื่อดูรายละเอียดของ</span>';
-  box.innerHTML = `<div class="ap-head"><span class="t">📦 ${title}${godWord('store thing', 16)}</span><button class="gbtn ghost round close" onclick="closeAgentPop()">✕</button></div>
+  box.innerHTML = `<div class="ap-head"><span class="t">📦 ${title}${godWord('ภาชนะ:n ใหญ่:a', 16)}</span><button class="gbtn ghost round close" onclick="closeAgentPop()">✕</button></div>
     <div class="item-info" style="margin-bottom:8px">${about}</div>
     <div class="ap-sec">📦 ของในคลัง ${used}${cap ? '/' + cap : ''} ชิ้น</div>
     <div class="bag-grid">${cells}</div>${items.length ? '' : '<div class="ac-sub">ยังว่างอยู่</div>'}
@@ -8611,7 +8581,7 @@ function renderAgentPop() {
   const box = document.getElementById('ap-box'), a = aiAgents.find(x => x.id === cardAgentId);
   if (!a || !document.getElementById('agent-pop').classList.contains('open')) return closeAgentPop();
   const tabs = `<div class="ap-tabs"><button class="${AP.tab === 'bag' ? 'on' : ''}" onclick="AP.tab='bag';renderAgentPop()">🎒 กระเป๋า</button><button class="${AP.tab === 'know' ? 'on' : ''}" onclick="AP.tab='know';renderAgentPop()">🧠 ความรู้</button></div>`;
-  const head = `<div class="ap-head"><span class="t">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${godWord('person', 16)}</span><button class="gbtn ghost round close" onclick="closeAgentPop()">✕</button></div>`;
+  const head = `<div class="ap-head"><span class="t">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${godWord('มนุษย์:n', 16)}</span><button class="gbtn ghost round close" onclick="closeAgentPop()">✕</button></div>`;
   let body = '';
   if (AP.tab === 'bag') {
     // worn & carried
@@ -8807,7 +8777,7 @@ function posPanelHTML(a) {
   const close = `<button onclick="posPanel(null)">✕</button>`;
   if (POS_PANEL === 'craft') {
     const ents = Object.entries(a.know || {}).filter(([, e]) => e.out);
-    return `<div class="pos-craft"><div class="pt"><span>🛠️ ทำของจากสูตรที่รู้${godWord('make thing', 14)}</span>${close}</div>${ents.length ? ents.map(([sig, e]) => { const ok = hasMaterials(e.a, e.b, a), mu = methodUsable(a, e.m);
+    return `<div class="pos-craft"><div class="pt"><span>🛠️ ทำของจากสูตรที่รู้${godWord('มือ:v เครื่องมือ:n', 14)}</span>${close}</div>${ents.length ? ents.map(([sig, e]) => { const ok = hasMaterials(e.a, e.b, a), mu = methodUsable(a, e.m);
       return `<div class="pr ${ok && mu ? '' : 'no'}" onclick="posCraft('${sig.replace(/'/g, "\\'")}')">${itemIcon(outName(e.out), 24)}<span>${outName(e.out)}<small>${e.a} + ${e.b}${!ok ? ' · ของไม่ครบ' : !mu ? ' · ' + (METHODS[e.m].station ? 'ต้องอยู่ที่' + (STATION_LABEL[METHODS[e.m].station] || '') : 'ต้องถือเครื่องมือ') : ''}</small></span></div>`; }).join('') : '<div class="ac-sub">ยังไม่รู้สูตรอะไรเลย</div>'}</div>`;
   }
   if (POS_PANEL === 'exp') {
@@ -8817,7 +8787,7 @@ function posPanelHTML(a) {
     const known = E.m && E.a && E.b && a.know[sigOf(E.a, E.b, E.m)];
     const ready = E.m && E.a && E.b && methodUsable(a, E.m) && hasMaterials(E.a, E.b, a) && !known;
     const Mh = E.m && METHODS[E.m];
-    return `<div class="pos-craft"><div class="pt"><span>🧪 ทดลองหาสูตรใหม่${godWord('test', 14)}</span>${close}</div>
+    return `<div class="pos-craft"><div class="pt"><span>🧪 ทดลองหาสูตรใหม่${godWord('ลอง:v', 14)}</span>${close}</div>
       <div class="ps">1. วิธี${Mh && !methodUsable(a, E.m) ? ` <span class="warn">(${Mh.station ? 'ต้องไปที่' + (STATION_LABEL[Mh.station] || '') : 'ต้องถือ' + (TOOL_LABEL[Mh.tool] || '')})</span>` : ''}</div><div class="chips">${ms}</div>
       <div class="ps">2. ของชิ้นที่ 1</div><div class="chips">${chip('a') || '<span class="ac-sub">กระเป๋าว่าง</span>'}</div>
       <div class="ps">3. ของชิ้นที่ 2</div><div class="chips">${chip('b')}</div>
@@ -8827,7 +8797,7 @@ function posPanelHTML(a) {
   }
   if (POS_PANEL === 'quest' && POS_DEAL) {
     const q = quests.find(x => x.id === POS_DEAL.q), g = q && byId(q.giverId); if (!q || !g) return '';
-    return `<div class="pos-craft"><div class="pt"><span>📜 ${g.name} ขอความช่วยเหลือ${godWord('help trade', 14)}</span>${close}</div>
+    return `<div class="pos-craft"><div class="pt"><span>📜 ${g.name} ขอความช่วยเหลือ${godWord('ช่วย:v แลก:v', 14)}</span>${close}</div>
       <div class="qq">${QUEST_TYPES[q.type].icon} <b>${q.title}</b><br><span class="ac-sub">ความยาก ${q.difficulty} · เหลือเวลา ${Math.max(0, Math.round(q.deadlineH - nowH()))} ชม.</span></div>
       <div class="qq">🎁 ตอบแทน: <b>${rewardText(POS_DEAL.offer)}</b></div>${q.talk.length ? `<div class="ac-sub">💬 ${q.talk.slice(-2).join('<br>💬 ')}</div>` : ''}
       <div class="qb"><button class="go" onclick="posQuest('yes')">🤝 รับ</button>${POS_DEAL.round ? '' : `<button onclick="posQuest('ask')">💬 ขอเพิ่ม</button>`}<button onclick="posQuest('no')">ไม่รับ</button></div></div>`;
@@ -8836,7 +8806,7 @@ function posPanelHTML(a) {
     const mine = a.questId && quests.find(x => x.id === a.questId);
     const open = quests.filter(q => q.status === 'open' && canHelp(a, q) && byId(q.giverId)).slice(0, 10);
     const t = templeOf(), tq = a.templeQ && t && (t.tQ || []).find(x => x.id === a.templeQ && !x.done);
-    return `<div class="pos-craft"><div class="pt"><span>📜 เควส${godWord('quest', 14)}</span>${close}</div>
+    return `<div class="pos-craft"><div class="pt"><span>📜 เควส${godWord('ภารกิจ:n', 14)}</span>${close}</div>
       ${mine ? `<div class="qq">⏳ <b>${mine.title}</b> ให้ ${mine.giverName}${mine.qty ? ` · ${mine.progress || 0}/${mine.qty}` : ''}<br><span class="ac-sub">ทำเสร็จแล้วเดินไปหา ${mine.giverName} (ไม่เกิน 2 ช่อง) เพื่อส่ง · ตอบแทน ${rewardText(mine.agreed || ['thanks'])}</span>
         <div class="qb"><button class="go" onclick="posGoTo('${mine.giverId}')">🚶 ไปหา ${mine.giverName}</button><button onclick="posQuestDrop()">ถอนตัว</button></div></div>` : ''}
       ${tq ? `<div class="qq">🏛️ <b>${templeQuestText(tq)}</b>${tq.type === 'bring' ? ` · มี ${avail(a, tq.mat)}/${tq.qty}` : ` · ${tq.prog}/${tq.hrs} ชม.`}<div class="qb"><button class="go" onclick="posGoTemple()">🚶 ไปวิหาร</button></div></div>` : ''}
@@ -8847,7 +8817,7 @@ function posPanelHTML(a) {
   if (POS_PANEL === 'temple') {
     const t = templeOf(); if (!t) return '';
     const q = a.templeQ && (t.tQ || []).find(x => x.id === a.templeQ && !x.done), open = (t.tQ || []).filter(x => !x.helper && !x.done);
-    return `<div class="pos-craft"><div class="pt"><span>🏛️ วิหารเทพ ${templePct(t)}%${godWord('temple god', 14)}</span>${close}</div>
+    return `<div class="pos-craft"><div class="pt"><span>🏛️ วิหารเทพ ${templePct(t)}%${godWord('บ้าน:n เทพ:n', 14)}</span>${close}</div>
       ${q ? `<div class="qq">กำลังทำ: <b>${templeQuestText(q)}</b><div class="qb">${q.type === 'bring' ? `<button class="go" ${avail(a, q.mat) >= q.qty ? '' : 'disabled'} onclick="posTemple('give')">📦 ส่ง${q.mat} (${avail(a, q.mat)}/${q.qty})</button>` : `<button class="go" onclick="posTemple('work')">🛠️ ช่วยแรง 1 ชม. (${q.prog}/${q.hrs})</button>`}<button onclick="posTemple('drop')">วางมือ</button></div></div>`
         : open.length ? `<div class="ps">งานที่เปิดรับ</div>${open.map(x => `<div class="pr" onclick="posTemple('take','${x.id}')">${x.type === 'bring' ? itemIcon(x.mat, 22) : '🛠️'}<span>${templeQuestText(x)}<small>แตะเพื่อรับงาน</small></span></div>`).join('')}` : '<div class="ac-sub">ตอนนี้ไม่มีงานว่าง</div>'}
       <div class="ac-sub">ซ่อมวิหารได้ศรัทธา ได้อ่านอักษรเทพ และได้เรียนวิธีทำของใหม่</div></div>`;
@@ -8855,7 +8825,7 @@ function posPanelHTML(a) {
   if (POS_PANEL === 'trap') {
     const traps = Object.keys(a.bag || {}).filter(n => a.bag[n] > 0 && PRODUCTS[keyByName(n)] && PRODUCTS[keyByName(n)].kind === 'trap');
     const set = shelters.filter(x => TRAP_ST.includes(x.station) && x.owner === a.id);
-    return `<div class="pos-craft"><div class="pt"><span>🪤 กับดัก${godWord('trap', 14)}</span>${close}</div>
+    return `<div class="pos-craft"><div class="pt"><span>🪤 กับดัก${godWord('กับดัก:n', 14)}</span>${close}</div>
       ${traps.length ? traps.map(n => `<div class="pr" onclick="posSetTrap('${keyByName(n)}')">${itemIcon(n, 24)}<span>วาง${n}ตรงนี้<small>${PRODUCTS[keyByName(n)].desc || ''}</small></span></div>`).join('') : '<div class="ac-sub">ไม่มีกับดักในกระเป๋า</div>'}
       ${set.length ? `<div class="ps">กับดักที่วางไว้ (แตะกับดักบนแผนที่เพื่อเดินไปเก็บ)</div>${set.map(x => `<div class="pr" style="cursor:default">🪤<span>${x.name.split(' (')[0]}<small>โซน ${x.zone}${x.catch ? ` · ติดแล้ว ${x.catchName || ''}` : ' · ยังว่าง'}${x.maxUses ? ` · ใช้ได้อีก ${x.uses}/${x.maxUses}` : ''}</small></span></div>`).join('')}` : ''}</div>`;
   }
@@ -8879,7 +8849,7 @@ function renderPosHud() {
   const craft = POS_PANEL ? posPanelHTML(a) : '';
   const mq = a.questId && quests.find(x => x.id === a.questId), tq = a.templeQ && templeOf() && (templeOf().tQ || []).find(x => x.id === a.templeQ && !x.done);
   const qline = mq ? `📜 ${mq.title}${mq.qty ? ` ${mq.progress || 0}/${mq.qty}` : ''} → ${mq.giverName}` : tq ? `🏛️ ${templeQuestText(tq)}` : '';
-  el.innerHTML = `${craft}<div class="pos-top"><canvas id="pos-av" width="64" height="72"></canvas><div class="pos-st"><div class="pn">${uiIcon('act', 'possess', 18, '👻')} ${a.name}${godWord('possess', 15)}${a.statPts ? ` <span class="pp" onclick="cardAgentId='${a.id}';openCW('stat')">+${a.statPts} แต้ม</span>` : ''}</div>
+  el.innerHTML = `${craft}<div class="pos-top"><canvas id="pos-av" width="64" height="72"></canvas><div class="pos-st"><div class="pn">${uiIcon('act', 'possess', 18, '👻')} ${a.name}${godWord('สิง:v', 15)}${a.statPts ? ` <span class="pp" onclick="cardAgentId='${a.id}';openCW('stat')">+${a.statPts} แต้ม</span>` : ''}</div>
       ${bar('hp', hp, hp > 50 ? '#4ade80' : hp > 25 ? '#facc15' : '#f87171')}${bar('food', full, full < 25 ? '#ef4444' : '#f5a524')}${bar('water', water, water < 25 ? '#ef4444' : '#38bdf8')}${bar('sta', sta, sta < 25 ? '#ef4444' : '#a78bfa')}
       <div class="pd">${doing}</div>${qline ? `<div class="pd q" onclick="posPanel('quests')">${qline}</div>` : ''}</div><button class="pos-out" onclick="unpossess()">ออกจากร่าง</button></div>
     <div class="pos-acts"><button onclick="posEat()">${uiIcon('vit', 'food', 22, '🍖')}<span>กิน</span></button><button onclick="posDrink()">${uiIcon('vit', 'water', 22, '💧')}<span>ดื่ม</span></button>
@@ -9025,7 +8995,7 @@ function renderCW() {
     foot = 'ความรู้ได้จากการทดลอง เรียนจากคนอื่น อ่านศิลา หรือช่วยซ่อมวิหาร · ยิ่งฝึกยิ่งทำพลาดน้อยลง';
   }
   const sc = document.querySelector('.cw-body') ? document.querySelector('.cw-body').scrollTop : 0;
-  win.innerHTML = `<div class="cw-head"><canvas id="cw-av" width="80" height="92"></canvas><div class="tt"><div class="nm">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${v && v.chiefId === a.id ? ' 👑' : ''}${godWord((a.possessed ? 'possess ' : '') + (GOD_CW[CW.tab] || 'self'), 16)}</div>
+  win.innerHTML = `<div class="cw-head"><canvas id="cw-av" width="80" height="92"></canvas><div class="tt"><div class="nm">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${v && v.chiefId === a.id ? ' 👑' : ''}${godWord((a.possessed ? 'สิง:v ' : '') + (GOD_CW[CW.tab] || 'ลำตัว:n'), 16)}</div>
       <div class="sb"><span class="lv">Lv ${lvl}</span>${stage.label} ${Math.floor(a.age)} ปี · ${a.role || 'ยังไม่มีอาชีพ'}${v ? ' · ' + v.name : ' · อิสระ'}</div></div><button class="cw-x" onclick="closeCW()">✕</button></div>
     <div class="cw-tabs">${TABS.map(([k, ic, lb, c]) => `<button class="${CW.tab === k ? 'on' : ''}" onclick="CW.tab='${k}';CW.sel=null;renderCW()">${uiIcon('tabs', k, 24, ic)} ${lb}${c !== '' ? `<span class="c">${c}</span>` : ''}</button>`).join('')}</div>
     <div class="cw-body">${body}</div><div class="cw-foot">${foot}</div>`;
@@ -9042,7 +9012,7 @@ function renderAgentCard() {
   const stats = ['str', 'agi', 'vit', 'int', 'dex', 'cha'].map(k => `<span class="st"><b>${k.toUpperCase()}</b> ${st(a, k)}</span>`).join('');
   const kn = Object.keys(a.know || {}).length;
   el.innerHTML = `<div class="ac-head"><canvas id="ac-avatar" width="84" height="96"></canvas><div class="ac-info">
-      <div class="ac-name">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${v && v.chiefId === a.id ? ' 👑' : ''}${godWord(a.possessed ? 'possess person' : 'person', 15)}</div>
+      <div class="ac-name">${a.gender === 'หญิง' ? '👩' : '👨'} ${a.name}${v && v.chiefId === a.id ? ' 👑' : ''}${godWord(a.possessed ? 'สิง:v มนุษย์:n' : 'มนุษย์:n', 15)}</div>
       <div class="ac-sub">${stage.label} ${Math.floor(a.age)} ปี · ${a.role || 'ยังไม่มีอาชีพ'}${v ? ' · ' + v.name : ''}</div>
       <div class="ac-bubble">${a.bubble || '...'}</div></div>
       <button class="gbtn ghost round close" onclick="closeAgentCard()">✕</button></div>
