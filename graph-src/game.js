@@ -8140,10 +8140,19 @@ function renderCW() {
     const gq = n => n ? qBest(a, n) : null, ge = ty => carriedEff(a, ty);
     const acc = carriedAcc(a), accSlot = (i, id, lb) => { const e = acc[i]; return slot(id, lb, '💍', e && e.item, e ? `${qName(e.q)} · ${e.stat.toUpperCase()} +${e.n}` : '', i ? '' : 'r', null, e && e.q); };
     const lg = ge('legs'), ft = ge('feet');
-    const L = [hand(0), hand(1), accSlot(1, 'ar', 'ประดับขวา'), slot('lg', 'กางเกง/กระโปรง', '👖', lg && lg.item, lg ? `${qName(lg.q)} · ${effText(lg)}` : '', '', null, lg && lg.q), slot('ft', 'รองเท้า', '👞', ft && ft.item, ft ? `${qName(ft.q)} · ${effText(ft)}` : '', '', null, ft && ft.q), slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : '')];
-    const R = [slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', '', 'r'),
-      slot('wm', 'ผ้าคลุม', '🧥', best('warm'), '', 'r'), accSlot(0, 'al', 'ประดับซ้าย'), slot('bg', 'ย่าม/ตะกร้า', '👜', carry || best('bag'), carry ? `ความจุ +${propsOf(carry).carry}` : '', 'r'),
-      slot('lt', 'แสงไฟ', '🔦', best('light'), '', 'r'), slot('ch', 'เครื่องราง', '📿', best('charm'), '', 'r')];
+    const S = {
+      h0: hand(0), h1: hand(1), ar: accSlot(1, 'ar', 'ประดับขวา'), al: accSlot(0, 'al', 'ประดับซ้าย'),
+      of: slot('of', 'ชุด', '👕', OUTFIT_TH[pupOutfit(a)] || 'ชุดธรรมดา', ''), wm: slot('wm', 'ผ้าคลุม', '🧥', best('warm'), ''),
+      ch: slot('ch', 'เครื่องราง', '📿', best('charm'), ''),
+      lg: slot('lg', 'กางเกง/กระโปรง', '👖', lg && lg.item, lg ? `${qName(lg.q)} · ${effText(lg)}` : '', '', null, lg && lg.q),
+      ft: slot('ft', 'รองเท้า', '👞', ft && ft.item, ft ? `${qName(ft.q)} · ${effText(ft)}` : '', '', null, ft && ft.q),
+      cs: slot('cs', 'ที่นอนพกพา', '🏕️', camp, camp ? (propsOf(camp).camp >= 2 ? 'กันหนาว กันฝน' : 'กันพื้นเย็น') : ''),
+      bg: slot('bg', 'ย่าม/ตะกร้า', '👜', carry || best('bag'), carry ? `ความจุ +${propsOf(carry).carry}` : ''),
+      lt: slot('lt', 'แสงไฟ', '🔦', best('light'), '') };
+    const sideOf = (h, r) => r ? h.replace('class="cw-eq ', 'class="cw-eq r ') : h.replace('class="cw-eq r ', 'class="cw-eq ');
+    // right-side things in the left column, left-side things in the right column, top to bottom; camp, bag and light always last
+    const L = ['h0', 'ar', 'of', 'wm', 'cs', 'bg'].map(k => sideOf(S[k], false));
+    const R = ['h1', 'al', 'ch', 'lg', 'ft', 'lt'].map(k => sideOf(S[k], true));
     const sumP = [`⚔️ ATK <b>${atkOf(a)}</b>`, `🛡️ DEF <b>${defOf(a)}</b>`, `❤️ HP <b>${maxHp(a)}</b>`, `💨 หลบ <b>${Math.round(dodgeOf(a) * 100)}%</b>`, `🎒 จุ <b>${bagCap(a)}</b> ช่อง`];
     body = `<div class="cw-doll"><div class="cw-eqcol">${L.join('')}</div><canvas id="cw-doll" width="300" height="400"></canvas><div class="cw-eqcol">${R.join('')}</div></div>
       <div class="cw-sum">${sumP.join(' · ')}</div>`;
