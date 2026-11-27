@@ -158,7 +158,9 @@ let faunaSpecies = [
   { id: 'f_cobra', sprite: 'wolf', name: 'งูเห่า', zones: ['S3', 'S2'], pop: 4, maxPop: 8, reproDays: 5, reproProgress: 0, lootFood: 2,
     lootMat: { 'เขี้ยวพิษงู': 1, 'หนังงู': 1 }, predator: true, power: 2, solitary: true },
   { id: 'f_croc', sprite: 'wolf', name: 'จระเข้น้ำเค็ม', zones: ['W3', 'E3'], pop: 3, maxPop: 6, reproDays: 7, reproProgress: 0, lootFood: 10,
-    lootMat: { 'หนังจระเข้หนา': 1, 'ฟันจระเข้': 2 }, predator: true, power: 4, solitary: true }
+    lootMat: { 'หนังจระเข้หนา': 1, 'ฟันจระเข้': 2 }, predator: true, power: 4, solitary: true },
+  { id: 'f_sheep', sprite: 'deer', name: 'แกะ', zones: ['S2', 'C3', 'E1', 'C4'], pop: 14, maxPop: 30, reproDays: 2, reproProgress: 0, lootFood: 7, lootMat: { 'ขนแกะ': 3, 'เนื้อแกะ': 1, 'หนังแกะ': 1, 'ไขมันแกะ': 1 }, color: '#f1ece0', sizeRel: 0.6 },
+  { id: 'f_silkworm', sprite: 'deer', name: 'ตัวไหม', zones: ['S1', 'S3', 'C3'], pop: 24, maxPop: 50, reproDays: 1, reproProgress: 0, lootFood: 1, lootMat: { 'รังไหม': 1, 'ดักแด้ไหม': 1 }, color: '#f5efdc', sizeRel: 0.18 }
 ];
 const FAUNA_BASE = JSON.parse(JSON.stringify(faunaSpecies));
 // older saves: add new species and raise caps so the wild feels alive
@@ -229,7 +231,7 @@ const MUST_RES = { 'น้ำจืด': ['river_grassland', 'waterfall_river'],
 const FAUNA_HABITAT = { f_deer: ['open_grassland', 'hill_grassland', 'river_grassland', 'hill_forest'], f_boar: ['hill_forest', 'deep_forest', 'hill_grassland', 'wetland'],
   f_rabbit: ['hill_grassland', 'open_grassland', 'river_grassland', 'wetland', 'beach_ocean'], f_goat: ['mountain_cliff', 'mountain_peak', 'rocky_beach', 'waterfall_river'],
   f_fish: ['river_grassland', 'waterfall_river', 'river_beach', 'wetland', 'beach_ocean'], f_leopard: ['mountain_cliff', 'deep_forest'], f_wolf: ['rocky_beach', 'wetland', 'mountain_peak'],
-  f_monitor: ['deep_forest', 'hill_forest', 'hill_grassland'], f_turtle: ['beach_ocean', 'rocky_beach'], f_frog: ['wetland', 'river_grassland'], f_cobra: ['deep_forest', 'open_grassland'], f_croc: ['wetland', 'river_beach'] };
+  f_monitor: ['deep_forest', 'hill_forest', 'hill_grassland'], f_turtle: ['beach_ocean', 'rocky_beach'], f_frog: ['wetland', 'river_grassland'], f_cobra: ['deep_forest', 'open_grassland'], f_croc: ['wetland', 'river_beach'], f_sheep: ['open_grassland', 'hill_grassland', 'river_grassland'], f_silkworm: ['hill_forest', 'deep_forest'] };
 let START_ZONE = 'E1';
 const HOME_BASICS = ['น้ำจืด', 'กิ่งไม้แห้ง', 'หินกรวด', 'เถาวัลย์เล็ก', 'ใบไม้สด', 'ใบตองสด', 'กอไผ่สด', 'ตะไคร่แห้ง'];
 function rollLayout(seed) {
@@ -523,6 +525,14 @@ function world() {
 
 // Physical properties of raw materials (what things ARE, not what to do with them)
 const MAT = {
+  // textile plants and animals
+  'เส้นใยฝ้าย': { fiber: 1, soft: 1, cotton: 1 }, 'เมล็ดฝ้าย': { seed: 1, oily: 1 },
+  'เส้นใยลินิน': { fiber: 1, linen: 1 }, 'เมล็ดแฟลกซ์': { seed: 1, oily: 1, food: 0.5 },
+  'ใยกัญชง': { fiber: 1, strong: 1, hemp: 1 }, 'เมล็ดกัญชง': { seed: 1, food: 0.6 }, 'ใบกัญชง': { herb: 1 },
+  'เส้นใยปอ': { fiber: 1, coarse: 1, jute: 1 }, 'ใบปอ': { food: 0.6, veg: 1 }, 'แกนปอ': { wood: 0.5, dry: 1, fuel: 1 },
+  'ลูกหม่อน': { food: 0.6, dye: 1 }, 'ใบหม่อน': { leaf: 1, mulberry: 1 }, 'กิ่งหม่อน': { wood: 1, dry: 1, fuel: 1 },
+  'รังไหม': { silk: 1 }, 'ดักแด้ไหม': { food: 0.6 },
+  'ขนแกะ': { fiber: 1, wool: 1, soft: 1 }, 'เนื้อแกะ': { food: 1 }, 'หนังแกะ': { hide: 1 }, 'ไขมันแกะ': { fuel: 1, food: 0.5, sticky: 0.5, tallow: 1 },
   'หินเหล็กไฟ': { hard: 1, mineral: 1, sharpable: 1, spark: 1 }, 'หินกรวด': { hard: 1, mineral: 1 },
   'กิ่งไม้แห้ง': { wood: 1, dry: 1, fuel: 1 }, 'กิ่งง่ามไม้แข็ง': { wood: 1, dry: 1, fuel: 1, forked: 1 },
   'ขอนไม้ลอยน้ำ': { wood: 1, fuel: 1, wet: 1 }, 'ต้นไม้เนื้อแข็ง': { wood: 1, fuel: 1 }, 'ต้นมะพร้าว': { wood: 1, fuel: 1 },
@@ -578,6 +588,33 @@ const PRODUCTS = {
   flower_costume: { name: 'ชุดเทศกาลดอกไม้', kind: 'item', eff: { type: 'costume', n: 3, look: 'flowerfest' }, props: { leaf: 0.5, wear: 1 } },   // women's
   priestess_costume: { name: 'ชุดนักบวชหญิงแห่งวิหาร', kind: 'item', eff: { type: 'costume', n: 4, look: 'priestess' }, props: { fiber: 0.5, wear: 1 } },   // women's
   armor_costume:  { name: 'ชุดเกราะไม้', kind: 'item', eff: { type: 'costume', n: 3, look: 'armor' }, props: { wood: 0.5, wear: 1 } },
+  // ----- textiles: spin fibre into thread, weave thread into cloth on a loom, dye it in a pot -----
+  spindle:       { name: 'แกนปั่นด้าย', kind: 'tool', tool: 'spindle', dur: 40, pow: 1, tier: 1, props: { wood: 0.5 } },
+  loom:          { name: 'กี่ทอผ้า', kind: 'station', station: 'loom' },
+  cotton_thread: { name: 'ด้ายฝ้าย', kind: 'item', props: { thread: 1, cotton: 1 } },
+  linen_thread:  { name: 'ด้ายลินิน', kind: 'item', props: { thread: 1, linen: 1 } },
+  hemp_thread:   { name: 'ด้ายกัญชง', kind: 'item', props: { thread: 1, hemp: 1 } },
+  jute_thread:   { name: 'ด้ายปอ', kind: 'item', props: { thread: 1, jute: 1 } },
+  wool_thread:   { name: 'ด้ายขนแกะ', kind: 'item', props: { thread: 1, wool: 1 } },
+  silk_fiber:    { name: 'เส้นใยไหม', kind: 'item', props: { fiber: 1, silkf: 1 } },
+  silk_thread:   { name: 'ด้ายไหม', kind: 'item', props: { thread: 1, silkt: 1 } },
+  cotton_cloth:  { name: 'ผ้าฝ้าย', kind: 'item', props: { cloth: 1 } },
+  linen_cloth:   { name: 'ผ้าลินิน', kind: 'item', props: { cloth: 1, cool: 1 } },
+  hemp_canvas:   { name: 'ผ้าใบกัญชง', kind: 'item', props: { cloth: 1, canvas: 1 } },
+  jute_sack:     { name: 'กระสอบปอ', kind: 'item', props: { cloth: 0.5, carry: 8 } },
+  wool_cloth:    { name: 'ผ้าขนแกะ', kind: 'item', props: { cloth: 1, warmc: 1 } },
+  silk_cloth:    { name: 'ผ้าไหม', kind: 'item', props: { cloth: 1, fine: 1 }, value: 6 },
+  mixed_cloth:   { name: 'ผ้าทอผสม', kind: 'item', props: { cloth: 1 } },
+  dyed_cloth:    { name: 'ผ้าย้อมสี', kind: 'item', props: { cloth: 1, dyed: 1 }, value: 3 },
+  wool_cloak:    { name: 'ผ้าคลุมขนแกะ', kind: 'item', eff: { type: 'warm', n: 6 }, props: { wool: 0.5, wear: 1 } },
+  canvas_tent:   { name: 'เต็นท์ผ้าใบ', kind: 'item', props: { canvas: 0.5, camp: 2 } },
+  hemp_rope:     { name: 'เชือกป่าน', kind: 'item', props: { rope: 1, fiber: 1, strong: 1 } },
+  seed_oil:      { name: 'น้ำมันเมล็ดพืช', kind: 'item', props: { fuel: 2, oil: 1 } },
+  oil_lamp:      { name: 'ตะเกียงน้ำมัน', kind: 'item', eff: { type: 'light' }, props: { light: 1 } },
+  tallow_candle: { name: 'เทียนไขแกะ', kind: 'item', eff: { type: 'light' }, props: { light: 1 } },
+  hemp_balm:     { name: 'ยาหม่องกัญชง', kind: 'item', props: { herb: 1, medicine: 2 } },
+  silk_frame:    { name: 'รังไหมจำลอง', kind: 'trap', station: 'silkframe', uses: 1, props: { slots: 1 }, desc: 'วางใกล้ต้นหม่อนเพื่อล่อตัวไหม จับได้แล้วกลายเป็นถาดเลี้ยงตัวไหม' },
+  silk_tray:     { name: 'ถาดเลี้ยงตัวไหม', kind: 'trap', station: 'silktray', props: { slots: 1 }, desc: 'วางที่ไหนก็ได้ ป้อนใบหม่อนหรือใบไม้ ตัวไหมจะทำรังไหมให้เรื่อยๆ' },
   copper_bangle: { name: 'กำไลทองแดง', kind: 'item', eff: { type: 'acc', stat: 'vit', n: 2 }, props: { metal: 0.5, copper: 1, wear: 1 } },
   clay_paste:   { name: 'ดินปั้นเนื้อเนียน', kind: 'item', props: { paste: 1 } },
   raw_pot:      { name: 'หม้อดินดิบ', kind: 'item', props: { raw: 1 } },
@@ -662,9 +699,9 @@ const PRODUCTS = {
   tile_house:  { name: 'บ้านอิฐหลังคากระเบื้อง', kind: 'home', tier: 6, warm: 18, hp: 300 }
 };
 
-const STATION_SPRITE = { fishtrap: 'st_store', snare: 'st_store', cage: 'st_store', cage_iron: 'st_store', chest: 'st_store', yard: 'st_store', warehouse: 'st_store', campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
+const STATION_SPRITE = { loom: 'st_bench', silkframe: 'st_store', silktray: 'st_store', fishtrap: 'st_store', snare: 'st_store', cage: 'st_store', cage_iron: 'st_store', chest: 'st_store', yard: 'st_store', warehouse: 'st_store', campfire: 'st_fire', workbench: 'st_bench', kiln: 'shelter_kiln', smelter: 'st_smelter', wall: 'st_wall', farm: 'shelter_farm', lab: 'st_lab', reactor: 'shelter_reactor' };
 const STATION_LABEL = { chest: 'กล่องเก็บของ', yard: 'ลานเก็บวัตถุดิบ', warehouse: 'โกดังเก็บของ', temple: 'วิหารเทพ', campfire: 'กองไฟ', workbench: 'โต๊ะช่าง', kiln: 'เตาเผา', smelter: 'เตาถลุง', wall: 'กำแพงอิฐ', farm: 'คอกสัตว์', lab: 'ห้องแล็บ', reactor: 'หอปฏิกรณ์' };
-const TOOL_LABEL = { blade: 'ของมีคม', vessel: 'ภาชนะใส่น้ำ', crucible: 'เบ้าหลอม', axe: 'ขวาน', bow: 'ธนู', pick: 'อีเต้อ', sickle: 'เคียว', hammer: 'ค้อน' };
+const TOOL_LABEL = { spindle: 'แกนปั่นด้าย', blade: 'ของมีคม', vessel: 'ภาชนะใส่น้ำ', crucible: 'เบ้าหลอม', axe: 'ขวาน', bow: 'ธนู', pick: 'อีเต้อ', sickle: 'เคียว', hammer: 'ค้อน' };
 
 // Ways of working. These are actions any human could try; what they DO is hidden.
 const METHODS = {
@@ -678,9 +715,11 @@ const METHODS = {
   roast:    { name: 'ย่าง/เผาบนกองไฟ', station: 'campfire', tool: null },
   kiln:     { name: 'เผาไฟแรงในเตาปิด', station: 'kiln', tool: null },
   smelt:    { name: 'หลอมในเบ้าที่เตาถลุง', station: 'smelter', tool: 'crucible' },
-  synth:    { name: 'สังเคราะห์ธาตุ', station: 'lab', tool: null }
+  synth:    { name: 'สังเคราะห์ธาตุ', station: 'lab', tool: null },
+  spin:     { name: 'ปั่นเส้นใยเป็นด้าย', station: null, tool: 'spindle' },
+  weave:    { name: 'ทอผ้าบนกี่', station: 'loom', tool: null }
 };
-const STATION_METHODS = { workbench: ['knead11', 'assemble'], campfire: ['roast'], kiln: ['kiln'], smelter: ['smelt'], lab: ['synth'] };
+const STATION_METHODS = { loom: ['weave'], workbench: ['knead11', 'assemble'], campfire: ['roast'], kiln: ['kiln'], smelter: ['smelt'], lab: ['synth'] };
 
 function productDef(key) { return PRODUCTS[key] || dynamicProducts[key] || null; }
 function keyByName(name) {
@@ -722,7 +761,23 @@ function natureLaw(a, b, m) {
       if (A.hard && B.hard && (A.mineral || A.sharpable || B.mineral || B.sharpable)) return ok('stone_blade');
       if (A.hard || B.hard) return near('ทุบแล้วแค่แตกละเอียด ไม่ได้อะไร');
       return fail('นิ่มเกินไป กะเทาะไม่ได้');
+    case 'spin': {                                  // one kind of fibre at a time; mixing fibres just tangles
+      const kinds = [['cotton', 'cotton_thread'], ['linen', 'linen_thread'], ['hemp', 'hemp_thread'], ['jute', 'jute_thread'], ['wool', 'wool_thread'], ['silkf', 'silk_thread']];
+      for (const [p, out] of kinds) if (A[p] && B[p]) return ok(out);
+      if (A.fiber && B.fiber) return near('เส้นใยคนละชนิดพันกันยุ่ง ต้องปั่นทีละชนิด');
+      return fail('ปั่นไม่เป็นเส้น ต้องใช้เส้นใย');
+    }
+    case 'weave': {
+      if (!A.thread || !B.thread) return A.thread || B.thread ? near('ต้องใช้ด้ายทั้งเส้นยืนและเส้นพุ่ง') : fail('ทอไม่ได้ ต้องใช้ด้าย');
+      const kinds = [['cotton', 'cotton_cloth'], ['linen', 'linen_cloth'], ['hemp', 'hemp_canvas'], ['jute', 'jute_sack'], ['wool', 'wool_cloth'], ['silkt', 'silk_cloth']];
+      for (const [p, out] of kinds) if (A[p] && B[p]) return ok(out);
+      return ok('mixed_cloth');
+    }
     case 'bind':
+      if (either(N('split_bamboo'), (P, n) => n === 'ใบหม่อน')) return ok('silk_frame');   // a bamboo frame lined with mulberry leaves lures silkworms
+      if (either((P, n) => n === 'ใยกัญชง' || n === 'เส้นใยปอ', (P, n) => n === 'ใยกัญชง' || n === 'เส้นใยปอ')) return ok('hemp_rope');   // bast fibre makes a thick, strong rope
+      if (either(is('tallow'), is('thread'))) return ok('tallow_candle');               // a wick dipped in mutton fat
+      if (either(P => P.hard && P.mineral && !P.sharp && !P.metal, P => P.wood && P.dry && !P.forked && !P.bamboo && !P.fiber)) return ok('spindle');   // a stone whorl on a stick
       if (either((P, n) => /^(เขี้ยว|ฟัน|กรงเล็บ)/.test(n), is('rope'))) return ok('fang_necklace');   // teeth threaded on a cord
       if (either(N('fence_posts'), P => P.hide >= 1)) return ok('wood_shield');        // hardwood planks lashed together with hide straps
       if (either(N('bow_hard'), (P, n) => /^เขา/.test(n))) return ok('bow_horn');       // glue horn to the belly: a short, strong recurve
@@ -802,11 +857,15 @@ function natureLaw(a, b, m) {
       if (either(N('ironwood_shield'), N('iron_ingot'))) return ok('iron_shield');   // plate it all over: a solid iron shield             // iron tips and grip on a horn bow
       if (either(N('hide_pants'), N('hide_boots'))) return ok('hunter_costume');       // a full hunter's outfit sewn on the bench
       if (either((P, n) => /ขนนก/.test(n), N('hide_pants'))) return ok('chief_costume');   // feather mantle on a hide loincloth
-      if (either(N('rope'), N('sleep_mat'))) return ok('priest_costume');
-      if (either(N('vine_net'), N('shell_necklace'))) return ok('fisher_costume');
-      if (either(N('leaf_skirt'), N('shell_necklace'))) return ok('flower_costume');
-      if (either(N('sleep_mat'), N('copper_bangle'))) return ok('priestess_costume');   // woven linen robe with a metal bangle     // petal skirt and a dressed-up top      // net vest and shell trim               // woven fibre robe tied with a cord
+      if (either(N('linen_cloth'), is('rope'))) return ok('priest_costume');             // a linen robe tied with a cord
+      if (either(N('cotton_cloth'), N('shell_necklace'))) return ok('fisher_costume');  // cotton shorts and shell trim
+      if (either(N('dyed_cloth'), N('leaf_skirt'))) return ok('flower_costume');         // dyed top over a petal skirt
+      if (either(N('linen_cloth'), N('copper_bangle'))) return ok('priestess_costume');  // linen robe with a metal bangle
       if (either(N('fence_posts'), N('hide_pants'))) return ok('armor_costume');        // carved wooden plates laced onto hide
+      if (either(N('fence_posts'), is('thread'))) return ok('loom');                    // a frame of posts strung with warp threads
+      if (either(N('wool_cloth'), is('rope'))) return ok('wool_cloak');
+      if (either(N('hemp_canvas'), N('fence_posts'))) return ok('canvas_tent');
+      if (either(N('clay_pot'), N('seed_oil'))) return ok('oil_lamp');
       if (either(N('copper_ingot'), N('copper_ingot'))) return ok('copper_bangle');    // hammered into a ring for the wrist
       if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');           // iron bars
       return fail('ประกอบแล้วไม่เข้ากัน ไม่ได้อะไร');
@@ -825,9 +884,13 @@ function natureLaw(a, b, m) {
         if (either(is('paste'), is('leaf'))) return ok('raw_tile');
         if (A.brick && B.brick) return ok('brick_wall');
         if (A.paste && B.paste) return ok('raw_pot');
+        if (A.oily && B.oily) return ok('seed_oil');                                     // press oily seeds
         if (either(is('paste'), P => P.sand || P.fiber)) return ok('raw_brick');
         return fail('นวดแล้วไม่เข้ากัน');
       }
+      if (either(is('silk'), is('water'))) return ok('silk_fiber');                     // boil cocoons to loosen the silk
+      if (either(is('cloth'), (P, n) => P.dye || /เบอร์รี่|ดอก/.test(n) || P.herb)) return ok('dyed_cloth');
+      if (either((P, n) => n === 'ใบกัญชง', (P, n) => n === 'สมุนไพร')) return ok('hemp_balm');
       if (either(is('herb'), is('water'))) return ok('herbal_medicine');
       return fail('คนแล้วแยกชั้น ไม่เข้ากัน');
     case 'roast':
@@ -1101,6 +1164,7 @@ const RESEARCH_TIERS = [
   { label: 'เครื่องมือพื้นฐาน', keys: ['stone_blade', 'rope', 'stone_axe', 'stone_pick', 'stone_hammer', 'stone_sickle', 'bamboo_tube'] },
   { label: 'อุปกรณ์ขนของ', keys: ['vine_net', 'bamboo_basket', 'hide_bag'] },
   { label: 'อุปกรณ์ตั้งแคมป์', keys: ['sleep_mat', 'travel_tent'] },
+  { label: 'การทอผ้า', keys: ['spindle', 'cotton_thread', 'linen_thread', 'hemp_rope', 'loom', 'cotton_cloth', 'linen_cloth', 'jute_sack', 'wool_cloth', 'dyed_cloth', 'silk_frame', 'silk_cloth', 'seed_oil', 'tallow_candle'] },
   { label: 'เครื่องแต่งกาย', keys: ['leaf_skirt', 'rope_sandal', 'hide_pants', 'hide_boots', 'fang_necklace', 'shell_necklace', 'hunter_costume', 'armor_costume', 'chief_costume', 'priest_costume', 'fisher_costume', 'flower_costume', 'priestess_costume'] }
 ];
 function researchPrio(k) { for (let i = 0; i < RESEARCH_TIERS.length; i++) if (RESEARCH_TIERS[i].keys.includes(k)) return i; return 9; }
@@ -1173,12 +1237,16 @@ function inAura(a) { const t = templeOf(); return !!(t && a && a.zone === t.zone
 // traps work on their own: a fish trap fills with fish, a snare catches small game, cages catch big game.
 // Traps are carried in the bag and set by their owner; the owner walks over (≤2 tiles) to collect. No animal keeping yet:
 // a caught animal is killed on the spot for meat and materials. Cages wear out (wood 20 / iron 30 catches) and break.
-const TRAP_ST = ['fishtrap', 'snare', 'cage', 'cage_iron'];
+const TEXTILE_DONE = new Set();
+const TRAP_ST = ['fishtrap', 'snare', 'cage', 'cage_iron', 'silkframe', 'silktray'];
 function preySize(f) { const art = animalArt(f); return art && ANIM_REL[art] ? ANIM_REL[art] : (f.sizeRel || 0.6); }
 function isFishy(f) { return animalArt(f) === 'fish' || /ปลา|กุ้ง|ปู/.test(f.name); }
 // who a trap can hold: snare = small animals only · wood cage = plant-eaters · iron cage = anything
 function trapPrey(st, zone) {
   return faunaSpecies.filter(f => (f.zp[zone] || 0) > 1 && !isFishy(f) && animalArt(f) && (
+    st === 'silkframe' ? f.id === 'f_silkworm' :
+    st === 'silktray' ? false :
+    f.id === 'f_silkworm' ? false :
     st === 'snare' ? !f.predator && preySize(f) <= 0.7 :
     st === 'cage' ? !f.predator :
     st === 'cage_iron'));
@@ -1193,12 +1261,22 @@ function trapTick() {
     if (o.zone === t.zone && structDist(o, t) <= 2) { collectTrap(o, t); if (o.goal && o.goal.trap) o.goal = null; return; }
     if (!o.goal && (o.zone === t.zone || zoneDist(o.zone, t.zone) <= 1)) { const p = approachOf(t, o); o.goal = { zone: t.zone, x: p.x, y: p.y, ttl: 20, trap: true }; o.bubble = `🪤 ไปดู${t.name.split(' (')[0]}`; }
   });
-  shelters.filter(s => TRAP_ST.includes(s.station)).forEach(s => {
+  // silkworm trays: fed with leaves they keep spinning cocoons; the owner feeds them and takes the cocoons
+  shelters.filter(s => s.station === 'silktray').forEach(s => {
+    s.catch = s.catch || 0; s.fed = s.fed || 0; s.prog = s.prog || 0;
+    if (s.fed > 0 && s.catch < 6) { s.prog += s.mul ? 1 : 0.6; s.fed = Math.max(0, s.fed - 0.25); if (s.prog >= 10) { s.prog = 0; s.catch++; } }
+    const o = byId(s.owner); if (!o || o.sleeping || o.age < 12 || isNightTime()) return;
+    const leaves = o.bag && (o.bag['ใบหม่อน'] ? 'ใบหม่อน' : o.bag['ใบไม้สด'] ? 'ใบไม้สด' : null);
+    if ((s.catch >= 2 || (s.fed < 1 && leaves)) && !o.goal && o.zone === s.zone && structDist(o, s) > 2) { const p = approachOf(s, o); o.goal = { zone: s.zone, x: p.x, y: p.y, ttl: 20, trap: true }; o.bubble = '🐛 ไปดูถาดตัวไหม'; }
+    if (o.zone === s.zone && structDist(o, s) <= 2) collectTrap(o, s);
+  });
+  shelters.filter(s => TRAP_ST.includes(s.station) && s.station !== 'silktray').forEach(s => {
     s.catch = s.catch || 0;
     if (!s.maxUses) s.uses = s.maxUses = ({ cage: 20, cage_iron: 30 })[s.station] || 3;   // traps set before wear existed
     if (s.catch >= 3) return;
     if (s.station === 'fishtrap') { const fish = (ZONES[s.zone].res || []).find(r => /ปลา|กุ้ง|ปู/.test(r)); if (fish && Math.random() < 0.18) { s.catch++; s.catchName = fish; } return; }
     if (s.station !== 'snare' && s.catch >= 1) return;                       // a cage holds one animal at a time
+    if (s.station === 'silkframe') { const sw = faunaSpecies.find(f => f.id === 'f_silkworm'); if (sw && (sw.zp[s.zone] || 0) > 1 && Math.random() < 0.12) { s.catch = 1; s.catchName = sw.name; s.catchId = sw.id; sw.zp[s.zone]--; } return; }
     const list = trapPrey(s.station, s.zone); if (!list.length) return;
     const big = list.filter(f => preySize(f) > 0.7), prey = s.station === 'snare' ? pick(list) : pick(big.length && Math.random() < 0.75 ? big : list);
     if (Math.random() < ({ snare: 0.08, cage: 0.05, cage_iron: 0.07 })[s.station]) { s.catch++; s.catchName = prey.name; s.catchId = prey.id; prey.zp[s.zone] = Math.max(0, prey.zp[s.zone] - 1); }
@@ -1208,7 +1286,7 @@ function trapTick() {
 function setTrap(a, key) {
   const d = PRODUCTS[key], st = d.station;
   if (shelters.some(x => x.station === st && x.owner === a.id)) return false;                       // one of each kind set at a time
-  if (st !== 'fishtrap' && !trapPrey(st, a.zone).length) return false;
+  if (st !== 'fishtrap' && st !== 'silktray' && !trapPrey(st, a.zone).length) return false;
   buildZoneTerrain(a.zone);
   let bs;
   if (st === 'fishtrap') {
@@ -1233,6 +1311,18 @@ function trapStep(a, night) {
   collectTrap(a, t); return true;
 }
 function collectTrap(a, t) {
+  if (t.station === 'silktray') {                       // take the cocoons, top up the leaves
+    QCTX = rollGatherQ(a, 'dex');
+    if (t.catch > 0) { gainItems(a, 'รังไหม', t.catch); a.bubble = `🐛 เก็บรังไหม ${t.catch} รังจากถาด`; addLog(`🐛 [เลี้ยงไหม] ${a.name} เก็บรังไหม ${t.catch} รัง`, '#fde68a'); t.catch = 0; gainExp(a, 'dex', 0.2); }
+    t.fed = t.fed || 0; const leaves = a.bag && (a.bag['ใบหม่อน'] ? 'ใบหม่อน' : a.bag['ใบไม้สด'] ? 'ใบไม้สด' : null);
+    if (leaves && t.fed < 3) { const n = Math.min(a.bag[leaves], 3); for (let i = 0; i < n; i++) take(a, leaves); t.fed += n; t.mul = leaves === 'ใบหม่อน'; a.bubble = `🍃 ป้อน${leaves}ให้ตัวไหม ${n} กำ`; }
+    QCTX = null; return;
+  }
+  if (t.station === 'silkframe') {                      // the lure caught a silkworm: it becomes a tray to keep and feed
+    shelters.splice(shelters.indexOf(t), 1); put(a, PRODUCTS.silk_tray.name, 1);
+    a.bubble = '🐛 จับตัวไหมได้! ได้ถาดเลี้ยงตัวไหม'; addLog(`🐛 [จับตัวไหม] ${a.name} จับตัวไหมได้ เอาไปเลี้ยงในถาด ป้อนใบไม้แล้วจะได้รังไหมเรื่อยๆ`, '#fde68a');
+    gainExp(a, 'int', 0.3); return;
+  }
   QCTX = rollGatherQ(a, 'dex');
   if (t.station === 'fishtrap') { gainItems(a, t.catchName || 'ปลา', t.catch); a.bubble = `🪤 ได้${t.catchName} ${t.catch} ตัวจากลอบ`; }
   else {                                                 // no animal keeping yet: kill it for meat and materials
@@ -1442,6 +1532,20 @@ function drawCage(ctx, s, cx, fy, now) {
   for (let i = 1; i < 7; i++) { const x = cx - w + i * w * 2 / 7; ctx.beginPath(); ctx.moveTo(x, fy - h); ctx.lineTo(x, fy); ctx.stroke(); }
   ctx.beginPath(); ctx.moveTo(cx - w, fy - h); ctx.lineTo(cx - w + dep, fy - h - dep * 0.5); ctx.moveTo(cx + w, fy - h); ctx.lineTo(cx + w + dep, fy - h - dep * 0.5); ctx.stroke();
   return { h: h + dep * 0.5 };
+}
+// silkworm lure / tray (code-drawn until it gets art): a bamboo tray of leaves with white cocoons and a few worms
+function drawSilk(ctx, s, cx, fy, now) {
+  const w = HUMAN_H * 0.75, h = w * 0.32, y = fy - h;
+  ctx.save();
+  ctx.fillStyle = '#c8a06a'; ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.ellipse(cx, y + h * 0.55, w / 2, h * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#5f9e47'; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.ellipse(cx - w * 0.3 + i * w * 0.15, y + h * 0.45, w * 0.09, h * 0.22, 0.5, 0, Math.PI * 2); ctx.fill(); }
+  const n = s.station === 'silktray' ? (s.catch || 0) : 0;
+  ctx.fillStyle = '#fbf7ea'; ctx.strokeStyle = '#a89a7a';
+  for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.ellipse(cx - w * 0.25 + i * w * 0.1, y + h * 0.3, w * 0.045, h * 0.17, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  if (s.station === 'silktray' || (s.catch || 0) > 0) { ctx.strokeStyle = '#f2ead2'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    for (let i = 0; i < 2; i++) { const t = now * 1.5 + i * 2, x0 = cx + (i ? w * 0.15 : -w * 0.05); ctx.beginPath(); ctx.moveTo(x0, y + h * 0.4); ctx.quadraticCurveTo(x0 + 2, y + h * 0.4 - 1.5 - Math.sin(t), x0 + 4, y + h * 0.42); ctx.stroke(); } }
+  ctx.restore(); return { h: h * 1.2 };
 }
 function drawTrapCode(ctx, s, cx, fy) {
   const H = HUMAN_H;
@@ -5810,7 +5914,7 @@ function baseOutfit(a) {
   if (v && a.age >= 18) return 'cape';
   const hide = discoveredProducts.hide_bag || Object.keys(a.bag || {}).some(n => /หนัง/.test(n));
   if (currentSeasonIdx === 3 && hide) return 'winter';
-  if (discoveredProducts.kiln || discoveredProducts.clay_pot) return female ? 'village' : 'cloth';
+  if (['cotton_cloth', 'linen_cloth', 'wool_cloth', 'silk_cloth', 'mixed_cloth', 'dyed_cloth'].some(k => discoveredProducts[k])) return female ? 'village' : 'cloth';   // clothes need woven cloth
   if (hide) return female ? 'deer' : 'hide';
   return female ? 'flower' : 'leaf';
 }
@@ -6408,7 +6512,7 @@ const WA = { ready: false, img: {}, tex: {}, wall: {} };
   for (const k in A.walls) WA.wall[k] = load(A.walls[k]);
 })();
 // animals: 0 idle, 1 eat, 2 fight, 3 sleep, 4 walk (art faces right)
-const ANIM_ART = { f_monitor: 'monitor', f_turtle: 'turtle', f_frog: 'frog', f_cobra: 'cobra', f_croc: 'croc', f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
+const ANIM_ART = { f_sheep: 'goat', f_silkworm: 'cobra', f_monitor: 'monitor', f_turtle: 'turtle', f_frog: 'frog', f_cobra: 'cobra', f_croc: 'croc', f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
 // animal height (head included) in adult-human heights, real-world proportions
@@ -6525,6 +6629,12 @@ const WOBJ = {
   grass_clover: { name: 'ใบโคลเวอร์', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'สมุนไพร': 1 }, st: ['0', '1', '2'], regrow: 18 },
   grass_fern:   { name: 'เฟิร์น', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'สมุนไพร': 1, 'ต้นกก': 1 }, st: ['0', '1', '2'], regrow: 18 },
   grass_reed:   { name: 'กกน้ำ', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'ต้นกก': 2 }, st: ['0', '1', '2'], regrow: 18 },
+  // textile plants (art: placeholders until their own sprites exist)
+  cotton:   { name: 'ต้นฝ้าย', art: 'bush_pink', tool: ['sickle', 'blade'], hp: 4, tier: 1, yields: { 'เส้นใยฝ้าย': 2, 'เมล็ดฝ้าย': 1 }, st: ['full', 'damaged', 'stub'], regrow: 48 },
+  flax:     { name: 'ต้นแฟลกซ์', art: 'grass_wheat', tool: ['sickle', 'blade'], hp: 2, tier: 1, yields: { 'เส้นใยลินิน': 2, 'เมล็ดแฟลกซ์': 1 }, st: ['0', '1', '2'], regrow: 36 },
+  hemp:     { name: 'ต้นกัญชง', art: 'grass_tall', tool: ['sickle', 'blade'], hp: 3, tier: 1, yields: { 'ใยกัญชง': 2, 'เมล็ดกัญชง': 1, 'ใบกัญชง': 1 }, st: ['0', '1', '2'], regrow: 36 },
+  jute:     { name: 'ต้นปอ', art: 'grass_reed', tool: ['sickle', 'blade'], hp: 3, tier: 1, yields: { 'เส้นใยปอ': 2, 'ใบปอ': 1, 'แกนปอ': 1 }, st: ['0', '1', '2'], regrow: 36 },
+  mulberry: { name: 'ต้นหม่อน', art: 'fruit', tool: ['axe'], hp: 10, tier: 1, yields: { 'กิ่งหม่อน': 2, 'ใบหม่อน': 2 }, fruit: 'ลูกหม่อน', fruitN: 3, st: ['full', 'picked', 'damaged', 'stump'], regrow: 72, tall: 1 },
   rock_gray:    { name: 'ก้อนหิน', tool: ['pick'], hp: 15, tier: 1, yields: { 'หินกรวด': 2 }, st: ['full', 'cracked', 'rubble'], regrow: 120 },
   rock_moss:    { name: 'หินมีมอส', tool: ['pick'], hp: 20, tier: 1, yields: { 'หินกรวด': 3 }, st: ['full', 'cracked', 'rubble'], regrow: 120 },
   rock_tall:    { name: 'หินตั้ง', tool: ['pick'], hp: 25, tier: 1, yields: { 'หินกรวด': 3, 'หินเหล็กไฟ': 1 }, st: ['full', 'cracked', 'rubble'], regrow: 120, tall: 1 },
@@ -6558,7 +6668,8 @@ function mkObj(zId, k, x, y, r) {
 }
 function objsOf(zId) {
   const key = '@' + zId;
-  if (zoneNodes[key]) return zoneNodes[key];
+  if (zoneNodes[key]) { if (!TEXTILE_DONE.has(zId)) { TEXTILE_DONE.add(zId); buildZoneTerrain(zId); addTextilePlants(zId, zoneNodes[key]); } return zoneNodes[key]; }   // older saves get the new plants too
+  TEXTILE_DONE.add(zId);
   buildZoneTerrain(zId);
   const g = zoneTerrainGrid[zId], r = wobjRng(hashStr(zId + ':' + (worldSeed || 1) + ':' + (typeof activeRealm !== 'undefined' ? activeRealm : 0)));
   const busy = new Set();
@@ -6576,7 +6687,20 @@ function objsOf(zId) {
       if (rr < acc) { list.push(mkObj(zId, wobjPick(kinds, r()), x + 0.25 + r() * 0.5, y + 0.25 + r() * 0.5, r)); break; }
     }
   }
+  addTextilePlants(zId, list, g, busy);
   return (zoneNodes[key] = list);
+}
+const TEXTILE_SPAWN = { grass: [[0.012, [['cotton', 3], ['flax', 2]]]], tall_grass: [[0.02, [['flax', 2], ['hemp', 1]]]], hill_slope: [[0.018, [['hemp', 3], ['cotton', 1]]]], mud_flat: [[0.03, [['jute', 1]]]], forest: [[0.012, [['mulberry', 1]]]] };
+const TEXTILE_KINDS = new Set(['cotton', 'flax', 'hemp', 'jute', 'mulberry']);
+function addTextilePlants(zId, list, g, busy) {
+  if (list.some(o => TEXTILE_KINDS.has(o.k))) return;
+  g = g || zoneTerrainGrid[zId]; if (!g) return;
+  const taken = new Set(list.map(o => Math.floor(o.x) + ',' + Math.floor(o.y))); if (busy) busy.forEach(b => taken.add(b));
+  const r = wobjRng(hashStr(zId + ':textile:' + (worldSeed || 1)));
+  for (let y = 2; y < 78; y++) for (let x = 2; x < 78; x++) {
+    const rules = TEXTILE_SPAWN[g[y] && g[y][x]]; const rr = r(); if (!rules || taken.has(x + ',' + y)) continue;
+    let acc = 0; for (const [p, kinds] of rules) { acc += p; if (rr < acc) { list.push(mkObj(zId, wobjPick(kinds, r()), x + 0.25 + r() * 0.5, y + 0.25 + r() * 0.5, r)); break; } }
+  }
 }
 function objState(o) {
   const d = WOBJ[o.k], st = d.st;
@@ -7075,7 +7199,7 @@ function homeArtKey(s) {
 }
 // draw one world object
 function drawWorldObj(ctx, o, cx, fy, now) {
-  const d = WOBJ[o.k], s = window.WORLD_ART && WORLD_ART.sprites[o.k]; if (!s) return;
+  const d = WOBJ[o.k], ak = d.art || o.k, s = window.WORLD_ART && WORLD_ART.sprites[ak]; if (!s) return;
   const stI = objState(o);
   let sx = 0; if (o.hitT && now - o.hitT < 0.35) sx = Math.sin((now - o.hitT) * 60) * 1.5 * (1 - (now - o.hitT) / 0.35);
   const w = s.w * (o.dead ? 0.6 : 1);
@@ -7083,8 +7207,9 @@ function drawWorldObj(ctx, o, cx, fy, now) {
   let hide = false;
   if (d.tall && !o.dead) hide = aiAgents.some(a => a.zone === currentZoneId && a._feet && (a._rx + a._ry) < o.x + o.y - 0.5 && Math.abs(a._feet[0] - cx) < s.w * 0.45 && a._feet[1] < fy && a._feet[1] > fy - s.h);
   if (hide) ctx.globalAlpha = 0.45;
-  drawProp(ctx, o.k, stI, cx + sx, fy, 1, o.fl);
-  ctx.globalAlpha = 1;
+  if (d.art) ctx.filter = ({ cotton: 'saturate(.25) brightness(1.15)', flax: 'hue-rotate(160deg) saturate(.8)', hemp: 'hue-rotate(-15deg) saturate(1.3)', jute: 'hue-rotate(20deg) brightness(.95)', mulberry: 'hue-rotate(250deg) saturate(.9)' })[o.k] || 'none';
+  drawProp(ctx, ak, stI, cx + sx, fy, 1, o.fl);
+  ctx.filter = 'none'; ctx.globalAlpha = 1;
   if (!o.dead && o.hp < o.max && VIEW.zoom >= 1.6) {
     const bw = 16, by = fy - Math.min(s.ay, 28) - 6; ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(cx - bw / 2, by, bw, 2.6);
     ctx.fillStyle = o.hp / o.max > 0.5 ? '#84cc16' : '#f97316'; ctx.fillRect(cx - bw / 2 + 0.3, by + 0.3, (bw - 0.6) * o.hp / o.max, 2);
@@ -7268,6 +7393,7 @@ function drawCanvas() {
     if (s.station === 'temple') { d = drawTemple(ctx, s, cx, fy); }
     else if (s.station === 'gate' && gateImg('dormant')) { d = drawGate(ctx, s, cx, fy, now); }
     else if (s.station === 'cage' || s.station === 'cage_iron') { d = drawCage(ctx, s, cx, fy, now); }
+    else if (s.station === 'silkframe' || s.station === 'silktray') { d = drawSilk(ctx, s, cx, fy, now); }
     else if ((s.station === 'fishtrap' || s.station === 'snare') && !(window.TRAP_ART && trapImg(s))) { d = drawTrapCode(ctx, s, cx, fy); }
     else if (s.station === 'fishtrap' || s.station === 'snare') {
       const im = trapImg(s), A = TRAP_ART[trapKey(s)] || TRAP_ART[trapKey(s).replace('_full', '')], w = HUMAN_H * (s.station === 'fishtrap' ? 0.9 : 0.8), h = w * A.h / A.w;
