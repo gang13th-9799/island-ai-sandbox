@@ -572,7 +572,7 @@ const PRODUCTS = {
   shell_necklace: { name: 'สร้อยเปลือกหอย', kind: 'item', eff: { type: 'acc', stat: 'cha', n: 1 }, props: { wear: 1 } },
   // costumes (ชุดคลุม): worn on the outside for looks and charm only; the body shows this instead of the everyday clothes
   hunter_costume: { name: 'ชุดนักล่า', kind: 'item', eff: { type: 'costume', n: 2, look: 'hunter' }, props: { hide: 0.5, wear: 1 } },
-  armor_costume:  { name: 'ชุดเกราะทองแดง', kind: 'item', eff: { type: 'costume', n: 3, look: 'armor' }, props: { metal: 0.5, wear: 1 } },
+  armor_costume:  { name: 'ชุดเกราะไม้', kind: 'item', eff: { type: 'costume', n: 3, look: 'armor' }, props: { wood: 0.5, wear: 1 } },
   copper_bangle: { name: 'กำไลทองแดง', kind: 'item', eff: { type: 'acc', stat: 'vit', n: 2 }, props: { metal: 0.5, copper: 1, wear: 1 } },
   clay_paste:   { name: 'ดินปั้นเนื้อเนียน', kind: 'item', props: { paste: 1 } },
   raw_pot:      { name: 'หม้อดินดิบ', kind: 'item', props: { raw: 1 } },
@@ -796,7 +796,7 @@ function natureLaw(a, b, m) {
       if (either(N('wood_shield'), N('iron_ingot'))) return ok('ironwood_shield');   // iron rim and boss on a wooden shield
       if (either(N('ironwood_shield'), N('iron_ingot'))) return ok('iron_shield');   // plate it all over: a solid iron shield             // iron tips and grip on a horn bow
       if (either(N('hide_pants'), N('hide_boots'))) return ok('hunter_costume');       // a full hunter's outfit sewn on the bench
-      if (either(N('copper_ingot'), N('hide_pants'))) return ok('armor_costume');       // copper plates riveted onto hide
+      if (either(N('fence_posts'), N('hide_pants'))) return ok('armor_costume');        // carved wooden plates laced onto hide
       if (either(N('copper_ingot'), N('copper_ingot'))) return ok('copper_bangle');    // hammered into a ring for the wrist
       if (either(N('iron_ingot'), N('iron_ingot'))) return ok('iron_cage');           // iron bars
       return fail('ประกอบแล้วไม่เข้ากัน ไม่ได้อะไร');
@@ -7748,7 +7748,7 @@ function openAgentCard(id) { cardAgentId = id; VIEW.follow = id; renderAgentCard
 function closeAgentCard() { closeAgentPop(); closeCW(); cardAgentId = null; VIEW.follow = null; document.getElementById('agent-card').classList.remove('open'); }
 // ===== Bag & knowledge popup =====
 let AP = { tab: 'bag', sel: null, open: new Set(), who: null };
-const OUTFIT_TH = { hunter: 'ชุดนักล่า', armor: 'ชุดเกราะทองแดง', under: 'ผ้าอ้อม', cape: 'ผ้าคลุมหัวหน้า', winter: 'ชุดกันหนาว', village: 'ชุดชาวบ้าน', cloth: 'ชุดผ้า', deer: 'ชุดหนังกวาง', hide: 'ชุดหนังสัตว์', flower: 'ชุดใบไม้ประดับดอกไม้', leaf: 'ชุดใบไม้' };
+const OUTFIT_TH = { hunter: 'ชุดนักล่า', armor: 'ชุดเกราะไม้', under: 'ผ้าอ้อม', cape: 'ผ้าคลุมหัวหน้า', winter: 'ชุดกันหนาว', village: 'ชุดชาวบ้าน', cloth: 'ชุดผ้า', deer: 'ชุดหนังกวาง', hide: 'ชุดหนังสัตว์', flower: 'ชุดใบไม้ประดับดอกไม้', leaf: 'ชุดใบไม้' };
 const PROP_TH = { food: 'กินได้', bad: 'รสแย่', fuel: 'เชื้อเพลิง', wood: 'เนื้อไม้', hard: 'แข็ง', sharp: 'คม', sharpable: 'ฝนให้คมได้', fiber: 'เส้นใย', sticky: 'เหนียวติด', herb: 'สมุนไพร', mineral: 'แร่', salt: 'เค็ม', clay: 'ดินปั้นได้', dry: 'แห้ง', wet: 'ชื้น', hide: 'หนังสัตว์', glow: 'เรืองแสง', poison: 'มีพิษ', water: 'น้ำ', soft: 'นิ่ม', flammable: 'ติดไฟง่าย', leaf: 'ใบไม้', liquid: 'ของเหลว' };
 function itemIcon(n, sz) { return itemIconHTML(n, sz) || `<span>${resIcon(n)}</span>`; }
 function itemDesc(n) {
