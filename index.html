@@ -6794,9 +6794,10 @@ function drawPuppet(ctx, a, fx, feetY, H, anim, tSec) {
   if (!rig.skirt) drawP('pelvis', Mb);
   const shKey = (anim === 'idle' || anim === 'walk' || anim === 'run' || anim === 'slash') && !bowInfo && p.two == null ? shieldKey(a) : null;
   if (shKey && anim === 'idle') drawShield(ctx, withBase(Mb), Mb.inverse().multiply(M.foF), rig, shKey, 'back');    // standing: hangs behind the arm, inside showing
-  ['upF', 'foF', 'thF', 'shF'].forEach(k => drawP(k, M[k]));
+  // trousers (rig.thighOver): the shin goes under the thigh so the trouser leg folds over the knee; bare legs keep the shin cap on top
+  (rig.thighOver ? ['upF', 'foF', 'shF', 'thF'] : ['upF', 'foF', 'thF', 'shF']).forEach(k => drawP(k, M[k]));
   if (bowInfo) drawBow(ctx, withBase(Mb), bowInfo, s, 'limb');
-  ['thN', 'shN'].forEach(k => drawP(k, M[k]));
+  (rig.thighOver ? ['shN', 'thN'] : ['thN', 'shN']).forEach(k => drawP(k, M[k]));
   if (rig.skirt) drawP('pelvis', Mb);
   drawP('chest', Mb); drawP('head', Mb);
   if (rig.cape) drawP('cape_front', Mb);
