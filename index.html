@@ -1400,6 +1400,8 @@ const PRODUCTS = {
   stone_sword:   { name: 'ดาบหิน', kind: 'tool', tool: 'sword', dur: 50, pow: 2, tier: 1, props: { hard: 1, sharp: 1 } },
   copper_sword:  { name: 'ดาบทองแดง', kind: 'tool', tool: 'sword', dur: 150, pow: 3, tier: 2, props: { hard: 1, sharp: 1, metal: 1 } },
   iron_sword:    { name: 'ดาบเหล็ก', kind: 'tool', tool: 'sword', dur: 300, pow: 4, tier: 3, props: { hard: 1, sharp: 1, metal: 1 } },
+  copper_greatsword: { name: 'ดาบใหญ่ทองแดง', kind: 'tool', tool: 'sword', two: 1, dur: 220, pow: 5, tier: 2, props: { hard: 1, sharp: 1, metal: 1 } },   // two-handed
+  iron_greatsword:   { name: 'ดาบใหญ่เหล็ก', kind: 'tool', tool: 'sword', two: 1, dur: 420, pow: 7, tier: 3, props: { hard: 1, sharp: 1, metal: 1 } },
   // fishing and trapping
   fishing_rod:   { name: 'เบ็ดตกปลาไม้ไผ่', kind: 'tool', tool: 'rod', dur: 40, pow: 1, tier: 1, props: { wood: 1 } },
   // traps are carried in the bag, then set where the prey is; the big cages take 4 bag slots, wear out and are fixed at a workbench
@@ -1514,6 +1516,8 @@ function natureLaw(a, b, m) {
       if (A.fence && B.fence) return ok('wood_house');
       if (either(N('split_bamboo'), is('rope'))) return ok('bamboo_hut');
       // metal heads on the right handle: bamboo pole = spear, split bamboo = sickle, a post = hammer; ingot + knife = sword
+      if (either(N('copper_ingot'), N('copper_sword'))) return ok('copper_greatsword'); // more metal on a sword: a longer, heavier blade for two hands
+      if (either(N('iron_ingot'), N('iron_sword'))) return ok('iron_greatsword');
       if (either(N('iron_ingot'), N('iron_tools'))) return ok('iron_sword');
       if (either(N('copper_ingot'), N('wood_sword'))) return ok('copper_sword');       // copper sheathing on a wooden sword
       if (either(N('split_bamboo'), N('bamboo_basket'))) return ok('fish_trap');      // a funnel basket that fish swim into
@@ -1758,7 +1762,7 @@ function toolNames(type) { return [...new Set(toolsOfType(type).map(t => t.name)
 const TOOL_CARRY = 2;          // two hands: right and left
 // the left hand holds either a second tool or a shield. a.offhand: 'shield' | 'tool' | unset (AI: shield only when the left hand is free)
 // bows and spears need both hands: holding one leaves no hand for a shield or another tool
-function isTwoHand(t) { const d = productDef(keyByName(t.name)) || {}; return d.tool === 'bow' || d.tool === 'spear' || /^หอก/.test(t.name); }
+function isTwoHand(t) { const d = productDef(keyByName(t.name)) || {}; return d.two || d.tool === 'bow' || d.tool === 'spear' || /^หอก/.test(t.name); }
 function toolHands(t) { return isTwoHand(t) ? 2 : 1; }
 function handsOnTools(a) { return carriedTools(a).reduce((s, t) => s + toolHands(t), 0); }
 function offhandArmor(a) { const e = carriedEff(a, 'armor'); if (!e || a.offhand === 'tool') return null; const h = handsOnTools(a); if (a.offhand === 'shield') return h <= 1 ? e : null; return h < TOOL_CARRY ? e : null; }
@@ -6535,6 +6539,7 @@ const PUP_ANIM = {
   slash: { dur: 1.3, item: 'sword', f: u => pupKeys([[0, pr({ upN: 40, foN: 40, upF: 20, foF: 40, item: -55 })], [0.22, pr({ item: -156, lean: 6, upN: 150, foN: 30, upF: -30, foF: 30, thN: -8, thF: 8, knN: -5 })],
     [0.4, pr({ item: -180, lean: 5, upN: 160, foN: 40, upF: -30, foF: 30, thN: -8, thF: 8 })], [0.6, pr({ item: -60, dy: 2, lean: -8, upN: 100, foN: 10, upF: 10, foF: 30, thN: 22, knN: -22, thF: -15, cape: 4, capeRot: 0 })],
     [0.75, pr({ item: 0, dy: 3.6, lean: -14, upN: 55, foN: -5, upF: 25, foF: 40, thN: 35, knN: -40, thF: -25, knF: -10, cape: 4, capeRot: 0 })], [0.9, pr({ item: 0, dy: 3.6, lean: -14, upN: 55, foN: -5, upF: 25, foF: 40, thN: 35, knN: -40, thF: -25, knF: -10, cape: 3, capeRot: 30 })], [1, pr({ upN: 40, foN: 40, upF: 20, foF: 40, item: -55 })]], u) },
+  gslash: { dur: 1.6, item: 'sword', f: u => Object.assign(PUP_ANIM.slash.f(u), { two: -16 }) },   // two-handed greatsword: same swing, far hand below the near one
   bow: { dur: 2.2, item: 'bow', f: u => pupKeys([[0, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: 65 })], [0.22, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -2, draw: 0.06, lean: 2 })],
     [0.48, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -4, draw: 1, lean: 4 })], [0.6, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -4, draw: 1, lean: 4 })],
     [0.63, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -5, draw: 0, hold: 1, lean: 5 })], [0.86, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: -6, hold: 0.95, lean: 4 })], [1, pr({ thN: -16, thF: 18, knN: -6, knF: -8, dy: 0.6, aim: 65 })]], u) },
@@ -6571,7 +6576,7 @@ function pupActivity(a, moving, fast) {
   const b = a.bubble || '';
   if (a.sleeping && !moving) return 'sleep';
   if (moving) return fast || b.startsWith('💨') || b.startsWith('⚠️') || b.includes('โจมตี') ? 'run' : 'walk';
-  const melee = () => hasTool('spear', a) && !hasTool('sword', a) ? 'thrust' : 'slash';
+  const melee = () => { if (hasTool('spear', a) && !hasTool('sword', a)) return 'thrust'; const sw = usableToolTier(a, 'sword'); return sw && PRODUCTS[sw.key] && PRODUCTS[sw.key].two ? 'gslash' : 'slash'; };
   if (b.startsWith('🏹')) return hasTool('bow', a) ? 'bow' : hasTool('spear', a) || hasTool('sword', a) || hasTool('blade', a) ? melee() : 'gather';
   if (b.startsWith('🗡️')) return hasTool('spear', a) || hasTool('sword', a) || hasTool('blade', a) ? melee() : 'gather';
   if (b.startsWith('🩸') || b.includes('โจมตี') || b.startsWith('💢')) return melee();
@@ -8908,7 +8913,7 @@ function renderCW() {
     const camp = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).camp || 0) > bv) { bv = propsOf(nm).camp; bn = nm; } return bn; })();
     const carry = (() => { let bn = null, bv = 0; for (const nm in a.bag || {}) if (a.bag[nm] > 0 && (propsOf(nm).carry || 0) > bv) { bv = propsOf(nm).carry; bn = nm; } return bn; })();
     const tools = carriedTools(a), oh = offhandArmor(a), shieldN = oh && oh.item;
-    const slot = (id, lb, ic, name, sub, side, dur, g) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" ${name && g != null ? `style="--qc:${qColor(g)}" data-q="1"` : ''} onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
+    const slot = (id, lb, ic, name, sub, side, dur, g) => `<div class="cw-eq ${side || ''} ${name ? '' : 'empty'} ${CW.sel === id ? 'sel' : ''}" ${name && g != null ? `style="--qc:${qColor(g)}" data-q="1"` : ''} onclick="cwSet('sel','${id}')"><div class="ic">${name && id !== 'of' ? itemIcon(name, 30) : uiIcon('eq', id[0] === 'h' ? 'hand' : id === 'cs' ? 'camp' : id === 'al' || id === 'ar' ? 'ac' : id, 30, ic)}</div><div class="tx"><span>${lb}</span><b>${name || 'ว่าง'}</b>${sub ? `<span>${sub}</span>` : ''}${dur != null ? `<div class="dur"><i style="width:${Math.round(dur * 100)}%;background:${dur < 0.25 ? '#ef4444' : '#16a34a'}"></i></div>` : ''}</div></div>`;
     const HN = ['มือขวา', 'มือซ้าย'];
     const two = tools[0] && isTwoHand(tools[0]);
     const hand = i => { if (i === 1 && oh) return slot('h1', 'มือซ้าย · โล่', '🛡️', oh.item, `${qName(oh.q)} · ${effText(oh)}`, '', null, oh.q);
