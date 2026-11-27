@@ -769,6 +769,7 @@
 <script src="assets/items.js"></script>
 <script src="assets/stele.js"></script>
 <script src="assets/glyphs.js"></script>
+<script src="assets/plants.js"></script>
 <script src="assets/homes.js"></script>
 <script src="assets/temple.js"></script>
 <script src="assets/mats.js"></script>
@@ -7983,8 +7984,22 @@ function homeArtKey(s) {
   return null;
 }
 // draw one world object
+// Gemini art for the textile plants: [full, harvested, stub], drawn feet-anchored at a set height
+const PLANT_H = { cotton: 0.62, flax: 0.62, hemp: 1.05, jute: 1.12, mulberry: 2.0 };
+const PLANT_IMG = {};
+function plantImg(k, i) { const c = PLANT_IMG[k] || (PLANT_IMG[k] = []); if (!c[i]) { c[i] = new Image(); c[i].src = PLANT_ART[k][i].img; } return c[i]; }
+function drawPlantArt(ctx, o, d, cx, fy, now) {
+  const L = PLANT_ART[o.k], i = Math.min(objState(o), L.length - 1), A = L[i], im = plantImg(o.k, i);
+  if (!im.complete || !im.naturalWidth) return;
+  const sc = HUMAN_H * PLANT_H[o.k] / L[0].h, w = A.w * sc, h = A.h * sc;
+  let sx = 0; if (o.hitT && now - o.hitT < 0.35) sx = Math.sin((now - o.hitT) * 60) * 1.5 * (1 - (now - o.hitT) / 0.35);
+  groundShadow(ctx, cx, fy, w * 0.3, w * 0.08, 0.2);
+  ctx.save(); ctx.translate(cx + sx, fy); if (o.fl) ctx.scale(-1, 1); ctx.drawImage(im, -w / 2, -h * 0.97, w, h); ctx.restore();
+}
 function drawWorldObj(ctx, o, cx, fy, now) {
-  const d = WOBJ[o.k], ak = d.art || o.k, s = window.WORLD_ART && WORLD_ART.sprites[ak]; if (!s) return;
+  const d = WOBJ[o.k];
+  if (window.PLANT_ART && PLANT_ART[o.k]) return drawPlantArt(ctx, o, d, cx, fy, now);
+  const ak = d.art || o.k, s = window.WORLD_ART && WORLD_ART.sprites[ak]; if (!s) return;
   const stI = objState(o);
   let sx = 0; if (o.hitT && now - o.hitT < 0.35) sx = Math.sin((now - o.hitT) * 60) * 1.5 * (1 - (now - o.hitT) / 0.35);
   const w = s.w * (o.dead ? 0.6 : 1);
