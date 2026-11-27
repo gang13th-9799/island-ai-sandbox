@@ -32,6 +32,20 @@ def place(F,ids,toe=True,crop=None):
         Y,X=np.where(pm)
         if not len(Y): print('missing piece',i); continue
         out[np.isin(bl,[i])]=[255,0,255]
+        if i in (10,11):   # Gemini often draws footwear larger than the foot: shrink to the template piece, anchored at the top centre
+            tm=tl==i; tys,txs=np.where(tm); ratio=np.sqrt(tm.sum()/pm.sum())
+            if ratio<0.9:
+                y0p,x0p=Y.min(),X.min(); crop=np.dstack([col,pm*255]).astype(np.uint8)[Y.min():Y.max()+1,X.min():X.max()+1]
+                im=Image.fromarray(crop); im=im.resize((max(1,int(im.width*ratio)),max(1,int(im.height*ratio))),Image.LANCZOS); arr=np.array(im)
+                # match the template top edge and its centre at the top rows
+                cx=txs[tys<tys.min()+15].mean(); ok_=arr[...,3]>128; yy,xx=np.where(ok_)
+                top=xx[yy<yy.min()+15].mean(); X0=int(round(cx-top)); Y0=tys.min()
+                flip=False
+                def tdir(mask):
+                    a_,b_=np.where(mask); r=a_>=a_.max()-(a_.max()-a_.min())*0.18; mid=a_<a_.min()+(a_.max()-a_.min())*0.6
+                    return b_[r].mean()-b_[mid].mean()
+                if np.sign(tdir(ok_))!=np.sign(tdir(tm)): arr=arr[:,::-1]; ok_=ok_[:,::-1]; yy,xx=np.where(ok_); X0=int(round(cx-xx[yy<yy.min()+15].mean())); print('flipped',i)
+                yy,xx=np.where(ok_); out[yy+Y0+y0,xx+X0+x0]=arr[yy,xx,:3]; print('shrunk shin',i,round(ratio,2)); continue
         if toe and i in (10,11):
             def tdir(mask):
                 yy,xx=np.where(mask); r=yy>=yy.max()-(yy.max()-yy.min())*0.18; mid=yy<yy.min()+(yy.max()-yy.min())*0.6
