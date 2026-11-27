@@ -1535,6 +1535,8 @@ function drawCage(ctx, s, cx, fy, now) {
 }
 // silkworm lure / tray (code-drawn until it gets art): a bamboo tray of leaves with white cocoons and a few worms
 function drawSilk(ctx, s, cx, fy, now) {
+  const tim = s.station === 'silktray' && stationImg('silktray');
+  if (tim) { const A = STATION_ART.silktray, z = STATION_SIZE.silktray, w = HUMAN_H * z.w, h = w * A.h / A.w; ctx.drawImage(tim, cx - w / 2, fy + h * z.dy - h, w, h); return { h: h * (1 - z.dy) }; }
   const w = HUMAN_H * 0.75, h = w * 0.32, y = fy - h;
   ctx.save();
   ctx.fillStyle = '#c8a06a'; ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 0.8;
@@ -6512,7 +6514,7 @@ const WA = { ready: false, img: {}, tex: {}, wall: {} };
   for (const k in A.walls) WA.wall[k] = load(A.walls[k]);
 })();
 // animals: 0 idle, 1 eat, 2 fight, 3 sleep, 4 walk (art faces right)
-const ANIM_ART = { f_sheep: 'goat', f_silkworm: 'cobra', f_monitor: 'monitor', f_turtle: 'turtle', f_frog: 'frog', f_cobra: 'cobra', f_croc: 'croc', f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
+const ANIM_ART = { f_sheep: 'sheep', f_silkworm: 'silkworm', f_monitor: 'monitor', f_turtle: 'turtle', f_frog: 'frog', f_cobra: 'cobra', f_croc: 'croc', f_deer: 'deer', f_boar: 'boar', f_rabbit: 'rabbit', f_goat: 'goat', f_wolf: 'wolf', f_leopard: 'leopard', f_fish: 'fish' };
 WA.anim = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.animals) return; for (const k in A.animals) WA.anim[k] = A.animals[k].map(p => { const im = new Image(); im.src = p.img; return im; }); })();
 // animal height (head included) in adult-human heights, real-world proportions
@@ -6538,13 +6540,13 @@ function fleeStep(o, x, y, dt, range, speed, aquatic) {
   const m = Math.hypot(o.fx, o.fy); if (m > 9) { o.fx *= 9 / m; o.fy *= 9 / m; }
   return [x + o.fx, y + o.fy];
 }
-const ANIM_REL = { monitor: 0.66, cobra: 0.62, turtle: 0.5, frog: 0.5, croc: 0.62, butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
+const ANIM_REL = { sheep: 0.62, silkworm: 0.13, monitor: 0.66, cobra: 0.62, turtle: 0.5, frog: 0.5, croc: 0.62, butterfly: 0.52, bee: 0.5, firefly: 0.5, scorpion: 0.5, deer: 1.1, boar: 0.74, rabbit: 0.84, goat: 0.93, wolf: 0.8, leopard: 0.75, fish: 0.54 };
 function animalArt(f) { return ANIM_ART[f.id] || ({ deer: 'deer', boar: 'boar', fish: 'fish', wolf: 'wolf', leopard: 'leopard' })[f.sprite] || null; }
 // mutated look: recolour (keeps shading) + Gemini part art (horns, wings, tails, scales, thick hide, back armor)
 WA.mut = {};
 (function () { const A = window.WORLD_ART; if (!A || !A.mut) return; for (const k in A.mut) { const im = new Image(); im.src = A.mut[k].img; WA.mut[k] = im; } })();
 function shadeCol(hex, f) { return typeof shade === 'function' && /^#/.test(hex) ? shade(hex, f) : hex; }
-const BODY_COL = { deer: '#b5793f', boar: '#5b3b2e', rabbit: '#9c7650', goat: '#9ca3af', wolf: '#8a8a8a', leopard: '#e3a24a', fish: '#7fa6c9' };
+const BODY_COL = { sheep: '#efe6d2', silkworm: '#f1ead8', deer: '#b5793f', boar: '#5b3b2e', rabbit: '#9c7650', goat: '#9ca3af', wolf: '#8a8a8a', leopard: '#e3a24a', fish: '#7fa6c9' };
 const MUT_CACHE = {};
 function mutOK(k) { const im = WA.mut[k]; return im && im.complete && im.naturalWidth; }
 function tinted(k, color, amt = 0.75) {          // recoloured copy of a part (luminance kept)
@@ -7914,7 +7916,7 @@ function openAgentPop(tab) { AP.store = false; AP.tab = tab; AP.sel = null; if (
 const STORE_KEY = { storehouse: 'storehouse', chest: 'chest', yard: 'yard', warehouse: 'warehouse' };
 const STORE_SIZE = { storehouse: { h: 2.5, dy: 0.04 }, chest: { h: 0.62, dy: 0.08 }, yard: { w: 2.8, dy: 0.22 }, warehouse: { h: 2.0, dy: 0.06 } };   // in human heights
 const STORE_IMG = {};
-const STATION_SIZE = { workbench: { w: 1.35, dy: 0.05 }, kiln: { h: 1.55, dy: 0.04 }, smelter: { h: 1.9, dy: 0.04 }, wall: { w: 1.9, dy: 0.06 }, farm: { w: 2.8, dy: 0.12 }, lab: { h: 2.2, dy: 0.04 }, reactor: { h: 2.5, dy: 0.04 } };   // in human heights
+const STATION_SIZE = { loom: { h: 1.45, dy: 0.04 }, silktray: { w: 0.9, dy: 0.08 }, workbench: { w: 1.35, dy: 0.05 }, kiln: { h: 1.55, dy: 0.04 }, smelter: { h: 1.9, dy: 0.04 }, wall: { w: 1.9, dy: 0.06 }, farm: { w: 2.8, dy: 0.12 }, lab: { h: 2.2, dy: 0.04 }, reactor: { h: 2.5, dy: 0.04 } };   // in human heights
 const STATION_IMG = {};
 function stationImg(k) { const A = window.STATION_ART && STATION_ART[k]; if (!A) return null; const im = STATION_IMG[k] || (STATION_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
 function storeImg(k) { const A = window.STORE_ART && STORE_ART[k]; if (!A) return null; const im = STORE_IMG[k] || (STORE_IMG[k] = Object.assign(new Image(), { src: A.img })); return im.complete && im.naturalWidth ? im : null; }
