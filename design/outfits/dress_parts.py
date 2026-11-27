@@ -5,7 +5,7 @@ import sys, argparse, numpy as np
 from PIL import Image
 from scipy import ndimage
 sys.path.insert(0,'/home/claude/rig'); from keylib2 import keyimg
-ap=argparse.ArgumentParser(); ap.add_argument('out'); ap.add_argument('--body'); ap.add_argument('--arms'); ap.add_argument('--legs'); ap.add_argument('--skirt'); ap.add_argument('--upper'); ap.add_argument('--skirtw',type=float,default=1.15)
+ap=argparse.ArgumentParser(); ap.add_argument('out'); ap.add_argument('--body'); ap.add_argument('--arms'); ap.add_argument('--legs'); ap.add_argument('--skirt'); ap.add_argument('--upper'); ap.add_argument('--skirtw',type=float,default=1.15); ap.add_argument('--anklet')
 A=ap.parse_args()
 B='/mnt/user-data/uploads/14ab5c70-image.jpg'
 ba=np.array(Image.open(B).convert('RGB')); H,W=ba.shape[:2]
@@ -56,6 +56,18 @@ if A.body: place(A.body,[6,9])
 if A.arms: place(A.arms,[2,3,4,5])
 if A.upper: place(A.upper,[2,3,4,5],crop=[2,3,4,5,6,9])
 if A.legs: place(A.legs,[7,8,10,11])
+if A.anklet:   # keep the base chibi feet; copy only the anklet decoration (white / yellow / green bits) from an aligned legs image
+    ids=[7,8,10,11]; m=ndimage.binary_dilation(np.isin(bl,ids),iterations=3); ys,xs=np.where(m); pad=60
+    y0,x0=max(0,ys.min()-pad),max(0,xs.min()-pad); y1,x1=ys.max()+pad,xs.max()+pad
+    raw=np.array(Image.open(A.anklet).convert('RGB').resize((x1-x0,y1-y0),Image.LANCZOS)).astype(int)
+    r,g,b=raw[...,0],raw[...,1],raw[...,2]
+    white=(r>215)&(g>215)&(b>200); yellow=(r>200)&(g>170)&(b<120); green=(g>r+10)&(g>b+10)
+    deco=white|yellow|green; deco=ndimage.binary_dilation(deco,iterations=2)&(white|yellow|green|((r+g+b)<360))   # include their dark outlines
+    for i in (10,11):
+        tm=(bl[y0:y1,x0:x1]==i); tys,_=np.where(tm); band=np.zeros_like(tm); band[tys.min()+int((tys.max()-tys.min())*0.35):tys.min()+int((tys.max()-tys.min())*0.78)]=True
+        d=deco&ndimage.binary_dilation(tm,iterations=4)&band
+        Y,X=np.where(d); out[Y+y0,X+x0]=raw[Y,X]
+    print('anklet pixels',int(deco.sum()))
 if A.skirt:
     ki,a=keyimg(A.skirt); m=ndimage.binary_opening(a>0.5,iterations=2); l,n=ndimage.label(m); big=max(range(1,n+1),key=lambda k:(l==k).sum()); m=l==big
     ys,xs=np.where(m); im=np.dstack([np.clip(ki,0,255),(m*255)]).astype(np.uint8)[ys.min():ys.max()+1,xs.min():xs.max()+1]
